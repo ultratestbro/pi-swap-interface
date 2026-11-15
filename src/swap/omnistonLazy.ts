@@ -27,7 +27,7 @@ export function lazyLoads(providers: readonly CrossChainProvider[]): Promise<voi
 
 /**
  * Omniston's cross-chain orders move tokens only: its getQuote refuses a native leg before sending anything
- * (chunk-FDSTD34Z.js:378-381/1995-1998) while its supportsRoute reads the chains alone (:1955-1961). Such a pair is
+ * (chunk-DMO24BFW.js:379-382/2086-2089) while its supportsRoute reads the chains alone (:2045-2051). Such a pair is
  * not asked, so its refusal can't hide "Couldn't reach any venue"; it lands in "Not for this pair" (venueScope).
  * The same lookups as the SDK's: the source by catalog symbol, the destination by token id.
  */

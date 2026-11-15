@@ -5,6 +5,7 @@
  * issued-quote memory, NEAR's `trackIntent` calling `this.notifyDeposit`.
  * Wrap before constructing a router: the router binds what it sees then.
  */
+import type {Swap2RefusalInfo} from "@anywalletkit/protocol-swap2-core/errors";
 import type {Asset, CrossChainProvider, Quote, QuoteParams} from "@anywalletkit/protocol-swap2-core/types";
 import {WRAPPED_NATIVE} from "@anywalletkit/protocol-swap2-wrap/provider";
 import {ccAsset} from "@anywalletkit/swap2-assets";
@@ -16,7 +17,7 @@ export {paced};
 
 /**
  * A copy of `p` with every member bound to `p`, then `overrides` on top. The
- * router reads exactly these members (router chunk-R47JJEOO.js:51-77); a
+ * router reads exactly these members (router chunk-7ZUNB2U7.js:70-99); a
  * spread copy would lose `this` for NEAR and any prototype method.
  */
 export function delegate(p: CrossChainProvider, overrides: Partial<Omit<CrossChainProvider, "name">> = {}): CrossChainProvider {
@@ -45,6 +46,10 @@ export function delegate(p: CrossChainProvider, overrides: Partial<Omit<CrossCha
     verifiesBuilds: p.verifiesBuilds,
     verifiesQuotes: p.verifiesQuotes,
     depositAddressRoutes: p.depositAddressRoutes,
+    // swap2-core 0.13.0: every EVM call goes out with the account's own gas estimate, dry-run first (0x's native sales;
+    // its Permit2 calls do anyway). Router 0.6.1 keeps it in its dispatch snapshot; a copy without it would let the
+    // engine send the venue's quoted gas limit.
+    ownGasEstimate: p.ownGasEstimate,
   };
   // Only members the original has: `"x" in provider` must agree with the original (the engine checks some by presence).
   for (const [k, v] of Object.entries(optional)) if (v !== undefined) Object.assign(out, {[k]: v});
@@ -99,7 +104,7 @@ export function payoutToSigner(p: CrossChainProvider): CrossChainProvider {
   return delegate(p, {
     getQuote: (params, signal) => {
       if (params.destAddress && params.refundAddress && params.destAddress !== params.refundAddress) {
-        params.onRefusal?.(`${p.name}: ${SIGNER_ONLY_REFUSAL} (it pays only the wallet that signs)`);
+        params.onRefusal?.(`${p.name}: ${SIGNER_ONLY_REFUSAL} (it pays only the wallet that signs)`, {reason: "unsupported_pair"});
         return Promise.resolve(null);
       }
       return p.getQuote(params, signal);
@@ -131,12 +136,13 @@ export function coolDownOnRateLimit(p: CrossChainProvider, fallbackMs = 15 * 60_
     getQuote: (params, signal) => {
       const left = until - now();
       if (left > 0) {
-        params.onRefusal?.(`${p.name}: rate limit exceeded, retry in ~${Math.ceil(left / 60_000)} min`);
+        params.onRefusal?.(`${p.name}: rate limit exceeded, retry in ~${Math.ceil(left / 60_000)} min`, {reason: "rate_limited", retryAfterMs: left});
         return Promise.resolve(null);
       }
-      const onRefusal = (reason: string) => {
+      // The venue's classification (swap2-core 0.12.0) passes on with its text.
+      const onRefusal = (reason: string, info?: Swap2RefusalInfo) => {
         if (RATE_LIMITED.test(reason)) until = now() + Math.min(retryAfterMs(reason) ?? fallbackMs, MAX_COOLDOWN_MS);
-        params.onRefusal?.(reason);
+        params.onRefusal?.(reason, info);
       };
       return p.getQuote({...params, onRefusal}, signal);
     },
@@ -152,7 +158,7 @@ const ZERO = /^0x0{40}$/i;
 
 /**
  * Native ↔ its wrapped token on one EVM chain, mirroring the wrap module's own
- * check (chunk-YIJIBFLG.js:118-126): `from.token` is a catalog symbol,
+ * check (chunk-GC6XODOS.js:121-129): `from.token` is a catalog symbol,
  * `to.token` an address (the zero address for native).
  */
 export function isWrapPair(from: Asset, to: Asset): boolean {

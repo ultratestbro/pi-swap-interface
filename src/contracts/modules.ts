@@ -7,6 +7,7 @@
  */
 import type {ReactNode} from "react";
 import type {Chain as ViemChain, PublicClient} from "viem";
+import type {Swap2RefusalReason} from "@anywalletkit/protocol-swap2-core/errors";
 import type {CrossChainProvider, QuoteParams} from "@anywalletkit/protocol-swap2-core/types";
 import type {CrossChainRouter} from "@anywalletkit/protocol-swap2-router/router";
 import type {NewRecordInput, StatusView, SwapRecord, SwapStatus, SwapStep} from "./activity";
@@ -153,8 +154,11 @@ export interface SwapModule {
   keepSelection(routes: readonly RouteView[], selected: string | null): string | null;
   isStale(route: Pick<RouteView, "validUntilMs">, now?: number, marginMs?: number): boolean;
   friendlyReason(provider: string, reason: string, pay?: PaySide): string;
-  /** A venue's refusal text → short line, section, one sentence and the redacted original (refusals.ts, D28). */
-  classifyRefusal(provider: string, raw: string, pay?: PaySide): Omit<RouteRejection, "provider">;
+  /**
+   * A venue's refusal text → short line, section, one sentence and the redacted original (refusals.ts, D28); `reason`
+   * (the venue's Swap2RefusalReason) words a text no rule knows.
+   */
+  classifyRefusal(provider: string, raw: string, pay?: PaySide, reason?: Swap2RefusalReason): Omit<RouteRejection, "provider">;
   // ── amounts (mobile math.ts, send/amount.ts) ──
   sanitizeAmountInput(text: string, decimals: number): string;
   parseUnits(text: string, decimals: number): bigint | null;

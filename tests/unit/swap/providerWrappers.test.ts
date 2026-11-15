@@ -135,6 +135,24 @@ describe("coolDownOnRateLimit", () => {
     expect(venue.calls).toHaveLength(2);
   });
 
+  it("passes the venue's classification on with its text, and classifies its own cooling refusal", async () => {
+    let now = 0;
+    const venue = fake("lifi");
+    venue.getQuote = async (qp) => {
+      qp.onRefusal?.("lifi: HTTP 429", {reason: "rate_limited", retryAfterMs: 60_000});
+      return null;
+    };
+    const cooled = coolDownOnRateLimit(venue, 15 * 60_000, () => now);
+    const heard: unknown[] = [];
+    await cooled.getQuote({...params, onRefusal: (r, info) => heard.push([r, info])});
+    now += 1_000;
+    await cooled.getQuote({...params, onRefusal: (r, info) => heard.push([r, info])});
+    expect(heard).toEqual([
+      ["lifi: HTTP 429", {reason: "rate_limited", retryAfterMs: 60_000}],
+      ["lifi: rate limit exceeded, retry in ~15 min", {reason: "rate_limited", retryAfterMs: 15 * 60_000 - 1_000}],
+    ]);
+  });
+
   it("a 429 that names no wait cools for the fallback; other refusals don't cool", async () => {
     let now = 0;
     const venue = scripted(["no route found", "HTTP 429"]);
@@ -213,6 +231,12 @@ describe("delegate", () => {
     expect("remote" in d).toBe(false);
     const withClaim = delegate({...fake(), buildClaim: async () => null, claimTargets: () => ["0x1"]});
     expect(withClaim.claimTargets?.("eip155:1")).toEqual(["0x1"]);
+    expect("ownGasEstimate" in d).toBe(false);
+  });
+
+  it("keeps ownGasEstimate (swap2-core 0.13.0): without it the engine would send a 0x native sale with the quoted gas limit", () => {
+    const d = delegate({...fake("zeroex"), ownGasEstimate: true});
+    expect(d.ownGasEstimate).toBe(true);
   });
 });
 

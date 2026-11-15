@@ -9,10 +9,14 @@
  * (RATE_LIMITED, which LI.FI's cooldown reads too) and transport failures
  * before anything that reads like a check, THORChain's vault rotation before
  * the generic "differs" safety rule, the specific safety lines before the
- * generic ones. Texts no rule knows degrade to "No quote right now" unless the
+ * generic ones. A text no rule knows is worded by the reason its venue gave
+ * it (`Swap2RefusalReason`: since swap2-core 0.12.0 every module classifies its
+ * refusals, texts unchanged), else degrades to "No quote right now" unless the
  * API's own words, past the venue's status prefix, are a short plain phrase.
+ * The text stays first: a reason only fills in where no rule has read it.
  * No React, no network — unit-tested in refusals.test.ts.
  */
+import type {Swap2RefusalReason} from "@anywalletkit/protocol-swap2-core/errors";
 import type {PaySide, RefusalCategory, RouteRejection} from "../contracts/routes";
 import {formatUnits} from "./amount";
 
@@ -89,7 +93,7 @@ const BUSY = "The venue is limiting requests from this browser for a while.";
 /**
  * A venue's rate limit, read the same way by the route list, the engine's back-off (limiter.ts) and LI.FI's cooldown
  * (providerWrappers.ts): its own words, or a 429 the SDK names as a status ("HTTP 429", "quote 429: …", Symbiosis'
- * "Symbiosis API → 429" for a body without a message, chunk-BVFMCR2O.js:157-159) — never any 429, which can be a
+ * "Symbiosis API → 429" for a body without a message, chunk-K3EPNDVO.js:176-183) — never any 429, which can be a
  * minimum ("at least 0.429 ETH") or a floor ("min=429").
  */
 export const RATE_LIMITED = /rate.?limit|too many requests|limit of requests|(?:HTTP|status|quote|build|encode|1Click|API \u2192):?\s*429\b/i;
@@ -214,7 +218,7 @@ const RULES: readonly Rule[] = [
     short: "Its node is catching up — try again soon",
     detail: "The node we asked is a few blocks behind and won't quote until it catches up.",
   },
-  // protocol-swap2-thorchain 0.4.0 (chunk-AYP7O2NT.js:596/599): every node that could double-check the vault lags the
+  // protocol-swap2-thorchain 0.4.3 (chunk-EIAXGWNG.js:648/651): every node that could double-check the vault lags the
   // quoting node by more than 50 blocks, or the 8 s confirmation budget ran out before one could be asked.
   {
     category: "unavailable",
@@ -543,11 +547,37 @@ function fallbackLine(text: string): string {
 }
 
 /**
+ * The line for a text no rule knows, by the reason its venue classified it with (swap2-core 0.12.0
+ * `Swap2RefusalReason`; the router keeps it next to the text, `RouteSet.refusals` / `lastRefusals`). Worded as the
+ * rules above word the same kind of refusal, never stronger than the reason says.
+ */
+const BY_REASON: Readonly<Record<Swap2RefusalReason, {category: RefusalCategory; short: string; detail: string}>> = {
+  rate_limited: {category: "busy", short: RETRY, detail: BUSY},
+  upstream_unavailable: {category: "unavailable", short: "Unavailable right now — try later", detail: "The venue's service didn't give a usable answer just now."},
+  key_rejected: {category: "unavailable", short: "Unavailable right now — try later", detail: "The venue refused the key it was asked with, so it couldn't quote just now."},
+  chain_halted: {category: "unavailable", short: "Paused on this network for now", detail: "This venue has paused that network; it usually resumes on its own."},
+  stale_node: {category: "unavailable", short: "Its node is catching up — try again soon", detail: "The node we asked is behind and won't quote until it catches up."},
+  quote_expired: {category: "unavailable", short: "Quote expired — tap refresh", detail: "The quote ran out before it could be used."},
+  simulation_failed: {category: "unavailable", short: "Would fail on-chain right now", detail: "We simulated its transaction and it would revert, so we left it out — a fresh quote may work."},
+  no_route: {category: "pair", short: "No route for this pair or amount", detail: "It found no way to make this swap right now — another amount may work."},
+  unsupported_pair: {category: "pair", short: "Doesn't support this pair", detail: "This venue doesn't connect these tokens or networks."},
+  amount_too_small: {category: "amount", short: "Too small — try a larger amount", detail: "Too little would arrive after this venue's fees."},
+  amount_too_large: {category: "amount", short: "Above its maximum for this pair", detail: "More than this venue takes in one swap — try a smaller amount."},
+  insufficient_liquidity: {category: "amount", short: "Too large for its pools — try less", detail: "Its pools run out before the full amount — try a smaller amount or split the swap."},
+  recipient_unverifiable: {category: "safety", short: "Can't confirm it pays you", detail: PAYS_YOU},
+  recipient_mismatch: {category: "safety", short: "Can't confirm it pays you", detail: PAYS_YOU},
+  vault_mismatch: {category: "safety", short: "Uses a contract we haven't verified", detail: "Its transaction calls a contract we haven't checked, so we left it out."},
+  price_check_failed: {category: "safety", short: "Didn't match what was asked", detail: MISMATCH},
+  policy_refused: {category: "safety", short: "Didn't match what was asked", detail: MISMATCH},
+};
+
+/**
  * A venue's refusal for the route list: the short line, its section, one plain sentence and the redacted original.
  * `raw` is the text after "<provider>: " (parseRejections splits it); `pay` lets minimums in base units read as
  * "Minimum 0.02 BTC". A templated line that would still show an address or a code falls back to "No quote right now".
+ * `reason`: the venue's classification of it (swap2-core 0.12.0), read only when no rule knows the text.
  */
-export function classifyRefusal(provider: string, raw: string, pay?: PaySide): ClassifiedRefusal {
+export function classifyRefusal(provider: string, raw: string, pay?: PaySide, reason?: Swap2RefusalReason): ClassifiedRefusal {
   const text = stripVenue(provider, raw);
   const shown = redactRaw(text);
   for (const rule of RULES) {
@@ -555,9 +585,11 @@ export function classifyRefusal(provider: string, raw: string, pay?: PaySide): C
     const m = text.match(rule.re);
     if (!m) continue;
     const short = fill(rule.short, m, pay);
-    const reason = UNSHOWABLE.test(short) ? NO_QUOTE : short;
+    const line = UNSHOWABLE.test(short) ? NO_QUOTE : short;
     const detail = rule.detail ? fill(rule.detail, m, pay) : undefined;
-    return {reason, category: rule.category, ...(detail ? {detail} : {}), raw: shown};
+    return {reason: line, category: rule.category, ...(detail ? {detail} : {}), raw: shown};
   }
+  const by = reason !== undefined && Object.prototype.hasOwnProperty.call(BY_REASON, reason) ? BY_REASON[reason] : undefined;
+  if (by) return {reason: by.short, category: by.category, detail: by.detail, raw: shown};
   return {reason: fallbackLine(text), category: "other", raw: shown};
 }

@@ -258,7 +258,7 @@ describe("buildProviders: options", () => {
   it("Symbiosis' 429 starts the engine's back-off: the next rounds send it nothing until the wait is over", async () => {
     const pacing = {...DEFAULT_RUNTIME_CONFIG.pacing, symbiosisGapMs: 0};
     const [symbiosis] = buildProviders(withFlags({...ALL_OFF, symbiosis: true}, {pacing}), stores(true));
-    // A 429 without a message: the SDK refuses with "Symbiosis API → 429" (chunk-BVFMCR2O.js:157-159, :428-429).
+    // A 429 without a message: the SDK refuses with "Symbiosis API → 429" (chunk-K3EPNDVO.js:176-183, :453-454).
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("", {status: 429}));
     try {
       let t = 1_000_000;

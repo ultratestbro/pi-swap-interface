@@ -5,11 +5,12 @@ for that commit. Paths starting with `apps/mobile/` and `packages/shared/` are u
 the installed copies under `~/cp0x-elysium/node_modules/.pnpm/@anywalletkit+*/node_modules/@anywalletkit/*`
 (router 0.5.4, core 0.10.3, swap2-assets 0.3.0, lifi 0.7.0, relay 0.1.0, symbiosis 0.1.0, near-intents 0.3.3,
 thorchain 0.3.5, chainflip 0.4.5, cctp 0.5.3, usdt0 0.4.4, omniston 0.5.5, uniswap 0.4.3, balancer 0.3.5, wrap 0.4.0,
-fynd 0.2.8, jupiter 0.3.6; `@anywalletkit/core` 0.8.0). This repo now pins (2026-11-13) router 0.5.5, core 0.11.0,
-lifi 0.8.0, relay 0.1.1, symbiosis 0.1.1, near-intents 0.3.4, thorchain 0.4.0, chainflip 0.4.6, cctp 0.5.4, usdt0
-0.5.0, omniston 0.5.6, uniswap 0.4.4, balancer 0.3.6, curve 0.1.3, wrap 0.4.1, fynd 0.2.9, jupiter 0.3.7,
-wallet-solana 0.6.2; what that changed for the UI is in the refusal table (§4.2) and the "Not for this pair" lines
-(§5.5).
+fynd 0.2.8, jupiter 0.3.6; `@anywalletkit/core` 0.8.0). This repo now pins (2026-11-15) router 0.6.2, core 0.14.0,
+lifi 0.8.3, relay 0.1.4, symbiosis 0.1.4, near-intents 0.3.7, thorchain 0.4.3, chainflip 0.4.9, cctp 0.5.7, usdt0
+0.5.3, omniston 0.5.9, uniswap 0.4.7, balancer 0.3.9, curve 0.1.6, wrap 0.4.4, fynd 0.2.12, jupiter 0.3.10,
+wallet-solana 0.6.2; what that changed for the UI is in the refusal table (§4.2: every module now classifies its
+refusals, swap2-core 0.12.0, and a text the table doesn't know is worded by that reason) and the "Not for this pair"
+lines (§5.5).
 
 Out of scope here (other specs): wiring the provider modules in the browser (configs, RPC URLs), wallet connection
 (wagmi/viem, Wallet Standard), balance reading, signing/execution guards (`lib/swap/execute.ts`, `gate.ts`, `pins.ts`).
@@ -601,7 +602,7 @@ Every mobile pattern keeps its meaning; the wording is shorter and drops the ven
 | `busy` | Not available right now | "Request limit hit — back in about 2 hours" (the wait the venue names, in its unit; never "a minute" for hours), else "Busy right now — try again soon" |
 | `pair` | Doesn't support this pair | "Doesn't support this pair", "Doesn't list one of these tokens", "No route for this pair or amount", "Doesn't take this token as a source" (Relay `[tx-target]` only) |
 | `safety` | Skipped for your safety | "Can't confirm it pays you" (LI.FI "pays …, not …", "recipient on a non-EVM destination", "does not bind" and, since 0.8.0, LI.FI Intents' "release the input without the delivery", Relay `[output-recipient]`, THORChain memo), "Its transaction didn't match the quote", "Uses a contract we haven't verified" (incl. Chainflip "encoder targets …, not the … Vault"), "Couldn't double-check its vault" (incl. thorchain 0.4.0 "not ActiveVault" and "mimir flags the inbound vault"), "Guarantees less than your slippage allows" (incl. Chainflip "floor … above the expected output …"), "Didn't match what was asked" (incl. the venues' build checks: Chainflip's vault call, THORChain's router call, Symbiosis' transaction, USDT0's LZ fee) |
-| `other` | Not available right now | "No quote right now" (no reason given, or an unknown text; a short plain unknown phrase shows as is) |
+| `other` | Not available right now | "No quote right now" (no reason given, or an unknown text the venue didn't classify; a short plain unknown phrase shows as is) |
 | `deferred` | none: its own quiet group, "Quoted after you connect ({n})" (2026-11-13) | no refusal — a preview left the venue for the live quote (D7: LI.FI while cp0x's proxy doesn't carry it; Fynd without its slot is asked by no round, so it is absent); the screen words the line for what is missing: "Connect a wallet to get this quote", "Paste the address to get this quote", "Enter the refund address to get this quote" |
 
 Rules: first match wins (rate limits and transport before anything that reads like a check, the specific safety lines
@@ -611,6 +612,14 @@ an unknown text shows only what follows that prefix (or NEAR's "threw: "), and o
 number of 3+ digits, bracket, address, CODE_NAME or bare HTTP reason phrase ("Forbidden"). Rate limits are ONE
 predicate, `RATE_LIMITED`, shared with LI.FI's cooldown: the venue's words or a 429 named as a status, never any 429
 ("at least 0.429 ETH" is a minimum). `raw` = the rest with URLs → `<url>`, whitespace collapsed, ≤ 400 chars.
+The venue's own classification (2026-11-15: swap2-core 0.12.0 `Swap2RefusalReason`, kept next to the text by router
+0.6.0's `RouteSet.refusals`) is read only when no rule knows the text (`BY_REASON`): `rate_limited` → `busy`
+"Busy right now — try again soon"; `upstream_unavailable` / `key_rejected` → "Unavailable right now — try later",
+`chain_halted` → "Paused on this network for now", `stale_node`, `quote_expired`, `simulation_failed` → their
+`unavailable` lines; `no_route`, `unsupported_pair` → `pair`; `amount_too_small` / `amount_too_large` /
+`insufficient_liquidity` → `amount`; `recipient_*` → "Can't confirm it pays you", `vault_mismatch` → "Uses a contract
+we haven't verified", `price_check_failed` / `policy_refused` → "Didn't match what was asked". The engine's observer
+and the wrappers (`coolDownOnRateLimit`, `payoutToSigner`) pass it on with the text.
 `tests/unit/swap/refusals.test.ts` is the guard: real SDK texts (the owner's screenshots, LI.FI's live 429, the
 installed `protocol-swap2-*` dists) with their category and short line.
 

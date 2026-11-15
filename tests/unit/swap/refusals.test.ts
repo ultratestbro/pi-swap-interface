@@ -149,7 +149,7 @@ const SAMPLES: readonly [raw: string, category: RefusalCategory, short: string, 
   ["omniston: no resolver quoted this route/amount", "pair", "No route for this pair or amount"],
   ["omniston: unavailable in this browser (site storage is blocked)", "setup", "Needs site storage, blocked here"],
   ["symbiosis: Symbiosis answered with a stargate route (a third party holds the funds)", "safety", "Holds funds with a third party"],
-  // Symbiosis' HTTP errors (chunk-BVFMCR2O.js:157-159): its 429 is a rate limit (the engine backs off), the rest unavailable
+  // Symbiosis' HTTP errors (chunk-K3EPNDVO.js:176-183): its 429 is a rate limit (the engine backs off), the rest unavailable
   ["symbiosis: Symbiosis API → 429", "busy", "Busy right now — try again soon"],
   ["symbiosis: Symbiosis: The limit of requests has been exceeded", "busy", "Busy right now — try again soon"],
   ["symbiosis: Symbiosis API → 503", "unavailable", "Unavailable right now — try later"],
@@ -170,7 +170,7 @@ const SAMPLES: readonly [raw: string, category: RefusalCategory, short: string, 
   ["thorchain: quote has no router for an EVM source", "safety", "Didn't match what was asked"],
   ["thorchain: the router call moves 0x2222222222222222222222222222222222222222, not the source asset", "safety", "Didn't match what was asked"],
   ["usdt0: OFT asks for a fee in LZ token — unsupported", "safety", "Didn't match what was asked"],
-  // Curve (protocol-swap2-curve 0.1.2 dist chunk-IFREGXMV.js: its RPC loop :455, verifyDeployment :583-597, getQuote :752-853)
+  // Curve (protocol-swap2-curve 0.1.6 dist chunk-NW2OLRIK.js: its RPC loop :469, verifyDeployment :602-616, getQuote :773-875)
   ["curve: curve: no RPC answered on chain 1 (HTTP 429)", "unreachable", "No RPC answered — tap refresh"],
   ["curve: no RPC answered on chain 8453 (rate limit exceeded)", "unreachable", "No RPC answered — tap refresh"],
   ["curve: no RPC answered on chain 10 (Failed to fetch)", "unreachable", "No RPC answered — tap refresh"],
@@ -185,7 +185,7 @@ const SAMPLES: readonly [raw: string, category: RefusalCategory, short: string, 
   ["curve: same-chain swaps only", "pair", "Doesn't support this pair"],
   ["curve: that is a wrap/unwrap, not a swap", "pair", "A wrap, not a swap"],
   ["uniswap: that is a wrap/unwrap, not a swap", "pair", "A wrap, not a swap"],
-  // Fynd, through cp0x's proxy (protocol-swap2-fynd 0.2.8 dist chunk-TZUER4XJ.js getQuote :137-221, checkFyndTransaction chunk-J6XM7WEG.js:50-86)
+  // Fynd, through cp0x's proxy (protocol-swap2-fynd 0.2.12 dist chunk-6AQCGGUZ.js getQuote :151-235, checkFyndTransaction chunk-6WSGOEAI.js:53-89)
   ["fynd: API unreachable (TypeError)", "unreachable", "Couldn't reach it — tap refresh"],
   ["fynd: API key rejected (HTTP 401)", "unavailable", "Unavailable right now — try later"],
   ["fynd: API key rejected (HTTP 403)", "unavailable", "Unavailable right now — try later"],
@@ -288,6 +288,36 @@ describe("classifyRefusal: the SDK's texts as the route list shows them", () => 
     expect(classifyRefusal("x", "unusual 0xabcdef12 thing").reason).toBe(NO_QUOTE);
     expect(classifyRefusal("x", "SOME_CODE happened").reason).toBe(NO_QUOTE);
     expect(classifyRefusal("x", "received 1234567").reason).toBe(NO_QUOTE);
+  });
+});
+
+describe("classifyRefusal: the venue's reason (swap2-core 0.12.0)", () => {
+  it("words a text no rule knows by the reason its venue gave it", () => {
+    expect(classifyRefusal("x", "something new and odd 12345", undefined, "insufficient_liquidity")).toMatchObject({
+      reason: "Too large for its pools — try less",
+      category: "amount",
+    });
+    expect(classifyRefusal("x", "something new and odd 12345", undefined, "vault_mismatch")).toMatchObject({reason: "Uses a contract we haven't verified", category: "safety"});
+    expect(classifyRefusal("x", "something new and odd 12345", undefined, "recipient_mismatch")).toMatchObject({reason: "Can't confirm it pays you", category: "safety"});
+    expect(classifyRefusal("x", "something new and odd 12345", undefined, "rate_limited")).toMatchObject({reason: "Busy right now — try again soon", category: "busy"});
+    expect(classifyRefusal("x", "something new and odd 12345", undefined, "chain_halted")).toMatchObject({category: "unavailable"});
+    expect(classifyRefusal("x", "something new and odd 12345", undefined, "unsupported_pair")).toMatchObject({reason: "Doesn't support this pair", category: "pair"});
+  });
+
+  it("never overrides a rule that reads the text, and an unknown or absent reason changes nothing", () => {
+    // A rule's own line wins over the reason (the reason here is deliberately another kind).
+    expect(classifyRefusal("lifi", "Rate limit exceeded, retry in 2 hours", undefined, "no_route").reason).toBe("Request limit hit — back in about 2 hours");
+    expect(classifyRefusal("x", "unusual 0xabcdef12 thing").reason).toBe(NO_QUOTE);
+    expect(classifyRefusal("x", "unusual 0xabcdef12 thing", undefined, "not_a_reason" as never).reason).toBe(NO_QUOTE);
+  });
+
+  it("parseRejections reads the router's classified refusals as it reads their texts", () => {
+    const rows = parseRejections([{message: "zz: something new 12345", reason: "amount_too_small"}, "yy: something new 12345", {message: "lifi: HTTP 429"}]);
+    expect(rows.map((r) => [r.provider, r.reason, r.category])).toEqual([
+      ["zz", "Too small — try a larger amount", "amount"],
+      ["yy", NO_QUOTE, "other"],
+      ["lifi", "Busy right now — try again soon", "busy"],
+    ]);
   });
 });
 

@@ -26,7 +26,7 @@ import {ME, USDC_ARB, USDC_BASE, USDC_ETH, USDT_ETH, request, token, venue, type
 
 const BTC = token({chain: "bitcoin", caip2: "bip122:000000000019d6689c085ae165831e93", chainName: "Bitcoin", symbol: "BTC", decimals: 8, family: "btc", owner: null, payMode: "deposit"});
 const SOL = token({chain: "solana", caip2: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", chainName: "Solana", symbol: "SOL", decimals: 9, family: "solana", owner: null, payMode: "connect"});
-/** LI.FI's own Solana placeholder for a dry quote, sender or recipient (protocol-swap2-lifi 0.8.0 chunk-GWUGK4SG.js:682). */
+/** LI.FI's own Solana placeholder for a dry quote, sender or recipient (protocol-swap2-lifi 0.8.3 chunk-G26GE46T.js:689). */
 const LIFI_SOLANA_SENDER = "HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk";
 
 /** cp0x's proxy as a preview round reads it: `live` per venue, switchable between rounds; the signals it marked. */
@@ -93,8 +93,8 @@ describe("preview params (D7: placeholders only inside the engine's preview roun
   });
 
   it("Fynd (same-network EVM) gets the EVM sample: it refuses a blank recipient, and the sample is its sender too", () => {
-    // protocol-swap2-fynd 0.2.8 chunk-TZUER4XJ.js:154 refuses a non-EVM recipient; :156 sender = an EVM refund, else the
-    // recipient. Its native-input simulation gives that sender the input plus 1 ETH by state override (:216-218).
+    // protocol-swap2-fynd 0.2.12 chunk-6AQCGGUZ.js:168 refuses a non-EVM recipient; :170 sender = an EVM refund, else the
+    // recipient. Its native-input simulation gives that sender the input plus 1 ETH by state override (:230-232).
     const same = previewReq({from: {...USDC_ETH, owner: null, payMode: "connect"}, to: {...USDT_ETH, owner: null}});
     expect(previewAddressing("fynd", same)).toEqual({destAddress: PREVIEW_PLACEHOLDER.evm});
     // A connected payer (another address still to type): the payer stays the sender, the sample only the recipient.
@@ -102,9 +102,9 @@ describe("preview params (D7: placeholders only inside the engine's preview roun
   });
 
   it("LI.FI keeps its own handling where the families match or the destination is Solana, and gets the EVM sample from Solana", () => {
-    // chunk-GWUGK4SG.js:866-867: a blank destination becomes the SENDER's placeholder (its EVM one = our EVM sample,
+    // chunk-G26GE46T.js:961-962: a blank destination becomes the SENDER's placeholder (its EVM one = our EVM sample,
     // its Solana one for a Solana source) — right for EVM → EVM and Solana → Solana, an EVM chain paid to a Solana
-    // address for Solana → EVM. EVM → Solana: its own Solana placeholder (dryRecipient, :782), priced without a
+    // address for Solana → EVM. EVM → Solana: its own Solana placeholder (dryRecipient, :789), priced without a
     // transaction, so a sample of ours would only put a stand-in where LI.FI already has one.
     expect([...FILLS_OTHER_FAMILY]).toEqual(["lifi"]);
     expect(previewAddressing("lifi", previewReq())).toEqual({});
@@ -254,7 +254,7 @@ describe("engine preview round", () => {
   });
 
   it("a Symbiosis text that repeats its own Tron placeholder shows the stand-in", async () => {
-    // chunk-BVFMCR2O.js:31/189: its EVM placeholder (= the EVM sample) in Tron form, sent as `to` for a blank one.
+    // chunk-K3EPNDVO.js:33/213: its EVM placeholder (= the EVM sample) in Tron form, sent as `to` for a blank one.
     const tron = evmToTron(PREVIEW_PLACEHOLDER.evm!);
     const symbiosis = seen("symbiosis", {refuse: `symbiosis: Symbiosis: the receiver ${tron} cannot receive this token`});
     const final = await engineOver([symbiosis]).quoteRoutes({mode: "preview", req: previewReq()}, () => {});
@@ -285,7 +285,7 @@ describe("engine preview round", () => {
   });
 
   it("a venue's text that repeats the sample shows the stand-in: THORChain's memo check stays a safety skip", async () => {
-    // protocol-swap2-thorchain 0.4.0 chunk-AYP7O2NT.js:731: `thorchain: memo failed verification (${String(q.memo).slice(0, 80)})`.
+    // protocol-swap2-thorchain 0.4.3 chunk-EIAXGWNG.js:793: `thorchain: memo failed verification (${String(q.memo).slice(0, 80)})`.
     const memo = `=:BTC.BTC:${PREVIEW_PLACEHOLDER.btc}:27000/1/0:cp0x:0`;
     const thorchain = seen("thorchain", {refuse: `thorchain: memo failed verification (${memo.slice(0, 80)})`});
     const final = await engineOver([thorchain]).quoteRoutes({mode: "preview", req: previewReq({to: BTC})}, () => {});
@@ -322,11 +322,11 @@ describe("scrubSamples", () => {
   });
 
   it("replaces LI.FI's own Solana sender (its checks and API messages can name it) and its EVM one, the EVM sample", () => {
-    // protocol-swap2-lifi 0.8.0 chunk-GWUGK4SG.js:609: "the Solana transaction is paid by …, not the sender <its Solana placeholder>".
+    // protocol-swap2-lifi 0.8.3 chunk-G26GE46T.js:615: "the Solana transaction is paid by …, not the sender <its Solana placeholder>".
     expect(scrubSamples(`the Solana transaction is paid by 11111111111111111111111111111111, not the sender ${LIFI_SOLANA_SENDER}`)).toBe(
       `the Solana transaction is paid by 11111111111111111111111111111111, not the sender ${SAMPLE_STANDIN}`,
     );
-    // chunk-GWUGK4SG.js:538: "pays …, not <receiver>" with LI.FI's EVM placeholder (= the EVM sample) as the receiver.
+    // chunk-G26GE46T.js:544: "pays …, not <receiver>" with LI.FI's EVM placeholder (= the EVM sample) as the receiver.
     expect(scrubSamples("pays 0x1111111111111111111111111111111111111111, not 0xd8da6bf26964af9d7eed9e03e53415d37aa96045")).toBe(
       `pays 0x1111111111111111111111111111111111111111, not ${SAMPLE_STANDIN}`,
     );

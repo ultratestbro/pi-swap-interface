@@ -1,4 +1,5 @@
 /** Test fixtures for the swap module: request tokens and in-process venues (no network). */
+import type {Swap2RefusalReason} from "@anywalletkit/protocol-swap2-core/errors";
 import type {CrossChainProvider, Quote, QuoteParams} from "@anywalletkit/protocol-swap2-core/types";
 import type {SwapToken} from "../../../src/contracts/domain";
 import type {QuoteRequest} from "../../../src/contracts/routes";
@@ -44,6 +45,8 @@ export interface VenueOptions {
   eta?: number;
   delayMs?: number;
   refuse?: string;
+  /** The classification `refuse` is given with (onRefusal's second argument, swap2-core 0.12.0). */
+  refuseReason?: Swap2RefusalReason;
   error?: string;
   /** Never settles and ignores its signal. */
   hang?: boolean;
@@ -77,7 +80,7 @@ export function venue(name: string, o: VenueOptions = {}): FakeVenue {
         const t = setTimeout(() => {
           if (o.error) return reject(new Error(o.error));
           if (o.refuse || !o.min) {
-            if (o.refuse) params.onRefusal?.(o.refuse);
+            if (o.refuse) params.onRefusal?.(o.refuse, o.refuseReason ? {reason: o.refuseReason} : undefined);
             return resolve(null);
           }
           resolve({

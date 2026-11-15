@@ -75,7 +75,7 @@ and `batch.sh`.
     the same refusal. EVM→EVM Omniston quotes do work. Fixed in 0.5.5 (2026-11-12): the audited TON entry is now
     the rev2 Escrow Minter `EQDybO88…` (positions pinned to code `eb503578…`); rev1 `EQAbWJ3Y…` is no longer trusted.
 12. **Router timeout.** `CrossChainRouter` gives each provider 8 s in a multi-venue auction and 25 s solo
-    (`AWK/protocol-swap2-router/dist/chunk-R47JJEOO.js:6-7`). It is not configurable. THORChain (two nodes)
+    (`AWK/protocol-swap2-router/dist/chunk-7ZUNB2U7.js:7-8`). It is not configurable. THORChain (two nodes)
     and Symbiosis (paced, up to 4 attempts) can exceed it. They simply drop out of that auction.
 
 ---
@@ -83,27 +83,27 @@ and `batch.sh`.
 ## 1. Packages and import paths
 
 ```jsonc
-// package.json — exact pins (re-synced on every AWK bump; last 2026-11-13)
+// package.json — exact pins (re-synced on every AWK bump; last 2026-11-15)
 "dependencies": {
   "@anywalletkit/core": "0.8.0",                       // peer of every provider package
-  "@anywalletkit/protocol-swap2-core": "0.11.0",
-  "@anywalletkit/protocol-swap2-router": "0.5.5",
+  "@anywalletkit/protocol-swap2-core": "0.14.0",       // refusal reasons (0.12.0), Permit2 transfers (0.13.0), QuoteParams.sender (0.14.0)
+  "@anywalletkit/protocol-swap2-router": "0.6.2",      // RouteSet.refusals (0.6.0), keeps ownGasEstimate (0.6.1)
   "@anywalletkit/swap2-assets": "0.3.0",
-  "@anywalletkit/protocol-swap2-near-intents": "0.3.4",
-  "@anywalletkit/protocol-swap2-lifi": "0.8.0",            // EVM → Solana checked (§4.2)
-  "@anywalletkit/protocol-swap2-thorchain": "0.4.0",       // any ActiveVault confirms (§4.3)
-  "@anywalletkit/protocol-swap2-cctp": "0.5.4",
-  "@anywalletkit/protocol-swap2-usdt0": "0.5.0",           // Legacy Mesh into TON and Tron (§4.5)
-  "@anywalletkit/protocol-swap2-chainflip": "0.4.6",
-  "@anywalletkit/protocol-swap2-relay": "0.1.1",
-  "@anywalletkit/protocol-swap2-uniswap": "0.4.4",
-  "@anywalletkit/protocol-swap2-curve": "0.1.3",     // added 2026-11-12 (§4.17)
-  "@anywalletkit/protocol-swap2-fynd": "0.2.9",      // added 2026-11-12, Standard only (§4.14)
-  "@anywalletkit/protocol-swap2-wrap": "0.4.1",
-  "@anywalletkit/protocol-swap2-jupiter": "0.3.7",
-  "@anywalletkit/protocol-swap2-symbiosis": "0.1.1",   // default on since 2026-11-12
-  "@anywalletkit/protocol-swap2-balancer": "0.3.6",    // default on since 2026-11-12
-  "@anywalletkit/protocol-swap2-omniston": "0.5.6",    // default on since 2026-11-12 (lazy chunk); rev2 TON minter since 0.5.5
+  "@anywalletkit/protocol-swap2-near-intents": "0.3.7",
+  "@anywalletkit/protocol-swap2-lifi": "0.8.3",            // EVM → Solana checked (§4.2)
+  "@anywalletkit/protocol-swap2-thorchain": "0.4.3",       // any ActiveVault confirms (§4.3)
+  "@anywalletkit/protocol-swap2-cctp": "0.5.7",
+  "@anywalletkit/protocol-swap2-usdt0": "0.5.3",           // Legacy Mesh into TON and Tron (§4.5)
+  "@anywalletkit/protocol-swap2-chainflip": "0.4.9",
+  "@anywalletkit/protocol-swap2-relay": "0.1.4",           // its fee itemized only when priced on the source chain
+  "@anywalletkit/protocol-swap2-uniswap": "0.4.7",
+  "@anywalletkit/protocol-swap2-curve": "0.1.6",     // added 2026-11-12 (§4.17)
+  "@anywalletkit/protocol-swap2-fynd": "0.2.12",     // added 2026-11-12, Standard only (§4.14)
+  "@anywalletkit/protocol-swap2-wrap": "0.4.4",
+  "@anywalletkit/protocol-swap2-jupiter": "0.3.10",
+  "@anywalletkit/protocol-swap2-symbiosis": "0.1.4",   // default on since 2026-11-12
+  "@anywalletkit/protocol-swap2-balancer": "0.3.9",    // default on since 2026-11-12
+  "@anywalletkit/protocol-swap2-omniston": "0.5.9",    // default on since 2026-11-12 (lazy chunk); rev2 TON minter since 0.5.5
   "buffer": "6.0.3",                                   // only for the Omniston chunk's global polyfill
   "viem": "2.57.10"                                    // the version cp0x-elysium resolves; dedupe with wagmi
 }
@@ -149,12 +149,12 @@ From a grep of every `dist/*.js`, plus the dependencies they import:
 
 | package | Node built-ins / globals | browser status |
 |---|---|---|
-| swap2-core, router, swap2-assets, core | `TextEncoder`; `crypto.subtle` **only in `/server`** (not imported); `AbortSignal.timeout/any` with a fallback (`swap2-core/dist/chunk-2KC734UX.js:12-25`) | OK |
-| near-intents | `crypto.randomUUID` (dry intent ids, `chunk-4GRRM3WT.js:217`) | needs a secure context |
+| swap2-core, router, swap2-assets, core | `TextEncoder`; `crypto.subtle` **only in `/server`** (not imported); `AbortSignal.timeout/any` with a fallback (`swap2-core/dist/chunk-OEX7O5CL.js:136-149`) | OK |
+| near-intents | `crypto.randomUUID` (dry intent ids, `chunk-4DBCMQCI.js:251`) | needs a secure context |
 | chainflip | `crypto.randomUUID`, `TextEncoder`; `@noble/hashes`, `@scure/base` | needs a secure context |
 | lifi, thorchain, cctp, usdt0, relay, uniswap, curve, fynd, wrap, balancer, symbiosis | none (`viem`, `@noble/curves`, `@noble/hashes`, `@scure/base`); global `fetch` | OK |
 | jupiter | `@solana/kit` 8.5.0: `process.env.NODE_ENV` (Vite defines it), `globalThis.crypto` / `isSecureContext` (SHA-256 for PDAs) | needs a secure context |
-| **omniston** | imports `Buffer` from the npm `buffer` package explicitly (`chunk-FDSTD34Z.js:14,19`, `validators.js:569`); `crypto.getRandomValues` (HTLC secrets, `chunk-FDSTD34Z.js:458`); lazy `import("@ston-fi/omniston-sdk")` (`:1394`) | see below |
+| **omniston** | imports `Buffer` from the npm `buffer` package explicitly (`chunk-DMO24BFW.js:14,19`, `validators.js:569`); `crypto.getRandomValues` (HTLC secrets, `chunk-DMO24BFW.js:507`); lazy `import("@ston-fi/omniston-sdk")` (`:1476`) | see below |
 | `@ton/core` 0.63.1 (CJS) | **global `Buffer`** without an import (`Buffer.from/alloc/concat/isBuffer`, 41 sites) | needs `globalThis.Buffer` |
 | `@ton/crypto` 3.3.0 (CJS) | global `Buffer`; `require("jssha")`, `require("tweetnacl")` | needs `globalThis.Buffer` |
 | `@ton/crypto-primitives` 2.1.0 | `require("crypto")` in `dist/node.js`; the `"browser": "./dist/browser.js"` field swaps in WebCrypto | OK (Vite honours `browser`) |
@@ -220,7 +220,7 @@ https://api.jup.ag https://api.symbiosis.finance https://api-v3.balancer.fi wss:
 https://*.publicnode.com <every EVM/Solana RPC host in the runtime config>
 ```
 
-THORChain always appends its built-in `HOSTS` to the confirm list (`chunk-AYP7O2NT.js:495`), which includes
+THORChain always appends its built-in `HOSTS` to the confirm list (`chunk-EIAXGWNG.js:540`), which includes
 `thorchain.ibs.team`. A CSP that leaves ibs out makes that fetch throw, the code treats it as `HostUnavailable`
 and moves on, and the console shows one CSP warning. That is harmless.
 
@@ -401,7 +401,7 @@ transports drop every cp0x API URL, in any mode). Only this layer adds cp0x: a c
 
 Every factory is a plain function that returns a plain object. `enabled` defaults to **true** in all of them
 (`config.enabled ?? true`). Omniston is the exception: it is also `false` until `trustedSettlementContracts` is
-non-empty (`chunk-FDSTD34Z.js:1948`). The browser never passes `enabled`; a disabled provider is simply not
+non-empty (`chunk-DMO24BFW.js:2038`). The browser never passes `enabled`; a disabled provider is simply not
 constructed. All option types below are copied from the installed `.d.ts`, with long comments trimmed.
 
 ### 4.1 NEAR Intents (1Click), `near_intents`
@@ -433,7 +433,7 @@ declare function nearIntentsProvider(config?: NearIntentsProviderConfig): CrossC
 - **Routes**: cross-chain only (`supportsSameChain` unset → the router drops it from same-chain pairs).
   - Any pair of 1Click-listed chains: EVM 1, 8453, 42161, 10, 56, 137, 100, 143, 43114, 534352, 80094, 9745,
     plus Solana, Tron, BTC, NEAR, TON, Sui, Zcash, LTC, DOGE, XRP, BCH, Cardano, Stellar and Aptos.
-  - `supportsRoute` needs both tokens' 1Click `assetId` in `swap2-assets` (`chunk-4GRRM3WT.js:129-133`).
+  - `supportsRoute` needs both tokens' 1Click `assetId` in `swap2-assets` (`chunk-4DBCMQCI.js:155-159`).
 - **Execution model**: a plain send to a per-quote deposit address, with an optional memo.
   - EVM and Solana sources sign it in the wallet.
   - **BTC, ZEC, LTC, DOGE, XRP and other sources are the QR routes.** `engine.md` §9 covers them: a live quote
@@ -441,7 +441,7 @@ declare function nearIntentsProvider(config?: NearIntentsProviderConfig): CrossC
     only MVP venue that serves those sources. THORChain needs an EVM source; Chainflip and Symbiosis BTC
     sources are off.
 - **Dry quotes**: with no `refundAddress`, the provider uses its own per-namespace placeholder
-  (`chunk-4GRRM3WT.js:44-60`). Dry quotes return no deposit address and an `intentId` of `dry:<uuid>`.
+  (`chunk-4DBCMQCI.js:46-62`). Dry quotes return no deposit address and an `intentId` of `dry:<uuid>`.
 - **Tracking**: stateless, by deposit address (+memo) via `GET /v0/status`. `notifyDeposit` POSTs
   `/v0/deposit/submit`; it is best-effort, and required for TON sources only.
 - **Stores**: none.
@@ -514,12 +514,12 @@ declare function lifiProvider(config?: LifiProviderConfig): CrossChainProvider;
   - **Refused by the module**: destination calls; the bridges whose facet does not bind delivery (Relay, Garden,
     deBridge DLN, ThorSwap, Squid, Symbiosis), and since 0.8.0 LI.FI Intents on every EVM-source route (its escrow
     order names its own oracles, settler and output amount: `INTENTS_UNPINNED`), all requested with `denyBridges`
-    (`REFUSED_EVM_TOOLS`, `chunk-GWUGK4SG.js:777-779`). So Elysium (99901), which LI.FI serves cross-chain only through
+    (`REFUSED_EVM_TOOLS`, `chunk-G26GE46T.js:784-786`). So Elysium (99901), which LI.FI serves cross-chain only through
     Intents, has no cross-chain LI.FI route for now; its same-chain swaps still quote. Any non-EVM destination other
     than Solana still refuses (`NON_EVM_UNREAD`).
   - **EVM → Solana is checked (lifi 0.8.0, asked since 2026-11-13).** The request asks only the bridges whose
-    delivery the module reads (`allowBridges` = `SOLANA_DESTINATION_TOOLS`, `:780`: Mayan Swift / MCTP / Fast MCTP,
-    Polymer CCTP, Chainflip). `solanaRecipientMismatch` (`:480-492`) then requires BridgeData to pay LI.FI's non-EVM
+    delivery the module reads (`allowBridges` = `SOLANA_DESTINATION_TOOLS`, `:787`: Mayan Swift / MCTP / Fast MCTP,
+    Polymer CCTP, Chainflip). `solanaRecipientMismatch` (`:486-498`) then requires BridgeData to pay LI.FI's non-EVM
     placeholder on the Solana chain id, and reads the facet: Mayan's order `destAddr` = the recipient, Wormhole 1 or
     CCTP domain 5, a plain delivery of the requested mint; Polymer CCTP's `mintTo` = the recipient's USDC associated
     token account (derived on the device); Chainflip's 32-byte destination = the recipient with asset SOL/USDC/USDT.
@@ -534,7 +534,7 @@ declare function lifiProvider(config?: LifiProviderConfig): CrossChainProvider;
 - **Rate limit**: `ratelimit-limit: 100`, `ratelimit-reset: 60`, per IP on `/v1/tools` and `/v1/chains`. Keyless
   `/v1/quote` is far tighter, measured live on 2026-11-12: about **75 per ~2 h per IP** (`ratelimit-limit: 75`,
   `ratelimit-remaining: 0`, `retry-after: 5693`, HTTP 429 body `{"message":"Rate limit exceeded, retry in 2 hours",
-  "code":1005}`). The route list refreshes every 30 s and the SDK may send two `/quote` per round (`:1023-1028` slippage
+  "code":1005}`). The route list refreshes every 30 s and the SDK may send two `/quote` per round (`:1132-1137` slippage
   rescale), so one open tab used it up in roughly 20–40 min; shared IPs (office NAT, VPN, CGNAT) share it. A key
   can't ship in a public static SPA. Uses global `fetch`; there is no `fetchImpl` option.
 - **Cooldown (app, 2026-11-12)**: `coolDownOnRateLimit` (`providerWrappers.ts`) wraps the one shared LI.FI instance.
@@ -553,16 +553,16 @@ declare function lifiProvider(config?: LifiProviderConfig): CrossChainProvider;
   proxy, once per page, then fails it WITHOUT a request from the stopped slot (the SDK's second `/quote` of that
   round, every later preview) and without a keyless retry when the proxy fails again after a short stop ran out.
   Addressing, read in 0.8.0: a dry quote's sender is `refundAddress ||` its own placeholder — EVM `0xd8dA…6045` (the
-  EVM sample, `:681`) or Solana `HAgk14Jp…uT3DKpqk` (`:682`) by source (`:866`) — so it needs no real sender, and its
+  EVM sample, `:688`) or Solana `HAgk14Jp…uT3DKpqk` (`:689`) by source (`:961`) — so it needs no real sender, and its
   checks run on the dry quote as on a live one (sender, recipient, Diamond call, approval target). A blank
-  destination becomes that sender placeholder (`:867`), except EVM → Solana, which prices for its Solana placeholder
-  (`dryRecipient`, `:782`): right for EVM → EVM, Solana → Solana and EVM → Solana, the wrong family for Solana → EVM,
+  destination becomes that sender placeholder (`:962`), except EVM → Solana, which prices for its Solana placeholder
+  (`dryRecipient`, `:789`): right for EVM → EVM, Solana → Solana and EVM → Solana, the wrong family for Solana → EVM,
   so the app fills a blank destination with the destination family's sample only for Solana → EVM
   (`FILLS_OTHER_FAMILY`). A dry quote priced for a placeholder (no refund, or EVM → Solana with no recipient:
-  `placeholderIn`, `:783-786`) comes back **price-only**: every check ran, then the transaction is dropped
-  (`providerData: {placeholder, nativeFee?}`, no `txRequest`, `:1069`), so a Standard preview's LI.FI row has no
+  `placeholderIn`, `:790-793`) comes back **price-only**: every check ran, then the transaction is dropped
+  (`providerData: {placeholder, nativeFee?}`, no `txRequest`, `:1182`), so a Standard preview's LI.FI row has no
   approval tag, the generic gas estimate and no bridge fee (the router still nets `providerData.nativeFee`, engine.md
-  §2.4). Its texts can name the Solana placeholder ("the Solana transaction is paid by …, not the sender …", `:609`):
+  §2.4). Its texts can name the Solana placeholder ("the Solana transaction is paid by …, not the sender …", `:615`):
   scrubbed like the samples.
 
 ### 4.3 THORChain, `thorchain`
@@ -602,13 +602,13 @@ declare function thorchainProvider(config?: ThorchainProviderConfig): CrossChain
   - No affiliate (fee 0). `affiliate` and `affiliateBps` must be set together or the constructor throws.
   - `tronSource: false`: there is no Tron wallet yet, and the server keeps it dark too (`SRV:300-308`).
 - **Why not the defaults**: the defaults are `HOSTS = [gateway.liquify.com/chain/thorchain_api,
-  thorchain.ibs.team/api]` (`chunk-AYP7O2NT.js:207-210`).
+  thorchain.ibs.team/api]` (`chunk-EIAXGWNG.js:217-220`).
   - ibs.team returns **403 to the CORS preflight** (the request carries the custom `x-client-id`, so a preflight
     always happens) and no `Access-Control-Allow-Origin` on GET.
   - The provider needs a node *other than the quoting one* to vouch for the inbound vault and router, both at
     quote time and in `preflightDeposit`. Otherwise it refuses: "no second node answered to confirm the inbound
     vault".
-- **Vault confirmation (0.4.0, `vaultVerdict`, `chunk-AYP7O2NT.js:177-204`; `confirmedElsewhere`, `:565-602`)**:
+- **Vault confirmation (0.4.0, `vaultVerdict`, `chunk-EIAXGWNG.js:187-214`; `confirmedElsewhere`, `:610-654`)**:
   - The quoting node answers `/thorchain/lastblock` too, read with its `inbound_addresses` (8 s each); a failed or
     malformed height makes it unavailable and the next `nodeUrl` quotes.
   - Each confirming node is read with GET on fixed paths only (`THORNODE_CONFIRM_PATHS`), no query, `redirect:
@@ -628,7 +628,7 @@ declare function thorchainProvider(config?: ThorchainProviderConfig): CrossChain
   - `https://gateway.liquify.com/chain/thorchain_api`: allows `x-client-id` explicitly.
   - Not usable: ninerealms (no answer), thorswap (403), publicnode (404), several others with no answer.
 - **Confirm hosts** = `[...confirmNodeUrl, ...nodeUrl, ...HOSTS]` minus the quoting host
-  (`chunk-AYP7O2NT.js:495`). With `nodeUrl = [Liquify, THORWallet]`, each host confirms the other. Both answer the
+  (`chunk-EIAXGWNG.js:540`). With `nodeUrl = [Liquify, THORWallet]`, each host confirms the other. Both answer the
   three new paths with CORS (checked 2026-11-13); ibs.team still answers its preflight 403.
 - **A lagging node blocks every quote** (2026-11-12): the THORWallet balancer was ~28 blocks (~3 min) behind and
   answered `/quote/swap` with `{"code":3,"message":"refusing quote on node with stale state: invalid request"}`.
@@ -747,8 +747,8 @@ declare function usdt0Provider(config?: Usdt0ProviderConfig): CrossChainProvider
     (worded in `refusals.ts`).
   - **Dry quotes (0.5.0)**: with no recipient or no refund the module still prices with its own stand-in (the EVM
     sample, or the zero account into Tron/TON) but returns a **price-only** quote: `providerData.placeholder`,
-    `providerData.nativeFee`, no `txRequest`; `buildDeposit` and `preflightDeposit` refuse it (`chunk-V2H32VE3.js:87`,
-    `:510`, `:517`, `:540`). So a preview row shows no approval tag and the generic gas estimate; live quotes are
+    `providerData.nativeFee`, no `txRequest`; `buildDeposit` and `preflightDeposit` refuse it (`chunk-7FQDRYVI.js:89`,
+    `:556`, `:563`, `:586`). So a preview row shows no approval tag and the generic gas estimate; live quotes are
     unchanged.
 - **Execution**: OFT `send` with `value = nativeFee` (+25 % headroom, declared as `txRequest.nativeFee`).
   - Approval only on Ethereum for the OFT path (probe: `approvalAddress = 0x6C96…1dee` = adapter); a mesh send
@@ -780,7 +780,7 @@ declare function chainflipProvider(config?: ChainflipProviderConfig): CrossChain
   - Destinations: Ethereum, Arbitrum, Solana (SOL, USDC, USDT), Tron (TRX, USDT), BTC.
   - Minimums: $20 for Ethereum stables, $10 for Arbitrum/Solana/Tron stables, 40 000 sat, 30 TRX.
 - **Execution**: `xSwapNative` / `xSwapToken` on `CF_VAULTS` (ETH `0xF5e1…2Bcc`, ARB `0x7900…8920`).
-  - **A dry quote carries no `txRequest`** (`chunk-RU2NXJTL.js:117`; probe: `to=undefined`), so it names no
+  - **A dry quote carries no `txRequest`** (`chunk-XUMGQNH4.js:142`; probe: `to=undefined`), so it names no
     approval spender. A review screen that shows the spender before the live quote must use
     `CF_VAULTS[sourceChain]` (§7, `orderSpender`). This is the fix for `engine.md` risk 10.
 - **Stores**: none. Tracking: `GET /v2/swaps/{sourceTxHash}`.
@@ -813,17 +813,17 @@ declare function relayProvider(config?: RelayProviderConfig): CrossChainProvider
 - **Routes**: cross-chain EVM ↔ EVM over the 29 pinned `RELAY_CHAINS`: 1, 10, 56, 100, 130, 137, 143, 146, 196,
   324, 480, 999, 2818, 4326, 4663, 5000, 5042, 8453, 9745, 42161, 42220, 43114, 57073, 59144, 80094, 98866,
   99901, 534352, 747474.
-  - `supportsRoute` is chain-only (`chunk-CCMNAZZB.js:121`). Unsupported inventory (ARB, POL, MNT…) is refused
+  - `supportsRoute` is chain-only (`chunk-BCY6ZEAE.js:163`). Unsupported inventory (ARB, POL, MNT…) is refused
     at quote time (`tx-target`).
 - **Execution**: `depositNative` / `depositErc20` on RelayDepository `0x4cd0…bc31` (Mantle and Linea:
   `0x5991…ecca`). The dry quote names the depository as `approvalAddress` (probe).
   - A quote with placeholder addresses (no dest/refund given) is **never** built (`placeholder: "1"`), so always
     pass the real addresses.
 - **Stores**: `clearedStore`.
-  - `preflightDeposit` (`chunk-CCMNAZZB.js:261-272`) calls `has(id)`, then the in-realm record, then
+  - `preflightDeposit` (`chunk-BCY6ZEAE.js:305-316`) calls `has(id)`, then the in-realm record, then
     `add(id, order.output.deadline*1000)`. That deadline is quote time + 7 days. Either call throwing refuses the
     signature.
-  - The SDK also keeps a per-JS-realm in-memory record (`chunk-WRIKAUWI.js:24-37`, TTL = (600 + 2·300) s).
+  - The SDK also keeps a per-JS-realm in-memory record (`chunk-C3I2XYSW.js:25-38`, TTL = (600 + 2·300) s).
   - The durable store adds "survives a reload". This replaces mobile's `relayDurablePins`
     (`M/swap/pins.ts:102-147`) + `relayClearedStore` (`M/swap/relayCleared.ts:1-33`), which wrapped a *remote*
     stub's pins. Locally the provider takes the store directly. Same semantics: ids are lowercased and kept until
@@ -876,7 +876,7 @@ declare function wrapProvider(config: WrapProviderConfig): CrossChainProvider;
 ```
 
 - **Browser options**: `{rpcUrls: cfg.evmRpc}`, wrapped in `narrowRoute(…, isWrapPair)` (§6.1).
-  - `supportsRoute` is chain-only (`chunk-YIJIBFLG.js:105-107`). Without narrowing, every same-chain pair
+  - `supportsRoute` is chain-only (`chunk-GC6XODOS.js:106-108`). Without narrowing, every same-chain pair
     collects a "wrap: only ETH ↔ WETH" rejection. That refusal involves no I/O, but it clutters
     `RouteSet.rejections`.
   - Mobile narrowed it the same way (`M/swap/providers.ts:244-248`).
@@ -975,7 +975,7 @@ declare function symbiosisProvider(config?: SymbiosisProviderConfig): CrossChain
     queue in the same line, so a preview burst (5 rounds) never goes past 1 request per 1.1 s; a superseded round's
     queued call reaches `fetch` with its aborted signal and sends nothing.
   - Nothing paces across tabs (or users behind one IP). Its 429 reads as a rate limit (`RATE_LIMITED`): the SDK says
-    "Symbiosis API → 429", or `Symbiosis: <the body's message>` such as the one above (`chunk-BVFMCR2O.js:157-159`), so
+    "Symbiosis API → 429", or `Symbiosis: <the body's message>` such as the one above (`chunk-K3EPNDVO.js:176-183`), so
     the engine's venue back-off (ARCHITECTURE D29) stops asking it, 60 s doubling per repeat, in every tab that saw it.
   - Live, 2026-11-12 (Node, dry, blank destination, no refund): 100 USDT Ethereum → 95.95 USDT Tron, eta 64 s, fee
     $4; `swap-limits` then `/v2/quote` 1101 ms apart, `from` = the EVM placeholder, `to` = `TVjpch…Ftnb`.
@@ -983,8 +983,8 @@ declare function symbiosisProvider(config?: SymbiosisProviderConfig): CrossChain
   (jettons only) is quoted, but it is a jetton transfer a TON wallet signs: `executionOf` reads Symbiosis as signed,
   so a QR payer gets "Needs a wallet that signs on TON" (no TON wallet here yet). No same-chain.
 - **Preview** (§4.16): a dry quote fills its own placeholders for a blank address, sender included
-  (`chunk-BVFMCR2O.js:232-236`): the EVM sample, `EQCD39…qB2N` for TON, `TVjpch…Ftnb` (the EVM sample in Tron form)
-  for Tron (`:31-33/189`); `scrubSamples` covers all three.
+  (`chunk-K3EPNDVO.js:257-261`): the EVM sample, `EQCD39…qB2N` for TON, `TVjpch…Ftnb` (the EVM sample in Tron form)
+  for Tron (`:33-35/213`); `scrubSamples` covers all three.
 - **Execution**: `metaRoute` on the pinned MetaRouterGateway (approve the same gateway), or a TON jetton
   transfer body. `preflightDeposit` re-decodes everything.
   - `providerData.serviceReverts = "1"`: a stuck swap is reverted by Symbiosis' service, not by the user's key.
@@ -1021,8 +1021,8 @@ declare function balancerProvider(config: BalancerProviderConfig): CrossChainPro
   EVM sample as recipient (one hop, 1.5 s); a blank recipient is refused.
 - **Cost**: it overlaps Uniswap and LI.FI same-chain, and adds SOR + RPC load to every same-chain quote (asked right
   after Curve).
-- **Preview** (§4.16): refuses a blank recipient (`chunk-YF3UW4GH.js:108`), so it gets the EVM sample; it prices with
-  the Vault's `queryBatchSwap` `eth_call` (`:80-82`), sender = refund or else the recipient (`:159-161`), which moves
+- **Preview** (§4.16): refuses a blank recipient (`chunk-XFRLZ25H.js:125`), so it gets the EVM sample; it prices with
+  the Vault's `queryBatchSwap` `eth_call` (`:86-88`), sender = refund or else the recipient (`:176-178`), which moves
   nothing.
 
 ### 4.13 Omniston (default on since 2026-11-12, lazy chunk), `omniston`
@@ -1132,19 +1132,19 @@ accepted a foreign `Origin` header (`ws.mjs`).
 
 **In the app.** The stand-in is off (uncounted) until the chunk is in; a round waits up to 2 s for it (engine.ts
 `LAZY_WAIT_MS`), so the page's first round asks it too. Between networks it is asked for tokens only
-(`omnistonTokenLegs`): its getQuote refuses a native leg before sending anything (`chunk-FDSTD34Z.js:378-381`,
-`:1995-1998`) while its supportsRoute reads the chains alone. On an IPFS path gateway (`/ipfs/…`, `/ipns/…`) it is
+(`omnistonTokenLegs`): its getQuote refuses a native leg before sending anything (`chunk-DMO24BFW.js:379-382`,
+`:2086-2089`) while its supportsRoute reads the chains alone. On an IPFS path gateway (`/ipfs/…`, `/ipns/…`) it is
 off unless that page's operator layer turns it on: its HTLC secret would sit in storage every site there shares.
 
 **Stores**: both are required and durable (§5).
 
-**Preview** (§4.16): the RFQ names assets and an amount only, no address (`chunk-FDSTD34Z.js:2005-2010`), and the
-addresses are checked only for a live quote (`:1981-1989`, `:2002-2004`), so a dry quote needs neither a sample nor
+**Preview** (§4.16): the RFQ names assets and an amount only, no address (`chunk-DMO24BFW.js:2096-2101`), and the
+addresses are checked only for a live quote (`:2072-2080`, `:2093-2095`), so a dry quote needs neither a sample nor
 a sender. Each dry quote is kept in the quote store with the addresses it was given (blank in a preview), 6 h.
 
 ### 4.14 Fynd, `fynd`: Standard only (rewritten 2026-11-12)
 
-`AWK/protocol-swap2-fynd@0.2.9/dist/provider.d.ts`; the SDK's requests read in `dist/chunk-TZUER4XJ.js:61-221`.
+`AWK/protocol-swap2-fynd@0.2.12/dist/provider.d.ts`; the SDK's requests read in `dist/chunk-6AQCGGUZ.js:71-235`.
 
 - **Why only Standard.** The hosted API (`https://fynd-api.propellerheads.xyz`) sends no CORS headers (checked
   2026-11-12: `OPTIONS` → 404, `POST` → 401 without a key, no `Access-Control-*`), and its key is cp0x's, the
@@ -1170,12 +1170,12 @@ a sender. Each dry quote is kept in the quote store with the addresses it was gi
 - **Previews (app, 2026-11-13; ARCHITECTURE D7).** Asked in a preview round while the slot is live (read per round,
   after the round waits for the health answer); cp0x's daily Fynd budget (3000, shared with the cp0x wallet) caps the
   spend and D29's bucket paces each tab. Its SDK refuses a blank recipient ("recipient must be an EVM address",
-  `chunk-TZUER4XJ.js:154`), so a preview gives it the EVM sample (`FILLS_DESTINATION`); the sender is an EVM refund,
-  else that recipient (`:156`), and a dry quote needs no real one: both go to the API only as the order's `sender`
-  and `receiver` (`:167`), and the native-input simulation runs the quote's call from the sender with a state
-  override giving it the input plus 1 ETH (`{[sender]: {balance: value + 10^18}}`, `:216-218`), so the sample needs no
+  `chunk-6AQCGGUZ.js:168`), so a preview gives it the EVM sample (`FILLS_DESTINATION`); the sender is an EVM refund,
+  else that recipient (`:170`), and a dry quote needs no real one: both go to the API only as the order's `sender`
+  and `receiver` (`:181`), and the native-input simulation runs the quote's call from the sender with a state
+  override giving it the input plus 1 ETH (`{[sender]: {balance: value + 10^18}}`, `:230-232`), so the sample needs no
   funds. A token input is not simulated at quote time. Its texts name the recipient only in "calldata pays …, not
-  <receiver>" (`chunk-J6XM7WEG.js:77`, checksummed): the EVM sample, scrubbed. No check is changed; the preview is
+  <receiver>" (`chunk-6WSGOEAI.js:80`, checksummed): the EVM sample, scrubbed. No check is changed; the preview is
   never reviewable (D7).
 - **Routes**: same-chain, exact input, on the seven chains above. **Checks** (all the SDK's, none weakened): the
   calldata targets the pinned TychoRouterV3, is a plain `singleSwap`/`sequentialSwap`/`splitSwap`, spends exactly the
@@ -1223,23 +1223,23 @@ Fynd, asked by no round while its slot is off (§4.14), is absent from the list.
 
 | venue | blank `destAddress` in a dry quote | preview |
 |---|---|---|
-| uniswap | refuses "recipient must be an EVM address" (`chunk-XJDPJSBT.js:139`) | fill: EVM sample |
-| curve | refuses the same (`chunk-IFREGXMV.js:767`); the sample sits only in calldata, never sent (quotes are `get_dy`) | fill: EVM sample |
-| balancer | refuses the same (`chunk-YF3UW4GH.js:108`); prices with `queryBatchSwap` (`eth_call`, moves nothing), sender = refund or else the recipient (`:159-161`) | fill: EVM sample |
-| wrap | quotes; compares refund with destination only when a refund is given (`chunk-YIJIBFLG.js:127`) | blank; sits out on "Send to another address" (pays the signer only) |
-| usdt0 | prices with its own stand-in (the EVM sample, or the zero account into Tron/TON: `chunk-V2H32VE3.js:448`, `:241`) and returns a price-only quote, no `txRequest` (`:87`, `:510`) | blank — never filled (its stand-in is the point; the TON sample is the zero account it refuses) |
-| cctp | fills its own EVM placeholder (`chunk-H4W3JMYC.js:124`) | blank |
-| thorchain | sends `destination=""`, gets no memo, refuses "incomplete quote" (`chunk-AYP7O2NT.js:670/722`) | fill: destination family's sample |
+| uniswap | refuses "recipient must be an EVM address" (`chunk-6ZGWUPLL.js:145`) | fill: EVM sample |
+| curve | refuses the same (`chunk-NW2OLRIK.js:789`); the sample sits only in calldata, never sent (quotes are `get_dy`) | fill: EVM sample |
+| balancer | refuses the same (`chunk-XFRLZ25H.js:125`); prices with `queryBatchSwap` (`eth_call`, moves nothing), sender = refund or else the recipient (`:176-178`) | fill: EVM sample |
+| wrap | quotes; compares refund with destination only when a refund is given (`chunk-GC6XODOS.js:130`) | blank; sits out on "Send to another address" (pays the signer only) |
+| usdt0 | prices with its own stand-in (the EVM sample, or the zero account into Tron/TON: `chunk-7FQDRYVI.js:494`, `:285`) and returns a price-only quote, no `txRequest` (`:89`, `:556`) | blank — never filled (its stand-in is the point; the TON sample is the zero account it refuses) |
+| cctp | fills its own EVM placeholder (`chunk-UPA4KJKX.js:151`) | blank |
+| thorchain | sends `destination=""`, gets no memo, refuses "incomplete quote" (`chunk-EIAXGWNG.js:725/781`) | fill: destination family's sample |
 | chainflip | `destAddressBytes` throws on a blank Solana destination (`chunk-SJ6UVIVY.js:119-128`) | fill: destination family's sample |
-| near_intents | passes `recipient` as given (`chunk-4GRRM3WT.js:170`); refund = `refundAddress ?? its placeholder` (`:154`) | fill: destination family's sample; refund absent |
-| relay | `placeholder = dry && (!destAddress \|\| !refundAddress)`, flagged, never issued (`chunk-CCMNAZZB.js:128/232/244/262`) | blank — NEVER filled (a value would bypass that flag) |
-| jupiter | taker = `refundAddress \|\| destAddress`, else its dry taker (`chunk-EY2HJJXY.js:181-186`) | blank; sits out on "Send to another address" (pays the signer only) |
-| lifi | `fromAddress = refund \|\| its own placeholder` (EVM = the EVM sample, Solana `HAgk…3DKpqk`, `chunk-GWUGK4SG.js:681-682/866`), `toAddress = dest \|\| dryRecipient` = its Solana placeholder for EVM → Solana, else `fromAddress` (`:782/867`); priced for a placeholder → price-only, no `txRequest` (`:783-786/1069`) | only through cp0x's keyed proxy (§4.2); blank where both sides are one family and for EVM → Solana, fill: EVM sample for Solana → EVM; its Solana placeholder scrubbed |
-| fynd | refuses "recipient must be an EVM address" (`chunk-TZUER4XJ.js:154`); sender = EVM refund, else the recipient (`:156`); native input simulated with a balance state override (`:216-218`) | only through cp0x's keyed proxy (§4.14); fill: EVM sample (recipient and sender) |
-| symbiosis | dry: fills its own placeholders for both sides (`chunk-BVFMCR2O.js:232-236`): the EVM sample, `EQCD39…qB2N` (TON), `TVjpch…Ftnb` (Tron, `:31-33/189`); never needs a sender | blank; all three scrubbed; its one pacer keeps 1 req/s through a burst |
-| omniston | the RFQ carries no address (`chunk-FDSTD34Z.js:2005-2010`); addresses checked only when `dry === false` (`:1981-1989`, `:2002-2004`) | blank |
+| near_intents | passes `recipient` as given (`chunk-4DBCMQCI.js:198`); refund = `refundAddress ?? its placeholder` (`:182`) | fill: destination family's sample; refund absent |
+| relay | `placeholder = dry && (!destAddress \|\| !refundAddress)`, flagged, never issued (`chunk-BCY6ZEAE.js:170/276/288/306`) | blank — NEVER filled (a value would bypass that flag) |
+| jupiter | taker = `refundAddress \|\| destAddress`, else its dry taker (`chunk-4V65GQY2.js:212-217`) | blank; sits out on "Send to another address" (pays the signer only) |
+| lifi | `fromAddress = refund \|\| its own placeholder` (EVM = the EVM sample, Solana `HAgk…3DKpqk`, `chunk-G26GE46T.js:688-689/961`), `toAddress = dest \|\| dryRecipient` = its Solana placeholder for EVM → Solana, else `fromAddress` (`:789/962`); priced for a placeholder → price-only, no `txRequest` (`:790-793/1182`) | only through cp0x's keyed proxy (§4.2); blank where both sides are one family and for EVM → Solana, fill: EVM sample for Solana → EVM; its Solana placeholder scrubbed |
+| fynd | refuses "recipient must be an EVM address" (`chunk-6AQCGGUZ.js:168`); sender = EVM refund, else the recipient (`:170`); native input simulated with a balance state override (`:230-232`) | only through cp0x's keyed proxy (§4.14); fill: EVM sample (recipient and sender) |
+| symbiosis | dry: fills its own placeholders for both sides (`chunk-K3EPNDVO.js:257-261`): the EVM sample, `EQCD39…qB2N` (TON), `TVjpch…Ftnb` (Tron, `:33-35/213`); never needs a sender | blank; all three scrubbed; its one pacer keeps 1 req/s through a burst |
+| omniston | the RFQ carries no address (`chunk-DMO24BFW.js:2096-2101`); addresses checked only when `dry === false` (`:2072-2080`, `:2093-2095`) | blank |
 
-Samples (`PREVIEW_PLACEHOLDER`, copied from near-intents `chunk-4GRRM3WT.js:44-58`; each passes the catalog's
+Samples (`PREVIEW_PLACEHOLDER`, copied from near-intents `chunk-4DBCMQCI.js:46-60`; each passes the catalog's
 `isAddressFor`): EVM `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`, Bitcoin `bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq`,
 Solana `1nc1nerator11111111111111111111111111111111`, TON `UQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJKZ`, Tron
 `TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9`, Zcash `t1KfwsnwJeNRVjQGBDZhwKskpQbih2qx5Ua`. NEAR's `near` is not an address the
@@ -1343,7 +1343,7 @@ export function createProviderStores(): ProviderStores {
   const del = async (key: string) => { await run(await db(), "readwrite", (s) => s.delete(key)); };
 
   // Omniston: prefixes keep the quote rows apart from the secret rows (the provider stores several keys per quote id:
-  // quoteId, its binding, disclosed flags — chunk-FDSTD34Z.js:1525-1551).
+  // quoteId, its binding, disclosed flags — chunk-DMO24BFW.js:1607-1633).
   const q = (id: string) => `oq:${id}`;
   const s = (id: string) => `os:${id}`;
   const r = (id: string) => `rc:${id.toLowerCase()}`;
@@ -1398,7 +1398,7 @@ Notes:
     mobile's fail-closed rule (`M/swap/relayCleared.ts:6-7`). Surface it as "Enable site storage to use Relay".
   - Omniston is not built (§6.3).
 - The 6 h sweep never deletes a live secret. The longest EVM window is the 300 s public cancel; the timelocks
-  are `EVM_TIMELOCKS = [1, 120, 240, 300, 1, 120, 180, 0]` (`chunk-FDSTD34Z.js:548`).
+  are `EVM_TIMELOCKS = [1, 120, 240, 300, 1, 120, 180, 0]` (`chunk-DMO24BFW.js:597`).
 - Omniston calls `claim` for **every** quote, dry route-list quotes included (`SRV:56-58`). Rows are small (≈1–3
   KB), and the sweep keeps the table bounded.
 
@@ -1459,7 +1459,14 @@ export function narrowRoute(p: CrossChainProvider, pred: (from: Asset, to: Asset
 }
 ```
 
-`isWrapPair` mirrors the wrap module's own check (`chunk-YIJIBFLG.js:118-126`). `from.token` is a catalog
+The app's `delegate` (every wrapper above is built on it) copies each member the router reads, bound to the shared
+instance, and only those the original has; since swap2-core 0.13.0 that includes `ownGasEstimate` (router 0.6.1 keeps
+it in its dispatch snapshot): without it the engine would send a 0x native sale with the venue's quoted gas limit
+instead of the account's own estimate of the exact call. Since swap2-core 0.12.0 every wrapper that refuses or relays a
+refusal (`coolDownOnRateLimit`, `payoutToSigner`, the quote round's observer) passes the venue's classification on with
+its text: `onRefusal(text, info)`.
+
+`isWrapPair` mirrors the wrap module's own check (`chunk-GC6XODOS.js:121-129`). `from.token` is a catalog
 symbol; `to.token` is an address, or the zero address for native.
 
 ```ts
@@ -1599,7 +1606,7 @@ export function closeProviders(providers: readonly CrossChainProvider[]): void {
 }
 ```
 
-The router binds the methods it sees at construction (`chunk-R47JJEOO.js:51-77`). Every object above is
+The router binds the methods it sees at construction (`chunk-7ZUNB2U7.js:70-99`). Every object above is
 therefore final when the array is returned: no mutation later, and `lazyOmniston` swaps internals behind
 stable functions.
 
@@ -1729,7 +1736,7 @@ Reload the page instead. The IndexedDB stores make Omniston resume after a reloa
 |---|---|---|
 | `PROVIDERS`, `ProviderName` (`:17-33`) | replace | `ProviderName` in `runtimeConfig.ts` (`fynd` Standard only, §4.14; plus `curve`) |
 | `PROVIDER_NAMES`, `providerName` (`:35-52`) | **keep** | display names |
-| `SAME_CHAIN` (`:55`) | drop | each provider sets `supportsSameChain` itself (lifi, uniswap, wrap, balancer, jupiter, omniston; checked with `names.mjs`), and the router filters on it (`chunk-R47JJEOO.js:183-185`) |
+| `SAME_CHAIN` (`:55`) | drop | each provider sets `supportsSameChain` itself (lifi, uniswap, wrap, balancer, jupiter, omniston; checked with `names.mjs`), and the router filters on it (`chunk-7ZUNB2U7.js:212-214`) |
 | `TWO_PHASE` (`:58`) | **keep** | the review says "claim on arrival" for cctp. Equivalent check: `!!provider.buildClaim` (true for cctp **and** usdt0, but usdt0's claim is only a failed-delivery retry, so keep the explicit set) |
 | `PROVIDER_CAPABILITIES`, chain sets (`:63-195`) | drop | the real `supportsChain` / `supportsChainPair` / `supportsRoute` decide. For a chain picker: `providers.some((p) => p.enabled() && p.supportsChain?.(caip2))` |
 | `orderSpender` (`:86-101`) | **keep and extend** | dry quotes that name no spender: omniston → `AUDITED_OMNISTON_EVM_ORDER_PROTOCOLS[chain]?.[0]`; **chainflip → `CF_VAULTS[chain]` for EVM sources** (the dry quote has no `txRequest`, §4.6). Every other EVM venue names `txRequest.approvalAddress` in its dry quote (`approve.mjs`) |

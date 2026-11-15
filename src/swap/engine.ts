@@ -19,6 +19,7 @@
 import {CrossChainRouter, type RouteSet} from "@anywalletkit/protocol-swap2-router/router";
 import {RouterSwap2Protocol} from "@anywalletkit/protocol-swap2-router/swap2/router";
 import {usdValue} from "@anywalletkit/protocol-swap2-router/value";
+import type {Swap2Refusal, Swap2RefusalInfo} from "@anywalletkit/protocol-swap2-core/errors";
 import type {CrossChainProvider, Quote, QuoteParams} from "@anywalletkit/protocol-swap2-core/types";
 import type {SwapStatus} from "../contracts/activity";
 import type {QuoteRequest, RouteSnapshot, RoutesRequest, WebRoute} from "../contracts/routes";
@@ -61,7 +62,7 @@ export function quoteParams(req: QuoteRequest): QuoteParams {
   };
 }
 
-/** The venues a round asks: the router's own eligibility predicate (router chunk-R47JJEOO.js:174-185), D17. */
+/** The venues a round asks: the router's own eligibility predicate (router chunk-7ZUNB2U7.js:203-214), D17. */
 export function eligibleProviders(providers: readonly CrossChainProvider[], params: Pick<QuoteParams, "sourceChain" | "sourceToken" | "destChain" | "destToken">): string[] {
   const from = {chain: params.sourceChain, token: params.sourceToken};
   const to = {chain: params.destChain, token: params.destToken};
@@ -273,11 +274,12 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
     let done = false;
     const shown = (w: WebRoute): WebRoute =>
       unknownEta.has(w.provider) ? {...w, ...(sameChain ? {} : {etaSeconds: 0}), tags: w.tags.filter((t) => t !== "fastest")} : w;
-    const view = (quotes: RouteSet["quotes"], pending: string[], rejections: readonly string[]): RouteSnapshot => ({
+    // The router's classified refusals (router 0.6.0): the same texts as its rejections, each with the venue's reason.
+    const view = (quotes: RouteSet["quotes"], pending: string[], refusals: readonly Swap2Refusal[]): RouteSnapshot => ({
       mode,
       routes: orderRoutes(quotes.map((q) => shown(toWebRoute(q, source, gas, native, req.slippageBps)))),
       pending,
-      rejections: parseRejections(scrub ? rejections.map(scrub) : rejections, req.from).map((x) =>
+      rejections: parseRejections(scrub ? refusals.map((x) => ({message: scrub(x.message), ...(x.reason ? {reason: x.reason} : {})})) : refusals, req.from).map((x) =>
         skipped.has(x.provider) ? {...x, skipped: true as const} : x,
       ),
       asked,
@@ -297,7 +299,7 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
     };
     const emit = () => {
       if (done || !live() || !rounder) return;
-      publish(view(latest, asked.filter((n) => !settled.has(n)), rounder.lastRejections));
+      publish(view(latest, asked.filter((n) => !settled.has(n)), rounder.lastRefusals));
     };
     const observed = providers.map((p) =>
       delegate(p, {
@@ -319,9 +321,10 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
             const own: QuoteParams = {
               ...qp,
               ...(r.mode === "preview" ? previewAddressing(p.name, r.req) : {}),
-              onRefusal: (reason: string) => {
+              // The venue's classification (swap2-core 0.12.0) goes on with its text: the router files both.
+              onRefusal: (reason: string, info?: Swap2RefusalInfo) => {
                 watch(reason);
-                qp.onRefusal?.(reason);
+                qp.onRefusal?.(reason, info);
               },
             };
             // A preview call to LI.FI or Fynd (asked only through cp0x's proxy) gets a signal of its own, marked so the
@@ -353,7 +356,7 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
       const set = await rounder.getQuotes(params, {onUpdate: (s) => void (latest = s.quotes)});
       if (!live()) return null;
       done = true;
-      return set ? view(set.quotes, [], set.rejections) : view([], [], rounder.lastRejections);
+      return set ? view(set.quotes, [], set.refusals) : view([], [], rounder.lastRefusals);
     } finally {
       done = true;
       if (inflight === round) inflight = null;
@@ -369,7 +372,7 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
     const set = await one.getQuotes(quoteParams(req));
     const q = set?.quotes.find((x) => x.provider === provider);
     if (q) return {route: tagRoutes([toWebRoute(q, {chain: req.from.caip2, isToken: req.from.contract !== null}, gas, native, req.slippageBps)])[0]!, reason: null};
-    return {route: null, reason: parseRejections(one.lastRejections, req.from)[0]?.reason ?? "No route right now"};
+    return {route: null, reason: parseRejections(one.lastRefusals, req.from)[0]?.reason ?? "No route right now"};
   }
 
   async function swapStatus(id: string, fromChain: string): Promise<{status: SwapStatus; transactions: {hash: string; type?: string}[]; depositReceived?: true}> {

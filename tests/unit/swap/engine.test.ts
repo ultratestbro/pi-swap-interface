@@ -151,6 +151,14 @@ describe("quoteRoutes", () => {
     });
   });
 
+  it("a venue's reason (swap2-core 0.12.0) reaches its row through the round: a text no rule knows reads by it", async () => {
+    const final = await engineOver([venue("a", {refuse: "an odd new text 4242", refuseReason: "insufficient_liquidity"}), venue("b", {refuse: "an odd new text 4242"})]).quoteRoutes(live(), () => {});
+    expect(final?.rejections.map((r) => [r.provider, r.reason, r.category])).toEqual([
+      ["a", "Too large for its pools — try less", "amount"],
+      ["b", "No quote right now", "other"],
+    ]);
+  });
+
   it("a newer round supersedes the older one: null, its requests aborted, no late updates", async () => {
     const slow = venue("v", {min: "1", delayMs: 60});
     const engine = engineOver([slow]);
@@ -276,6 +284,10 @@ describe("requoteRoute", () => {
   it("a venue that no longer routes it: no route, its reason", async () => {
     const res = await engineOver([venue("near_intents", {refuse: "1Click 400: minimum swap amount is $10 [dry=true a->b amount=1]"})]).requoteRoute(request(), "near_intents");
     expect(res).toEqual({route: null, reason: "Minimum $10 right now"});
+  });
+  it("a venue that no longer routes it, for a reason only its classification names", async () => {
+    const res = await engineOver([venue("near_intents", {refuse: "an odd new text 4242", refuseReason: "chain_halted"})]).requoteRoute(request(), "near_intents");
+    expect(res).toEqual({route: null, reason: "Paused on this network for now"});
   });
   it("a venue that isn't built here", async () => {
     expect(await engineOver([venue("lifi", {min: "1"})]).requoteRoute(request(), "relay")).toEqual({route: null, reason: "Not available in this browser right now"});

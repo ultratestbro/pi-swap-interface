@@ -9,7 +9,8 @@ Sources read (read-only), pinned:
 - AWK packages as installed there: `@anywalletkit/swap2-assets@0.3.0`, `protocol-swap2-router@0.5.4`,
   `protocol-swap2-core@0.10.3`, `protocol-swap2-jupiter@0.3.6`; `viem@2.57.10`, `@solana/kit@8.5.0`. Re-checked
   against this repo's router 0.5.5, core 0.11.0 and jupiter 0.3.7 on 2026-11-13: of what this spec reads, only
-  `usdValue`'s native-fee source changed (price-only quotes, below).
+  `usdValue`'s native-fee source changed (price-only quotes, below); and against router 0.6.2, core 0.14.0 and
+  jupiter 0.3.10 on 2026-11-15: unchanged (`usdValue` stays in the same `chunk-VAOFSGCX.js`).
 - Every endpoint below was probed on 2026-11-11 with `Origin: https://swap.cp0x.com` (CORS preflight
   `OPTIONS` with `Access-Control-Request-Headers: content-type`, then the real request). Probe scripts are in
   Appendix B.

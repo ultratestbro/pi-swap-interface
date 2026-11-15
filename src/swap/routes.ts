@@ -8,6 +8,7 @@
  * stream in as venues answer (lib/swap/engine); this module only shapes
  * them. No React, no network — unit-tested in routes.test.ts.
  */
+import type {Swap2Refusal} from "@anywalletkit/protocol-swap2-core/errors";
 import type {RankedQuote} from "@anywalletkit/protocol-swap2-router/router";
 import type {PaySide, RouteRejection, RouteView} from "../contracts/routes";
 import type {QuoteGasLike} from "./gas";
@@ -108,12 +109,18 @@ export function friendlyReason(provider: string, reason: string, pay?: PaySide):
   return classifyRefusal(provider, reason, pay).reason;
 }
 
-/** "lifi: no route for …" → {provider, reason, category, detail, raw}; the router prefixes every rejection with the venue. */
-export function parseRejections(rejections: readonly string[], pay?: PaySide): RouteRejection[] {
-  return rejections.map((r) => {
+/**
+ * "lifi: no route for …" → {provider, reason, category, detail, raw}; the router prefixes every rejection with the venue.
+ * web: a rejection may come as the router's classified refusal (router 0.6.0 `RouteSet.refusals` / `lastRefusals`, the
+ * same text as `message`): its `reason` words a text the table doesn't know (refusals.ts BY_REASON).
+ */
+export function parseRejections(rejections: readonly (string | Pick<Swap2Refusal, "message" | "reason">)[], pay?: PaySide): RouteRejection[] {
+  return rejections.map((x) => {
+    const r = typeof x === "string" ? x : x.message;
+    const reason = typeof x === "string" ? undefined : x.reason;
     const i = r.indexOf(": ");
     const provider = i > 0 ? r.slice(0, i) : "";
-    return {provider, ...classifyRefusal(provider, i > 0 ? r.slice(i + 2) : r, pay)};
+    return {provider, ...classifyRefusal(provider, i > 0 ? r.slice(i + 2) : r, pay, reason)};
   });
 }
 

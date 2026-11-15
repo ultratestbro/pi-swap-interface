@@ -238,7 +238,7 @@ react-query key `["prices"]`, 60 s; `localStorage "cp0x.prices.v1"` only as a wa
   list quotes `{mode: "preview", req}`. Not assignable to `QuoteRequest` (its addresses are optional), so it can't
   type-check into a draft, a deposit or an execution. The engine's preview round (`src/swap/preview.ts`) is the ONLY
   place a sample address exists, and only per venue: a blank destination gets the destination family's sample (the
-  SDK's own table, near-intents chunk-4GRRM3WT.js:44-58) for uniswap, curve, balancer, thorchain, chainflip,
+  SDK's own table, near-intents chunk-4DBCMQCI.js:46-60) for uniswap, curve, balancer, thorchain, chainflip,
   near_intents and fynd, whose dry quotes can't price without one, and for lifi only Solana → EVM (its dry quote
   reuses the sender's placeholder as the destination, `FILLS_OTHER_FAMILY`; EVM → Solana prices for its own Solana
   placeholder since lifi 0.8.0); relay, usdt0, cctp, symbiosis, omniston, wrap and jupiter keep the blank address and
@@ -582,7 +582,7 @@ inside an open signing window. v1 supports only wallets with `solana:signTransac
 for every browser origin. Balances: the owner's ATAs via `getMultipleAccounts` (≤ 10 per call), never
 `getTokenAccountsByOwner` (blocked on publicnode).
 
-**D19 — Re-quote.** swap2-core 0.11.0 (as since 0.10.3) re-reviews a changed plan itself (`requoted: true`): no build observer, no
+**D19 — Re-quote.** swap2-core 0.14.0 (as since 0.10.3) re-reviews a changed plan itself (`requoted: true`): no build observer, no
 `requotePlan`; on a re-arm with no approvals keep the previous revokes. The review re-quotes the picked venue every
 30 s (react-query, retry 1, staleTime 0, gcTime 0); a venue that no longer routes it sets `gone` and blocks Confirm.
 
@@ -734,7 +734,12 @@ on node with stale state: invalid request"), cut after two lines, and venues tha
   passes), maximums DOWN; Symbiosis' "received amount … below Symbiosis' minimum" (receive-token units) shows no
   number. Unknown texts: past the venue's status prefix ("quote 404: ", "build 400: ", "1Click 400: ", "threw: "),
   a short plain phrase (≤ 40 chars; no number of 3+ digits, bracket, address, CODE_NAME or bare HTTP reason phrase
-  like "Forbidden") shows as is, anything else "No quote right now". The venues' own build checks (Chainflip's vault
+  like "Forbidden") shows as is, anything else "No quote right now" — unless its venue classified it (2026-11-15:
+  swap2-core 0.12.0's `Swap2RefusalReason`, which every module now gives next to an unchanged text and router 0.6.0
+  keeps as `RouteSet.refusals`): then the line its reason names (`BY_REASON`: `insufficient_liquidity` "Too large for
+  its pools — try less", `vault_mismatch` "Uses a contract we haven't verified", …). The text stays first: a reason
+  never overrides a rule. The engine's observer, `coolDownOnRateLimit` and `payoutToSigner` pass the reason on with
+  the text (`onRefusal(text, info)`), and `parseRejections` takes the router's refusals. The venues' own build checks (Chainflip's vault
   call, THORChain's router call, Symbiosis' transaction, USDT0's LZ fee) read as safety skips.
   `friendlyReason`/`parseRejections` (routes.ts) keep their exports and delegate. Wording only: no SDK check is
   weakened, and a safety refusal stays a refusal. The rate limit says how long ("Request limit hit — back in about

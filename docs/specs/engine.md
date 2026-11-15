@@ -1,12 +1,12 @@
 # cp0x Swap: driving the AWK swap2 engine in the browser, and the wallet-account contract
 
-Status: implementation spec, 2026-11-11. Sources read: AWK packages installed in `~/cp0x-elysium` (exact versions below), the mobile wallet `~/cp0x-elysium/apps/mobile/lib/{swap,send}`, cp0x-api `~/cp0x-elysium/apps/api/src/lib/crossChain/index.ts`. Line numbers refer to those files as of `756b115`; the `ENGINE` and `ROUTER` pins were re-read against this repo's installed swap2-core 0.11.0 and router 0.5.5 on 2026-11-13.
+Status: implementation spec, 2026-11-11. Sources read: AWK packages installed in `~/cp0x-elysium` (exact versions below), the mobile wallet `~/cp0x-elysium/apps/mobile/lib/{swap,send}`, cp0x-api `~/cp0x-elysium/apps/api/src/lib/crossChain/index.ts`. Line numbers refer to those files as of `756b115`; the `ENGINE` and `ROUTER` pins were re-read against this repo's installed swap2-core 0.14.0 and router 0.6.2 on 2026-11-15.
 
 Short names used below:
 
 - `CORE` = `~/cp0x-elysium/apps/mobile/node_modules/@anywalletkit/protocol-swap2-core/dist`
 - `ROUTER` = `~/cp0x-elysium/apps/mobile/node_modules/@anywalletkit/protocol-swap2-router/dist`
-- `ENGINE` = `CORE/chunk-MVEAEYYJ.js` (BaseSwap2Protocol, the whole execution engine, 1342 lines; swap2-core 0.11.0)
+- `ENGINE` = `CORE/chunk-KR2NO5BB.js` (BaseSwap2Protocol, the whole execution engine, 1470 lines; swap2-core 0.14.0)
 - `M` = `~/cp0x-elysium/apps/mobile/lib`
 
 ---
@@ -19,7 +19,7 @@ Short names used below:
 4. **EVM account** = reads through `WalletAccountReadOnlyEvm` (public RPC) and writes through a viem `WalletClient` (wagmi). It exposes `getChainId()` read from the wallet and **no `chain` property**, so the engine's account-chain check asks the wallet. Never set `accountChain` or `skipAccountChainCheck`.
 5. **Solana account** = the SDK's own `WalletAccountSolana`, with `externalSigner()` bridging to Wallet Standard `solana:signTransaction`. The SDK runs the full serialized-tx guard (`sendSerialized` → `checkSerialized`), simulation, the fee cap and the broadcast. The wallet only signs, and a signature over altered bytes fails the SDK's own verification. A local probe (§6.2) showed the bridge works end to end with `@solana/kit` 8.5.
 6. **Gate**: port `M/swap/gate.ts` (`checkPlan`, `planWrites`, the arm/consume matcher, `executionConstraints`) almost verbatim, but as a **per-execution instance**. `reviewExecution` = `checkPlan` + arm. Every write method on the engine account must consume one armed write before anything touches the wallet. Refusals carry `answered: true`, so the engine never reports them as "maybe sent".
-7. **Re-quote**: with swap2-core 0.11.0 (as since 0.10.3) the engine itself calls `reviewExecution` again (`requoted: true`) whenever the fresh plan differs. Mobile's `requotePlan` and `observeBuild` are not needed (§7.4).
+7. **Re-quote**: with swap2-core 0.14.0 (as since 0.10.3) the engine itself calls `reviewExecution` again (`requoted: true`) whenever the fresh plan differs. Mobile's `requotePlan` and `observeBuild` are not needed (§7.4).
 8. **Hardening the browser adds**: a kind/family check and an optional pin check (the provider packages' `*Pins.callTargets/spenders`) on top of `checkPlan`. A revoke is allowed only after an approval for that token and spender was actually sent. `eth_call` simulation runs before each EVM wallet prompt. The wallet's current account must equal the reviewed refund address. A cross-tab `navigator.locks` lock covers each execution.
 9. **EVM fee caps cannot be enforced** (the wallet picks the gas price). They are advisory only. Solana's fee cap **is** enforced (`transactionMaxFee`/`transferMaxFee` = 0.05 SOL), because we build the bytes the wallet signs.
 10. **Ids** are `awk1.<provider>.<intentId>[.<srcHash>[.<dstHash>[.ok]]]`. `encodeId` is not exported, so copy it (§4.6).
@@ -29,18 +29,18 @@ Short names used below:
 
 ## 1. Packages, import paths, bundling
 
-Pin exact versions (this repo's `package.json`, re-synced on every AWK bump; last 2026-11-13):
+Pin exact versions (this repo's `package.json`, re-synced on every AWK bump; last 2026-11-15):
 
 | package | version | used for |
 |---|---|---|
 | `@anywalletkit/core` | 0.8.0 | `externalSigner`, `UserRejectedError`, `TokenInfo`, `Swap2Options`… (peer of everything) |
-| `@anywalletkit/protocol-swap2-core` | 0.11.0 | engine, types, errors, `validQuote` |
-| `@anywalletkit/protocol-swap2-router` | 0.5.5 | `CrossChainRouter`, `RouterSwap2Protocol`, `usdValue` |
+| `@anywalletkit/protocol-swap2-core` | 0.14.0 | engine, types, errors (refusal reasons), `validQuote`, Permit2 (`/util`: `PERMIT2_ADDRESS`, `PERMIT2_TRANSFER_TYPES`, `appendPermit2Signature`) |
+| `@anywalletkit/protocol-swap2-router` | 0.6.2 | `CrossChainRouter` (+ `lastRefusals`), `RouterSwap2Protocol`, `usdValue` |
 | `@anywalletkit/swap2-assets` | 0.3.0 | catalog (`ccAsset`, `ccAssetByToken`, `CC_SOURCE_CHAINS`) |
 | `@anywalletkit/tx-preview-evm` | 0.5.1 | dependency of the engine (`decodeCall`) |
 | `@anywalletkit/wallet-evm` | 0.8.0 | `WalletAccountReadOnlyEvm` (reads, quotes, simulation) |
 | `@anywalletkit/wallet-solana` | 0.6.2 | `WalletAccountSolana`, `serializedGuardFromExecution` |
-| provider modules | lifi 0.8.0, relay 0.1.1, symbiosis 0.1.1, near-intents 0.3.4, chainflip 0.4.6, cctp 0.5.4, thorchain 0.4.0, usdt0 0.5.0, uniswap 0.4.4, curve 0.1.3, wrap 0.4.1, balancer 0.3.6, fynd 0.2.9 (Standard only), jupiter 0.3.7, omniston 0.5.6 | the providers spec covers these |
+| provider modules | lifi 0.8.3, relay 0.1.4, symbiosis 0.1.4, near-intents 0.3.7, chainflip 0.4.9, cctp 0.5.7, thorchain 0.4.3, usdt0 0.5.3, uniswap 0.4.7, curve 0.1.6, wrap 0.4.4, balancer 0.3.9, fynd 0.2.12 (Standard only), jupiter 0.3.10, omniston 0.5.9 | the providers spec covers these |
 | `viem` | one version, `2.57.x` (the version mobile resolves) | swap2-core needs `^2.45.0`. Dedupe with wagmi (`pnpm.overrides`) |
 
 Exact imports. These are the subpath exports in each `package.json`:
@@ -72,14 +72,14 @@ Bundling notes:
 
 - The engine imports `viem`, `@anywalletkit/tx-preview-evm` and `@anywalletkit/swap2-assets`. All are pure.
 - No Node built-ins appear in core, router, wallet-evm or wallet-solana (checked: no `node:` or `crypto`/`buffer` imports).
-- `protocol-swap2-omniston` imports `buffer` (`chunk-FDSTD34Z.js:14,19`, `validators.js:569`) and needs server-side stores. Omniston is TON, so it is "later"; do not ship it in v1.
+- `protocol-swap2-omniston` imports `buffer` (`chunk-DMO24BFW.js:14,19`, `validators.js:569`) and needs server-side stores. Omniston is TON, so it is "later"; do not ship it in v1.
 - Packages declare `engines.node >= 22`. Vite ignores this; do not enable `engine-strict`.
 
 ---
 
 ## 2. Quoting: `CrossChainRouter`
 
-Implementation: `ROUTER/chunk-R47JJEOO.js`. Types: `ROUTER/router.d.ts`.
+Implementation: `ROUTER/chunk-7ZUNB2U7.js`. Types: `ROUTER/router.d.ts`.
 
 ### 2.1 Constructor
 
@@ -87,6 +87,8 @@ Implementation: `ROUTER/chunk-R47JJEOO.js`. Types: `ROUTER/router.d.ts`.
 declare class CrossChainRouter {
   constructor(providers: CrossChainProvider[], options?: string | RouterOptions); // string = weights
   get lastRejections(): readonly string[];
+  get lastRefusals(): readonly Swap2Refusal[];   // router 0.6.0: the same, each {message, provider?, reason?, retryAfterMs?, httpStatus?}
+  refusalsFor(params: QuoteParams): readonly Swap2Refusal[] | undefined; // one auction's own, keyed by its params object
   only(name: string): CrossChainRouter;
   describeActivity(tx: ChainTx, ctx: DescribeActivityContext): ActivityItem | null;
   getProvider(name: string): CrossChainProvider | undefined;
@@ -107,7 +109,7 @@ interface RouterOptions {
 }
 ```
 
-Constructor behaviour (`chunk-R47JJEOO.js:38-82`):
+Constructor behaviour (`chunk-7ZUNB2U7.js:57-104`):
 
 - Every provider `name` must match `/^[A-Za-z0-9_-]+$/` and be unique, or the constructor throws.
 - Each provider is **re-bound** into a plain record of bound methods and flags (`enabled`, `supportsRoute`, `getQuote`, `buildDeposit`, `trackIntent`, `preflightDeposit?`, `notifyDeposit?`, `registerSignedOrder?`, `buildClaim?`, `claimTargets?`, `remote`, `verifiesBuilds`, `verifiesQuotes`, `depositAddressRoutes`, `callTargets?`, `spenders?`, `close?`, `supportsChain?`, `supportsChainPair?`, `describeActivity?`, `supportsSameChain`).
@@ -115,17 +117,17 @@ Constructor behaviour (`chunk-R47JJEOO.js:38-82`):
 
 ### 2.2 `getQuotes(params, {onUpdate})`
 
-Code: `chunk-R47JJEOO.js:170-242`.
+Code: `chunk-7ZUNB2U7.js:192-288`.
 
 1. **Eligibility.** A provider is eligible when `p.enabled() && p.supportsRoute({chain: sourceChain, token: sourceToken}, {chain: destChain, token: destToken})`. When `sourceChain === destChain`, only providers with `supportsSameChain === true` stay. With no eligible provider the call returns **`null`** (and `rejections` stays empty).
 2. **Parallel calls with a timeout.** All eligible providers are called in parallel. Each gets its own `AbortController` and a timeout: **8 s** normally, or **25 s** when only one provider is eligible. The 25 s case is always the one for `only(name)`.
 3. **Per-quote checks.** Each quote passes:
-   - `validQuote(q, params, p.name)` (`CORE/chunk-F5TRF52T.js:7-46`): the provider name matches; `sourceAmount === amountIn`; the amounts are positive integers with `min ≤ dest`; `min ≥ params.minAmountOut`; `min ≥ slippageFloor(dest, slippageBps)` (with 1 bp of rounding allowed); eta, reliability and feeUsd are finite; the fees are well-formed; the `txRequest` fields are well-formed; and **`validUntilMs > now`** (a quote with `validUntilMs` 0 is rejected).
+   - `validQuote(q, params, p.name)` (`CORE/chunk-QQSJPEYY.js:7-57`): the provider name matches; `sourceAmount === amountIn`; the amounts are positive integers with `min ≤ dest`; `min ≥ params.minAmountOut`; `min ≥ slippageFloor(dest, slippageBps)` (with 1 bp of rounding allowed); eta, reliability and feeUsd are finite; the fees are well-formed; the `txRequest` fields are well-formed; and **`validUntilMs > now`** (a quote with `validUntilMs` 0 is rejected).
    - `remotePinRefusal`, which is always `null` for local providers.
    - With `requireImmediateExecution`, quotes that have neither a `depositAddress` nor a `txRequest` are dropped.
 4. **Rejections.** Each rejection is one line, prefixed `"<name>: <reason>"`. The reason comes from the provider's `params.onRefusal(reason)`, or `"returned no quote"`, or `"rejected by validation (minDest=… vs floor=…, validUntil=…, now=…)"`, or the thrown message (cut to 160 characters). The router logs `console.warn("swap2-router: …")` for validation and pin refusals.
 5. **`onUpdate`.** After each provider settles, if at least one quote has been accepted, the router calls `onUpdate(rank(accepted, …, [...pending], rejections))`. Exceptions thrown by the observer are swallowed.
-6. **Result.** It resolves to the final `RouteSet`, with `pending: []`, or **`null`** when nothing was accepted. Read `router.lastRejections` in that case (mobile `M/swap/engine.ts:176`).
+6. **Result.** It resolves to the final `RouteSet`, with `pending: []`, or **`null`** when nothing was accepted. Read `router.lastRejections` in that case (mobile `M/swap/engine.ts:176`). Since router 0.6.0 each rejection also comes classified (`RouteSet.refusals`, `lastRefusals`: the same text as `message`, plus the venue's `reason` — swap2-core 0.12.0's `Swap2RefusalReason` — when it gave one through `onRefusal(text, info)` or a tagged throw; the router classifies its own: `returned no quote` → `no_route`, a disabled venue → `policy_refused`, validation by `quoteRejection`). The web reads the refusals (`engine.ts` `view`, `requoteRoute`) and words a text its table doesn't know by that reason (refusals.ts `BY_REASON`, D28); its observer and wrappers pass `info` on with the text.
 7. **No external `AbortSignal`.** To drop a stale round (the user typed again), guard the results with a generation counter.
 
 ```ts
@@ -140,17 +142,18 @@ interface RouteSet {
   fastest: RankedQuote;
   pending: string[];                   // only non-empty in onUpdate snapshots
   rejections: string[];                // "name: reason" (== lastRejections at that moment)
+  refusals: Swap2Refusal[];            // router 0.6.0: the same texts, each with the venue's Swap2RefusalReason when it gave one
 }
 ```
 
-### 2.3 Ranking (`rank`, `chunk-R47JJEOO.js:265-303`)
+### 2.3 Ranking (`rank`, `chunk-7ZUNB2U7.js:311-349`)
 
 - **USD values.** If `valueUsd` is set, it is computed per quote; a throw or a non-finite result counts as null. When **every** quote is priced, `relativeValue = max(0, v) / max(v)`. If any quote is unpriced, the auction falls back to `minDestAmount / max(minDestAmount)` for all quotes.
 - **Tie tier and best.** The tie tier is the quotes with `relativeValue ≥ 1 − tieBand`. `best` is the highest `w.price*rel + w.speed*etaScore + w.reliability*reliability` within the tier.
 - **Fastest.** `fastest` is the lowest `etaSeconds`; a tie goes to the higher value.
 - **Sort order.** `best` first, then `relativeValue` descending, then eta ascending.
 
-`getBestQuote(params, {prefer})` (`:143-163`) runs `getQuotes` and returns `best` or `fastest` with a `routeScore` attached. The engine's `resolveQuote` uses it (`ROUTER/chunk-S4DOWMWG.js:29-31`).
+`getBestQuote(params, {prefer})` (`:165-185`) runs `getQuotes` and returns `best` or `fastest` with a `routeScore` attached. The engine's `resolveQuote` uses it (`ROUTER/chunk-VSASJ3WV.js:29-31`).
 
 ### 2.4 Value and gas (`ROUTER/chunk-VAOFSGCX.js`)
 
@@ -176,12 +179,12 @@ The mobile ranking constants (copy them):
 
 ### 2.5 Lifecycle: `only()` and `close()` with shared providers
 
-- `only(name)` (`:84-88`) builds a **new** router over the *same bound provider records*. `close()` calls every provider's `close?.()`.
+- `only(name)` (`chunk-7ZUNB2U7.js:106-110`) builds a **new** router over the *same bound provider records*. `close()` calls every provider's `close?.()`.
 - Mobile can close freely, because its stubs are created per call (`engine.ts:178,195`). The browser shares real provider instances; today only Omniston implements `close` (it closes its WebSocket). Rules:
   - Build the provider registry and `appRouter` once (a module singleton).
   - Call `appRouter.close()` only on `pagehide`.
   - Never call `protocol.close()` or `router.only(x).close()` after a quote or an execution.
-- Module-level one-shot records survive inside the page and are lost on reload. Relay's "one deposit per order" record (`relayClearOrder`, `protocol-swap2-relay/dist/chunk-WRIKAUWI.js:28`, called at build/sign time) is one of them. The UI must never resubmit a quote object restored from storage after a reload.
+- Module-level one-shot records survive inside the page and are lost on reload. Relay's "one deposit per order" record (`relayClearOrder`, `protocol-swap2-relay/dist/chunk-C3I2XYSW.js:29`, called at build/sign time) is one of them. The UI must never resubmit a quote object restored from storage after a reload.
 
 ### 2.6 Browser `engine.ts`, ported from `M/swap/engine.ts`
 
@@ -264,7 +267,7 @@ separate preview round (§2.7).
 
 - The SDK has no address-free quote: `QuoteParams.destAddress` is a required string and `dry: true` is "pricing
   preview only" (`CORE/types.d.ts`). The router's quote stage never compares addresses (`getQuotes` / `validQuote`,
-  router `chunk-R47JJEOO.js:170-225`), and every build- and execution-time recipient/refund check stays as it is, so a
+  router `chunk-7ZUNB2U7.js:192-271`), and every build- and execution-time recipient/refund check stays as it is, so a
   preview round needs no weakened check — only per-venue addressing, kept inside the round.
 - The router gets `previewBaseParams(req)` (`src/swap/preview.ts`): `destAddress` = the real recipient or `""`,
   `refundAddress` = the real refund address or ABSENT (never `""`: NEAR reads `refundAddress ?? its placeholder`),
@@ -303,7 +306,7 @@ separate preview round (§2.7).
 
 ## 3. Executing: `RouterSwap2Protocol`
 
-Implementation: `ROUTER/chunk-S4DOWMWG.js` (router 0.5.5 freezes a shallow copy of the config, `:27`). Types: `ROUTER/swap2/router.d.ts`. Engine base: `ENGINE`.
+Implementation: `ROUTER/chunk-VSASJ3WV.js` (router 0.5.5 freezes a shallow copy of the config, `:27`). Types: `ROUTER/swap2/router.d.ts`. Engine base: `ENGINE`.
 
 ### 3.1 Constructor and config
 
@@ -326,9 +329,9 @@ interface RouterSwap2Config extends Swap2EngineConfig {
 }
 ```
 
-- The constructor (`chunk-S4DOWMWG.js:13-28`) runs `toCaip2(config.fromChain)`. A bare number becomes `eip155:<n>`, and genesis-hash ids are aliased: `solana:5eykt…` → `solana:mainnet`, `tron:0x2b6653dc` → `tron:728126428`, `bip122:0000…e93` → `bitcoin:mainnet` (`ENGINE:306-327`).
-- It freezes the config (`ENGINE:454-460`) and stores the account as is: `ProtocolBase` keeps `this._account` and `this._config` and does no validation.
-- `account: undefined` gives a quote-and-track-only protocol: `swap2` throws `Swap2ExecutionError` (`ENGINE:663-666`).
+- The constructor (`chunk-VSASJ3WV.js:13-28`) runs `toCaip2(config.fromChain)`. A bare number becomes `eip155:<n>`, and genesis-hash ids are aliased: `solana:5eykt…` → `solana:mainnet`, `tron:0x2b6653dc` → `tron:728126428`, `bip122:0000…e93` → `bitcoin:mainnet` (`ENGINE:328-349`).
+- It freezes the config (`ENGINE:476-482`) and stores the account as is: `ProtocolBase` keeps `this._account` and `this._config` and does no validation.
+- `account: undefined` gives a quote-and-track-only protocol: `swap2` throws `Swap2ExecutionError` (`ENGINE:705-708`).
 
 ### 3.2 `swap2(options)` input
 
@@ -343,7 +346,7 @@ type Swap2Options = {
   recipient?: string;           // ALWAYS pass it (cross-family: the engine's default is the source address!)
   refundAddress?: string;       // ALWAYS pass it (= source owner)
   slippage?: number;            // decimal; reviewed bps / 10_000
-  minAmountOut?: bigint | number; // REQUIRED by swap2(): `requireExecutionFloor` (ENGINE:433-438)
+  minAmountOut?: bigint | number; // REQUIRED by swap2(): `requireExecutionFloor` (ENGINE:455-460)
   fromTokenAmount: bigint | number;
 };
 ```
@@ -363,45 +366,49 @@ protocol.swap2({
 ```
 
 - `minOut = executionFloor(route.minDestAmount)` = the dry minimum less 50 bps (`M/swap/math.ts:54-59`). The review screen shows this floor as "Minimum received" (`app/swap/review.tsx:112`).
-- The engine refuses a live quote whose minimum is below `minAmountOut`, twice: the router's `validQuote` and `assertQuoteConstraints` (`ENGINE:400-415`). The refusal surfaces as `"no route available for the requested pair :: <provider>: rejected by validation (minDest=… vs floor=…)"`.
-- Do not pass the second argument (`Swap2ProtocolConfig` `maxNetworkFeeBps`/`maxProtocolFeeBps`). Those caps need itemized `fees`, which many providers lack (`ENGINE:574-596`), and the swap would be refused with `Swap2FeeLimitError`.
+- The engine refuses a live quote whose minimum is below `minAmountOut`, twice: the router's `validQuote` and `assertQuoteConstraints` (`ENGINE:422-437`). The refusal surfaces as `"no route available for the requested pair :: <provider>: rejected by validation (minDest=… vs floor=…)"`.
+- Do not pass the second argument (`Swap2ProtocolConfig` `maxNetworkFeeBps`/`maxProtocolFeeBps`). Those caps need itemized `fees`, which many providers lack (`ENGINE:614-640`), and the swap would be refused with `Swap2FeeLimitError`.
 
 ### 3.3 Order of operations inside `swap2()`
 
-This sequence determines the UI phases and when wallet prompts appear (`ENGINE:662-1121`).
+This sequence determines the UI phases and when wallet prompts appear (`ENGINE:704-1208`).
 
 | # | step | code | account calls | wallet prompt | phase |
 |---|---|---|---|---|---|
-| 0 | read-only account → `Swap2ExecutionError`; no `minAmountOut` → Error; an identical swap in flight on **the same account object** → `Swap2InFlightError` | 662-679 | `typeof sendTransaction` | — | — |
-| 1 | account chain check (§5.1) | 551-565, 683 | `chain`/`getChainId`/… | — | — |
-| 2 | `selfAddress = getAddress()`; recipient and refund default to it; `prepareOptions` (unlisted decimals) | 684-687 | `getAddress`, (`getTokenInfo`) | — | — |
-| 3 | **live quote** `resolveQuote(toParams(opts, dry=false))` = `router.getBestQuote` (≤25 s for `only`) → `Swap2QuoteError("no route … :: rejections")` | 688-696 | — | — | (show "Preparing…") |
-| 4 | provider registered and enabled; `buildDeposit(q)`; payload consistency (serialized vs data vs bodyBoc vs typedData; build == quote `txRequest`, or == deposit address and memo); chain id; memo and calldata are only allowed on families that support them | 697-768 | `typeof sendSerializedTransaction` | — | — |
-| 5 | an EVM ERC-20 deposit-address route is rewritten into `transfer(depositAddress, amount)` calldata on the token; non-EVM token routes become `account.transfer` | 769-794 | — | — | — |
-| 6 | value checks: serialized `value` = 0 or the input; ERC-20 `value` = the declared `nativeFee`; native `value` = input + `nativeFee`; `nativeFee ≤ nativeFeeCap()`: `NATIVE_FEE_CAP[chain]`, or the app's `nativeFeeCeiling` answer (swap2-core 0.11.0; this app: 0.01 ETH for USDT0's Legacy Mesh into Tron from Ethereum / Arbitrum, the chain's cap elsewhere) | 799-815, 123-181 | — | — | — |
-| 7 | TON cell body checks; remote-pin checks (not ours); typed-order shape (`primaryType: "Order"`, `verifyingContract` = the approval address, maker = self, makerAsset = source token, `makingAmount` = input, domain chainId) | 816-856, 193-221 | `getJettonWalletAddress` (TON) | — | — |
-| 8 | EVM calldata decode (`decodeCall`): never Permit2 or `setApprovalForAll` as the main call; `transfer`/`approve` only on the source token, ≤ the input, to self, the deposit address or the spender; never `transferFrom` | 857-882 | — | — | — |
-| 9 | allowance: `getAllowance(token, spender)`. If ≠ the input, approvals = `[0n?, input]` (the 0 reset only for USDT on eip155:1 when the current allowance is non-zero **or unknown**). A missing or throwing `getAllowance` counts as unknown, so the engine approves | 883-914 | `getAllowance` | — | — |
-| 10 | **`reviewExecution(plan)`** with a deep-frozen copy of the plan. A throw aborts with nothing sent. After it returns, an expired quote → `Swap2QuoteError("quote expired during review")` | 915-959 | — | — | — |
-| 11 | EVM gas pre-check: sum of `quoteSendTransaction(approve)` fees, plus the main call's fee (an estimate failure counts as 0 if approvals come first, otherwise it throws), plus `value`, compared with `getBalance()` → `Swap2InsufficientGasError` | 961-966, 1131-1148 | `getBalance`, `quoteSendTransaction` | — | — |
-| 12 | approvals, each `sendTransaction({to: token, data: approve(spender, amt), value: 0n, chainId?})` then `waitForTransaction(hash)`. On any failure: `revokeApproval()` (approve 0), then rethrow | 967-991 | `sendTransaction`, `waitForTransaction` | **1–2 × approve**, then possibly a **revoke** | `approving {index, total}` |
-| 13 | quote expired after approvals → **re-quote** once (recursive `executeSwap2` with `carried` = the allowance handoff); otherwise revoke and `Swap2QuoteError("quote expired before source broadcast")` | 992-1007 | — | — | `requoting` |
-| 14 | provider still enabled; `preflightDeposit(q, unsigned)` (THORChain vault revalidation, Relay one-shot) → on throw: revoke, rethrow | 1008-1021 | — | — | `preflight` (only if the provider has it) |
-| 15a | typed order: `signTypedData({domain (chainId → number), types minus EIP712Domain, primaryType, message})` → `registerSignedOrder` → returns `id` **without** a hash. No `signing`/`broadcast` phases | 1022-1054 | `signTypedData` | **sign typed data** | — |
-| 15b | serialized: `sendSerializedTransaction(tx, expect)`; token deposit (non-EVM): `transfer({token, recipient, amount, memo?})`; otherwise `sendTransaction({to, data?, value, chainId?, gasLimit?, body?/memo?})` | 1055-1091 | one of those | **the swap** | `signing` |
-| 16 | missing `hash` → `Swap2ExecutionError`. On a throw: `maybeSent(err)` → `Swap2MaybeSentError(hash?, id?)` with **no revoke**; otherwise revoke and rethrow | 1092-1107 | — | maybe a **revoke** | `broadcast {hash}` |
-| 17 | `notifyDeposit(intentId, hash)` (errors swallowed); return `{id: awk1.<p>.<intent>.<hash>, hash, transactions:[{hash,type:"source"}], fees, fromTokenAmount, toTokenAmount, toTokenAmountMin}` | 1108-1120 | — | — | — |
+| 0 | read-only account → `Swap2ExecutionError`; no `minAmountOut` → Error; an identical swap in flight on **the same account object** → `Swap2InFlightError` | 704-721 | `typeof sendTransaction` | — | — |
+| 1 | account chain check (§5.1) | 586-600, 725 | `chain`/`getChainId`/… | — | — |
+| 2 | `selfAddress = getAddress()`; recipient and refund default to it; `prepareOptions` (unlisted decimals) | 726-729 | `getAddress`, (`getTokenInfo`) | — | — |
+| 3 | **live quote** `resolveQuote(toParams(opts, dry=false))` = `router.getBestQuote` (≤25 s for `only`) → `Swap2QuoteError("no route … :: rejections")` | 730-735 | — | — | (show "Preparing…") |
+| 4 | provider registered and enabled; `buildDeposit(q)`; payload consistency (serialized vs data vs bodyBoc vs typedData; build == quote `txRequest`, or == deposit address and memo); chain id; memo and calldata are only allowed on families that support them | 736-810 | `typeof sendSerializedTransaction` | — | — |
+| 5 | an EVM ERC-20 deposit-address route is rewritten into `transfer(depositAddress, amount)` calldata on the token; non-EVM token routes become `account.transfer` | 811-836 | — | — | — |
+| 6 | value checks: serialized `value` = 0 or the input; ERC-20 `value` = the declared `nativeFee`; native `value` = input + `nativeFee`; `nativeFee ≤ nativeFeeCap()`: `NATIVE_FEE_CAP[chain]`, or the app's `nativeFeeCeiling` answer (swap2-core 0.11.0; this app: 0.01 ETH for USDT0's Legacy Mesh into Tron from Ethereum / Arbitrum, the chain's cap elsewhere) | 841-857, 140-203 | — | — | — |
+| 7 | TON cell body checks; remote-pin checks (not ours); typed-order shape (`primaryType: "Order"`, `verifyingContract` = the approval address, maker = self, makerAsset = source token, `makingAmount` = input, domain chainId) | 858-898, 215-243 | `getJettonWalletAddress` (TON) | — | — |
+| 8 | EVM calldata decode (`decodeCall`): never Permit2 or `setApprovalForAll` as the main call; `transfer`/`approve` only on the source token, ≤ the input, to self, the deposit address or the spender; never `transferFrom` | 917-943 | — | — | — |
+| 9 | allowance: `getAllowance(token, spender)`. If ≠ the input, approvals = `[0n?, input]` (the 0 reset only for USDT on eip155:1 when the current allowance is non-zero **or unknown**). A missing or throwing `getAllowance` counts as unknown, so the engine approves | 944-975 | `getAllowance` | — | — |
+| 9a | **Permit2 signature transfer** (swap2-core 0.13.0; a quote whose `txRequest` carries `permit2Transfer`, 0x's Settler): `readPermit2Transfer` holds the payload to the source chain's Permit2 domain, the source token, exactly the input, the called contract as the only spender, a deadline ≤ 1 h away; refused with a native input, a native value or `nativeFee` alongside, an `approvalAddress` that is not canonical Permit2, the account as spender, a quote valid past the deadline. The plan's `source` (`call`) carries the REBUILT payload as `permit2Transfer`; a standing Permit2 allowance that covers the input is left as is (no approval) | 899-916, 974 | — | — | — |
+| 9b | `ownGas`: a Permit2 call, or any EVM call of a provider that declares `ownGasEstimate` (0x's native sales), goes out with the account's own estimate — the plan shows no `gasLimit` and the quoted one is never sent | 916-917 | — | — | — |
+| 10 | **`reviewExecution(plan)`** with a deep-frozen copy of the plan. A throw aborts with nothing sent. After it returns, an expired quote → `Swap2QuoteError("quote expired during review")` | 976-1021 | — | — | — |
+| 11 | EVM gas pre-check: sum of `quoteSendTransaction(approve)` fees, plus the main call's fee (an estimate failure counts as 0 if approvals come first, otherwise it throws), plus `value`, compared with `getBalance()` → `Swap2InsufficientGasError` | 1023-1039, 1257-1275 | `getBalance`, `quoteSendTransaction` | — | — |
+| 11a | Permit2: `signTypedData({domain, types, primaryType: "PermitTransferFrom", message})` of the rebuilt payload **before** any approval (a deadline already passed → `Swap2QuoteError`), then `appendPermit2Signature` (`data ++ uint256(len) ++ sig`); a refusal here costs no approval (a re-quote pass revokes the one it holds) | 1029-1039, 1213-1220 | `signTypedData` | **sign typed data** | `signing` |
+| 12 | approvals, each `sendTransaction({to: token, data: approve(spender, amt), value: 0n, chainId?})` then `waitForTransaction(hash)`. On any failure: `revokeApproval()` (approve 0), then rethrow | 1040-1064 | `sendTransaction`, `waitForTransaction` | **1–2 × approve**, then possibly a **revoke** | `approving {index, total}` |
+| 13 | quote expired after approvals → **re-quote** once (recursive `executeSwap2` with `carried` = the allowance handoff); otherwise revoke and `Swap2QuoteError("quote expired before source broadcast")` | 1065-1080 | — | — | `requoting` |
+| 14 | provider still enabled; `preflightDeposit(q, unsigned)` (THORChain vault revalidation, Relay one-shot) → on throw: revoke, rethrow | 1081-1094 | — | — | `preflight` (only if the provider has it) |
+| 15a | typed order: `signTypedData({domain (chainId → number), types minus EIP712Domain, primaryType, message})` → `registerSignedOrder` → returns `id` **without** a hash. No `signing`/`broadcast` phases | 1095-1127 | `signTypedData` | **sign typed data** | — |
+| 15b | serialized: `sendSerializedTransaction(tx, expect)`; token deposit (non-EVM): `transfer({token, recipient, amount, memo?})`; otherwise `sendTransaction({to, data?, value, chainId?, gasLimit?, body?/memo?})` | 1128-1178 | one of those | **the swap** | `signing` |
+| 15c | `ownGas` (9b): before the main `sendTransaction`, `dryRunCall` estimates the exact call (a Permit2 call WITH its signature) from the account: a revert → `Swap2ExecutionError` `simulation_failed`, an RPC that doesn't answer twice → `upstream_unavailable`; either revokes. The call then goes out without `gasLimit` | 1129-1137, 1226-1247 | `quoteSendTransaction` | — | `signing` |
+| 16 | missing `hash` → `Swap2ExecutionError`. On a throw: `maybeSent(err)` → `Swap2MaybeSentError(hash?, id?)` with **no revoke**; otherwise revoke and rethrow | 1179-1194 | — | maybe a **revoke** | `broadcast {hash}` |
+| 17 | `notifyDeposit(intentId, hash)` (errors swallowed); return `{id: awk1.<p>.<intent>.<hash>, hash, transactions:[{hash,type:"source"}], fees, fromTokenAmount, toTokenAmount, toTokenAmountMin}` | 1195-1207 | — | — | — |
 
 ### 3.4 Other methods
 
-- `getSwap2Status(id)` (`ENGINE:1150-1155`): `decodeId` → `providerFor(name)` (throws `"no swap2 found for id"` if the provider is not in the router) → `provider.trackIntent({intentId, sourceTxHash?, destTxHash?, destTxConfirmed?})`. The result goes through `mapStatus` (`:439-442`) and becomes `{status, transactions?: [{hash: destTxHash, type: "destination"}]}`. No account is needed.
-- `claimSwap2(id, destAccount)` (`ENGINE:1166-1242`) handles two-phase routes (CCTP). It requires `provider.buildClaim` and an account with `sendTransaction`. The claim must:
+- `getSwap2Status(id)` (`ENGINE:1277-1282`): `decodeId` → `providerFor(name)` (throws `"no swap2 found for id"` if the provider is not in the router) → `provider.trackIntent({intentId, sourceTxHash?, destTxHash?, destTxConfirmed?})`. The result goes through `mapStatus` (`:461-464`) and becomes `{status, transactions?: [{hash: destTxHash, type: "destination"}]}`. No account is needed.
+- `claimSwap2(id, destAccount)` (`ENGINE:1293-1369`) handles two-phase routes (CCTP). It requires `provider.buildClaim` and an account with `sendTransaction`. The claim must:
   - be EVM calldata on `unsigned.chain` with no value, no approval and no serialized payload;
   - have `to ∈ provider.claimTargets(chain)`;
   - not decode as a transfer or approve.
 
   The destination account chain is checked with `readAccountChain(destAccount)`, which ignores `config.accountChain`, so the wallet must already be on the destination chain. The engine then sends `{to, data, value: 0n, chainId: Number, gasLimit?}` and calls `waitForTransaction`. A revert (`err.code === "reverted"` or `/reverted/`) becomes `Swap2ExecutionError`; a timeout keeps `confirmed = false`. It returns `{hash, chain, id: awk1.<p>.<intent>.<src>.<claimHash>[.ok]}`. Keep polling with **that** id.
-- `quoteSwap2(options)` (`:642-652`) returns one checked `Swap2Quote`. `quoteSwap2Routes` and `using(provider)` exist, but `Swap2Quote` has no `txRequest`, so the review cannot be built from them. Use `router.getQuotes` (§2.6), as mobile does.
+- `quoteSwap2(options)` (`ENGINE:686-694`) returns one checked `Swap2Quote`. `quoteSwap2Routes` and `using(provider)` exist, but `Swap2Quote` has no `txRequest`, so the review cannot be built from them. Use `router.getQuotes` (§2.6), as mobile does.
 - `bridge()` and `swap()` are legacy wrappers. Don't use them.
 
 ### 3.5 How mobile wires this (`M/swap/execute.ts`, `M/swap/engine.ts`)
@@ -482,7 +489,7 @@ interface IntentStatus { state: IntentState; depositReceived?: boolean; destTxHa
 | `serializedNativeAllowance?` | lamports a provider-built Solana tx may cost on top of the input (default `20_000_000n`, 0.02 SOL; 222, 1059-1063) | default |
 | `allowUnlistedTokens?: boolean` | trade tokens not in the catalog; reads decimals via `account.getTokenInfo` (484-522) | `false` in v1 |
 | `maxNetworkFeeBps` / `maxProtocolFeeBps` | fee caps, need itemized fees (566-596) | unset |
-| `nativeFeeCeiling?: (ctx) => bigint \| undefined` | per-execution native-fee cap in place of `NATIVE_FEE_CAP[chain]`, ≤ 20× it; asked before the review and approvals, and again on a re-quote pass, where a refusal revokes (swap2-core 0.11.0, 124-181) | `execute.ts` `nativeFeeCeiling`: 0.01 ETH for provider `usdt0`, dest `tron:728126428`, intent `usdt0-mesh:<src>:30420`, from `eip155:1` / `eip155:42161`; `undefined` (the chain's cap) for every other route (owner's decision, 2026-11-13; §4.7) |
+| `nativeFeeCeiling?: (ctx) => bigint \| undefined` | per-execution native-fee cap in place of `NATIVE_FEE_CAP[chain]`, ≤ 20× it; asked before the review and approvals, and again on a re-quote pass, where a refusal revokes (swap2-core 0.11.0, `ENGINE:141-203`) | `execute.ts` `nativeFeeCeiling`: 0.01 ETH for provider `usdt0`, dest `tron:728126428`, intent `usdt0-mesh:<src>:30420`, from `eip155:1` / `eip155:42161`; `undefined` (the chain's cap) for every other route (owner's decision, 2026-11-13; §4.7) |
 | `RouterSwap2Config.router` | one-provider router | `appRouter().only(reviewed.provider)` |
 | `RouterSwap2Config.prefer` | `best`/`fastest` | unset (a single provider) |
 
@@ -498,7 +505,8 @@ interface Swap2ExecutionPlan {
   requoted?: true;
   source:
     | {kind: "call"; to: string; data?: string; value: bigint; chainId?: number; gasLimit?: bigint;
-       memo?: string; memoEncoding?: "utf8" | "hex"; cellBody?: boolean; cellBodyDecoded?: TonBodySummary}
+       memo?: string; memoEncoding?: "utf8" | "hex"; cellBody?: boolean; cellBodyDecoded?: TonBodySummary;
+       permit2Transfer?: string}  // swap2-core 0.13.0: the rebuilt EIP-712 PermitTransferFrom the account signs first (0x)
     | {kind: "token-transfer"; token: string; recipient: string; amount: bigint; memo?: string; memoEncoding?: "utf8" | "hex"}
     | {kind: "serialized"; serializedTx: string}
     | {kind: "typed-order"; typedData: string};
@@ -507,7 +515,7 @@ type Swap2ExecutionPhase = "approving" | "requoting" | "preflight" | "signing" |
 interface Swap2ExecutionPhaseDetail { index?: number; total?: number; hash?: string }
 ```
 
-Which `source` kind each route produces (`ENGINE:934-943`):
+Which `source` kind each route produces (`ENGINE:995-1005`):
 
 | route | `source` |
 |---|---|
@@ -519,9 +527,9 @@ Which `source` kind each route produces (`ENGINE:934-943`):
 | Jupiter or a LI.FI Solana leg | `serialized` |
 | Omniston EVM-source order | `typed-order` |
 
-The plan's identity for the re-quote comparison is `reviewedIdentity` (`ENGINE:251-254`): the whole plan minus `feeUsd`, `etaSeconds`, `validUntilMs`, `approvals`, `destAmount` and `requoted`.
+The plan's identity for the re-quote comparison is `reviewedIdentity` (`ENGINE:273-276`): the whole plan minus `feeUsd`, `etaSeconds`, `validUntilMs`, `approvals`, `destAmount` and `requoted`.
 
-### 4.4 `SerializedExecutionExpectation` (handed to `sendSerializedTransaction`, `base.d.ts:239-270`, built at `ENGINE:1062-1068`)
+### 4.4 `SerializedExecutionExpectation` (handed to `sendSerializedTransaction`, `base.d.ts:239-270`, built at `ENGINE:1144-1150`)
 
 ```ts
 interface SerializedExecutionExpectation {
@@ -535,18 +543,18 @@ interface SerializedExecutionExpectation {
 
 It is structurally compatible with wallet-solana's `SerializedExecutionInput`. Map it **only** with `serializedGuardFromExecution(expect)`. A hand-written mapping that drops `bridgeOut` checks a bridge against the SOL ceiling only (mobile comment, `execute.ts:131-133`).
 
-### 4.5 Errors (`CORE/errors.d.ts`, `CORE/chunk-IVR3SREQ.js`)
+### 4.5 Errors (`CORE/errors.d.ts`, `CORE/chunk-UD3CJFBY.js`)
 
-All of these extend `Swap2Error extends Error {code: Swap2ErrorCode}`, with `name = class name`. **Many engine refusals are plain `Error`s** (build mismatches, chain mismatch, "provider disabled", native fee cap). Map errors by `instanceof` first, then by message regex, the way mobile's `swapErrorText` does (`M/swap/execute.ts:326-352`).
+All of these extend `Swap2Error extends Error {code: Swap2ErrorCode}`, with `name = class name`; since swap2-core 0.12.0 a classified one also carries `reason` (`Swap2RefusalReason`, plus `retryAfterMs` / `httpStatus`, and `refusals` on "no route available"), read by `refusalOf(err)`, texts unchanged. **Many engine refusals are plain `Error`s** (build mismatches, chain mismatch, "provider disabled", native fee cap). Map errors by `instanceof` first, then by message regex, the way mobile's `swapErrorText` does (`M/swap/execute.ts:326-352`).
 
 | class | code | thrown when | sent? | UI (port of mobile texts) |
 |---|---|---|---|---|
 | `Swap2QuoteError` | QUOTE | no live route (`"no route available for the requested pair :: <rejections>"`); quote expired during review or before broadcast; a fresh quote moved the spender, or no longer needs an allowance (allowance revoked) | nothing, or approval revoked | "The route is no longer available (…)". A min-floor breach shows as a price move (regex `/minAmountOut\|below the (requested\|caller)\|floor/`) |
 | `Swap2ValidationError` | VALIDATION | calldata, typed order or TON body refused; malformed id; bad `toTokenDecimals` | nothing | "This route was refused for safety" + detail |
 | `Swap2ExecutionError` | EXECUTION | read-only account; a required hook is missing; no hash returned; claim reverted | depends | generic |
-| `Swap2InFlightError` (extends Execution) | EXECUTION | the same options are already running on the same account object (`IN_FLIGHT` WeakMap keyed by the account, `ENGINE:49-53,669-673`) | nothing for this call | "This swap is already running" |
+| `Swap2InFlightError` (extends Execution) | EXECUTION | the same options are already running on the same account object (`IN_FLIGHT` WeakMap keyed by the account, `ENGINE:54-58,711-715`) | nothing for this call | "This swap is already running" |
 | `Swap2InsufficientGasError` (extends Execution) | EXECUTION | EVM native balance < approvals + main fee + value | nothing | "Not enough {native} to pay the network fees" |
-| `Swap2MaybeSentError {hash?, id?}` (extends Execution) | EXECUTION | the send threw and `maybeSent(err)` matched: an error in the cause chain with `maybeSent: true` (wallet-evm and wallet-solana `BroadcastUnknownError`), or the text matches `LOST_ANSWER` (`ENGINE:54-62`). **No revoke**, because the deposit may spend the allowance | maybe | "May still go through, check your wallet's activity before retrying". Track `id` if present |
+| `Swap2MaybeSentError {hash?, id?}` (extends Execution) | EXECUTION | the send threw and `maybeSent(err)` matched: an error in the cause chain with `maybeSent: true` (wallet-evm and wallet-solana `BroadcastUnknownError`), or the text matches `LOST_ANSWER` (`ENGINE:59-79`). **No revoke**, because the deposit may spend the allowance | maybe | "May still go through, check your wallet's activity before retrying". Track `id` if present |
 | `Swap2FeeLimitError` | FEE_LIMIT | `max*FeeBps` caps (not used) | nothing | — |
 | `Swap2StatusError` | STATUS | claim not ready | — | "Attestation pending" |
 | `Swap2UnsupportedOperationError` | UNSUPPORTED_OPERATION | exact-out; a provider without a claim step; a non-EVM claim | — | — |
@@ -555,7 +563,7 @@ All of these extend `Swap2Error extends Error {code: Swap2ErrorCode}`, with `nam
 | ours: `SwapGateRefusal` (`answered: true`) | — | an unarmed write reached the account | nothing | "A transaction didn't match the reviewed route, refused" |
 | wallet rejection (`answered: true`) | — | user rejected in the wallet | nothing (a revoke may follow) | "Cancelled in your wallet" |
 
-The `maybeSent` heuristic (`ENGINE:55-62`) walks up to 6 levels of `.cause`:
+The `maybeSent` heuristic (`ENGINE:60-67`) walks up to 6 levels of `.cause`:
 
 1. Any level with `maybeSent === true` → "maybe sent" (with `hash` if present).
 2. Else any level with `answered === true` → definitive failure.
@@ -565,10 +573,10 @@ The `maybeSent` heuristic (`ENGINE:55-62`) walks up to 6 levels of `.cause`:
 
 ### 4.6 Swap ids
 
-Format (`ENGINE:255-280`): `awk1.<provider>.<intentId>[.<sourceTxHash>[.<destTxHash>[.ok]]]`. Each segment is `encodeURIComponent`'d with `.` → `%2E`, and there are 2–5 segments. The provider must match `/^[A-Za-z0-9_-]+$/`. A typed order's id has no hash; a deposit-address route tracked without the source hash also has none. `SWAP2_ID_PREFIX` is exported; `encodeId` and `decodeId` are not, so copy them:
+Format (`ENGINE:277-302`): `awk1.<provider>.<intentId>[.<sourceTxHash>[.<destTxHash>[.ok]]]`. Each segment is `encodeURIComponent`'d with `.` → `%2E`, and there are 2–5 segments. The provider must match `/^[A-Za-z0-9_-]+$/`. A typed order's id has no hash; a deposit-address route tracked without the source hash also has none. `SWAP2_ID_PREFIX` is exported; `encodeId` and `decodeId` are not, so copy them:
 
 ```ts
-// src/lib/swap/ids.ts (verbatim logic from ENGINE:257-280; decode as M/swap/execute.ts:259-271)
+// src/lib/swap/ids.ts (verbatim logic from ENGINE:279-302; decode as M/swap/execute.ts:259-271)
 import {SWAP2_ID_PREFIX} from "@anywalletkit/protocol-swap2-core/swap2/base";
 const enc = (v: string) => encodeURIComponent(v).replace(/\./g, "%2E");
 export function encodeSwapId(provider: string, intentId: string, sourceTxHash?: string, destTxHash?: string, destTxConfirmed = false): string {
@@ -586,10 +594,10 @@ export function decodeSwapId(id: string): {provider: string; intentId: string; s
 
 ### 4.7 Engine-enforced constants worth knowing
 
-- `NATIVE_FEE_CAP` per chain (`ENGINE:79-122`): 0.005 ETH by default, 20 POL, 0.005 BNB, 0.1 AVAX, 0.1 HYPE, … Only `swap2()` applies it (`declaredNativeFee` at `:173-181`, called at `:809`/`:813`, before the approvals and the review): `router.getQuotes` and the route list do **not** check it, so a route whose fee is above the cap is listed and ranked, and its Confirm is refused before any approval (`swap2: quoted native fee X exceeds the cap Y for <chain>`, a plain `Error`). swap2-core 0.11.0 adds `Swap2EngineConfig.nativeFeeCeiling` (`nativeFeeCap`, `:124-172`), which may raise or lower the cap per execution, up to 20× the chain's (`NATIVE_FEE_CEILING_MAX_MULTIPLE`). This app answers 0.01 ETH for USDT0's Legacy Mesh into Tron from Ethereum or Arbitrum (its LayerZero fee ≈ 0.0053 ETH on 2026-11-12, sealed with 25 % headroom ≈ 0.0067 ETH; the unused part is refunded in the same transaction) and `undefined` for every other route, so their defaults hold (`execute.ts` `nativeFeeCeiling`; `tests/unit/execute/flow.test.ts` pins the config keys and the matches). The in-page gate's own value check (twice the reviewed `nativeFee`, §7.3) is unchanged.
-- The default serialized allowance is 0.02 SOL and the default TON gas ceiling is 1 TON (`:222-223`).
-- Approvals are always for the **exact** input amount (`:884`), never unlimited.
-- The in-flight key is `[fromChain, fromToken, toToken, toChain, recipient, refundAddress, fromTokenAmount, toTokenAmount, minAmountOut, slippage]`, keyed per account object (`:49-53`).
+- `NATIVE_FEE_CAP` per chain (`ENGINE:96-139`): 0.005 ETH by default, 20 POL, 0.005 BNB, 0.1 AVAX, 0.1 HYPE, … Only `swap2()` applies it (`declaredNativeFee` at `:190-203`, called at `:851`/`:855`, before the approvals and the review): `router.getQuotes` and the route list do **not** check it, so a route whose fee is above the cap is listed and ranked, and its Confirm is refused before any approval (`swap2: quoted native fee X exceeds the cap Y for <chain>`, a plain `Error`). swap2-core 0.11.0 adds `Swap2EngineConfig.nativeFeeCeiling` (`nativeFeeCap`, `:141-189`), which may raise or lower the cap per execution, up to 20× the chain's (`NATIVE_FEE_CEILING_MAX_MULTIPLE`). This app answers 0.01 ETH for USDT0's Legacy Mesh into Tron from Ethereum or Arbitrum (its LayerZero fee ≈ 0.0053 ETH on 2026-11-12, sealed with 25 % headroom ≈ 0.0067 ETH; the unused part is refunded in the same transaction) and `undefined` for every other route, so their defaults hold (`execute.ts` `nativeFeeCeiling`; `tests/unit/execute/flow.test.ts` pins the config keys and the matches). The in-page gate's own value check (twice the reviewed `nativeFee`, §7.3) is unchanged.
+- The default serialized allowance is 0.02 SOL and the default TON gas ceiling is 1 TON (`:244-245`).
+- Approvals are always for the **exact** input amount (`:945`), never unlimited.
+- The in-flight key is `[fromChain, fromToken, toToken, toChain, recipient, refundAddress, fromTokenAmount, toTokenAmount, minAmountOut, slippage]`, keyed per account object (`:54-58`).
 
 ---
 
@@ -597,7 +605,7 @@ export function decodeSwapId(id: string): {provider: string; intentId: string; s
 
 The engine accepts the account as `unknown` and duck-types it. Every member it touches (grep of `ENGINE`: `signer.*`, `reader.*`, `this._account`) is listed below.
 
-### 5.1 Chain identity (`readAccountChain`, `ENGINE:281-297`; check at `:551-565`)
+### 5.1 Chain identity (`readAccountChain`, `ENGINE:303-319`; check at `:586-600`)
 
 Resolution order:
 
@@ -623,18 +631,18 @@ Engine tx shapes are exact, so the gate must match them.
 
 | member | engine call (line) | args the engine passes | expected return | EVM | Solana | TON / Tron (later) | if missing |
 |---|---|---|---|---|---|---|---|
-| `getAddress()` | 684 | — | `Promise<string>` (self; default recipient/refund; typed-order `maker`; TON excess check) | checksummed owner | base58 | raw/friendly / base58 `T…` | **TypeError, crash** (required) |
-| `chain` / `getChainId()` / … | 283-296 | — | see §5.1 | `getChainId()` from the wallet | `chain` property | `chain` | Error before anything |
-| `sendTransaction(tx)` | 664 (presence), 969-974 (approve), 1083-1090 (main), 1218-1224 (claim) | approve: `{to: token, data: approve(spender,amt), value: 0n, chainId?}`; main: `{to, data?, value: bigint, chainId?: number, gasLimit?: bigint, body?: Cell \| string (TON), memo?, memoEncoding? (Tron), memo? (NEAR)}`; claim: `{to, data, value: 0n, chainId: number, gasLimit?}` | `Promise<{hash: string}>` (`fee` is ignored; return `fee: 0n`) | `eth_sendTransaction` | `{to, value}`: a SOL transfer only (calldata is refused off EVM, 698-700) | TON: `body` is a Cell (cell body) or a string (**text comment**); Tron: TRX with an optional memo | `Swap2ExecutionError` "requires a signing account" (the read-only path) |
-| `waitForTransaction(hash)` | 975 (after each approval), 1228-1240 (claim) | `hash` | resolves when mined and successful; **throws** on revert (`code: "reverted"` or `/reverted/` in the message for claims) | receipt wait | not called | not called | no wait: the main call follows the approval immediately (race) and a claim stays `confirmed=false` |
-| `quoteSendTransaction(tx)` | 1134, 1138 | the same shapes as `sendTransaction` (approve and main; main includes `gasLimit` if quoted) | `Promise<{fee: bigint}>`, the worst case `gas × maxFeePerGas`. **Throw** when estimation fails | public RPC | not called (EVM only) | — | the gas pre-check is skipped |
-| `getBalance()` | 1144 | — | native balance (BigInt-able) | public RPC | not called (EVM only) | — | the gas pre-check is skipped |
-| `getAllowance(token, spender)` | 906-912 | ERC-20 contract, spender | BigInt-able; a throw counts as unknown | public RPC `allowance` | not called | — | always approves (and on eip155:1 USDT always resets to 0 first) |
-| `getTokenInfo(token)` | 508-516 | contract / mint | `{decimals: number}` (`TokenInfo`) | public RPC | `WalletAccountSolana.getTokenInfo` | — | only with `allowUnlistedTokens`: then `fromTokenDecimals` is required |
-| `signTypedData(td)` | 1024-1040 | `{domain (chainId normalized to number), types (no EIP712Domain), primaryType?: string, message}` | `Promise<string>` (0x signature) | `eth_signTypedData_v4` | — | — | Error **after approvals**, then a revoke |
-| `transfer(o)` | 1071-1081 | `{token: mint/jetton/TRC-20, recipient: depositAddress, amount: bigint, memo?, memoEncoding? (Tron only)}` | `Promise<{hash: string}>` | never (EVM token deposits become calldata) | SPL / Token-2022 `transferChecked` (+ATA) | jetton transfer / TRC-20 + memo | `Swap2ExecutionError` at the signing step (non-EVM sources have no approvals, so nothing has been sent) |
-| `sendSerializedTransaction(tx, expect)` | 712 (presence, before review), 1069 | base64 wire tx, `SerializedExecutionExpectation` | `Promise<{hash: string}>` | — | guard → sign → broadcast | — | `Swap2ExecutionError` before the review |
-| `getJettonWalletAddress(master)` | 834 | jetton master | the own jetton wallet address | — | — | TON jetton cell-body deposits | refused (`Swap2ValidationError`) |
+| `getAddress()` | 726 | — | `Promise<string>` (self; default recipient/refund; typed-order `maker`; TON excess check) | checksummed owner | base58 | raw/friendly / base58 `T…` | **TypeError, crash** (required) |
+| `chain` / `getChainId()` / … | 305-318 | — | see §5.1 | `getChainId()` from the wallet | `chain` property | `chain` | Error before anything |
+| `sendTransaction(tx)` | 706 (presence), 1042-1047 (approve), 1166-1177 (main), 1345-1351 (claim) | approve: `{to: token, data: approve(spender,amt), value: 0n, chainId?}`; main: `{to, data?, value: bigint, chainId?: number, gasLimit?: bigint, body?: Cell \| string (TON), memo?, memoEncoding? (Tron), memo? (NEAR)}`; claim: `{to, data, value: 0n, chainId: number, gasLimit?}` | `Promise<{hash: string}>` (`fee` is ignored; return `fee: 0n`) | `eth_sendTransaction` | `{to, value}`: a SOL transfer only (calldata is refused off EVM, 698-700) | TON: `body` is a Cell (cell body) or a string (**text comment**); Tron: TRX with an optional memo | `Swap2ExecutionError` "requires a signing account" (the read-only path) |
+| `waitForTransaction(hash)` | 1048 (after each approval), 1355-1367 (claim) | `hash` | resolves when mined and successful; **throws** on revert (`code: "reverted"` or `/reverted/` in the message for claims) | receipt wait | not called | not called | no wait: the main call follows the approval immediately (race) and a claim stays `confirmed=false` |
+| `quoteSendTransaction(tx)` | 1260, 1264 (gas pre-check), 1234 (dry run, `ownGas`) | the same shapes as `sendTransaction` (approve and main; main includes `gasLimit` if quoted) | `Promise<{fee: bigint}>`, the worst case `gas × maxFeePerGas`. **Throw** when estimation fails | public RPC | not called (EVM only) | — | the gas pre-check is skipped |
+| `getBalance()` | 1271 | — | native balance (BigInt-able) | public RPC | not called (EVM only) | — | the gas pre-check is skipped |
+| `getAllowance(token, spender)` | 967-973 | ERC-20 contract, spender | BigInt-able; a throw counts as unknown | public RPC `allowance` | not called | — | always approves (and on eip155:1 USDT always resets to 0 first) |
+| `getTokenInfo(token)` | 543-551 | contract / mint | `{decimals: number}` (`TokenInfo`) | public RPC | `WalletAccountSolana.getTokenInfo` | — | only with `allowUnlistedTokens`: then `fromTokenDecimals` is required |
+| `signTypedData(td)` | 1097-1113 (typed order), 1213-1220 (Permit2) | `{domain (chainId normalized to number), types (no EIP712Domain), primaryType?: string, message}` | `Promise<string>` (0x signature) | `eth_signTypedData_v4` | — | — | typed order: Error **after approvals**, then a revoke; Permit2: refused **before** any approval, nothing to revoke |
+| `transfer(o)` | 1153-1163 | `{token: mint/jetton/TRC-20, recipient: depositAddress, amount: bigint, memo?, memoEncoding? (Tron only)}` | `Promise<{hash: string}>` | never (EVM token deposits become calldata) | SPL / Token-2022 `transferChecked` (+ATA) | jetton transfer / TRC-20 + memo | `Swap2ExecutionError` at the signing step (non-EVM sources have no approvals, so nothing has been sent) |
+| `sendSerializedTransaction(tx, expect)` | 751 (presence, before review), 1151 | base64 wire tx, `SerializedExecutionExpectation` | `Promise<{hash: string}>` | — | guard → sign → broadcast | — | `Swap2ExecutionError` before the review |
+| `getJettonWalletAddress(master)` | 876 | jetton master | the own jetton wallet address | — | — | TON jetton cell-body deposits | refused (`Swap2ValidationError`) |
 
 Nothing else is called: no `sign`, `signTransaction`, `approve`, `getTransactionReceipt`, `dispose`, `toReadOnlyAccount`. Providers never see the account; they get only `QuoteParams` and the quote.
 
@@ -898,7 +906,7 @@ Use a failover list. A keyed RPC in a static SPA exposes the key: only use one t
 - **TON (TON Connect `sendTransaction({validUntil, messages: [{address, amount, payload?, stateInit?}]})`):**
   - `sendTransaction({to, value, body})`: a `Cell` body → `payload = body.toBoc().toString("base64")`. A **string** body is a text comment: build cell `op=0 + utf8`; never send a BoC as text.
   - `transfer({token: master, recipient, amount, memo?})`: build a TEP-74 `transfer` body to **our own jetton wallet** (`getJettonWalletAddress`), with response destination = self and the forward comment = memo.
-  - `getJettonWalletAddress(master)` is required for cell-body jetton deposits (`ENGINE:834-836`).
+  - `getJettonWalletAddress(master)` is required for cell-body jetton deposits (`ENGINE:876-878`).
   - Engine config: `decodeTonBody: (b) => Cell.fromBase64(b)`, `tonGasCeiling: 500_000_000n`. The gate arms `bodyBoc` for cell bodies (mobile `M/swap/gate.ts:181-187`).
   - The `hash` returned must follow wallet-ton's convention ("body hash", `wallet-ton/dist/index.d.ts:121-125`), because providers track by it. Verify against wallet-ton before shipping.
 - **Tron (TronLink / tronWeb):**
@@ -923,7 +931,7 @@ Use a failover list. A keyed RPC in a static SPA exposes the key: only use one t
 | `toBig`, `str`, `stableJson` | 68-90 | normalization; `stableJson` = sorted keys, bigints as strings |
 | `matches(w, method, raw)` | 92-123 | `call` ⇔ `sendTransaction` with the same `to`, the same `data` (case-insensitive hex, or both absent), the same `value`, and **the same `body`/`bodyBoc`/`memo`** (a text comment ≠ a cell body). `transfer` ⇔ `transfer` with the same token, recipient, amount and memo. `serialized` ⇔ `sendSerialized` with `raw === tx`. `typed` ⇔ `signTypedData` with `stableJson(raw.message) === w.message` |
 | `consumeSwapWrite(intent, now)` | 131-155 | the kit `confirm` hook. No arm, or expired → false. A kit `revoke` intent is allowed if every revoke is armed. A raw `approve(spender, 0)` on an armed revoke pair is allowed. Otherwise the first unused matching write is marked used → true. **No match → every remaining write is marked used (disarmed)** → false |
-| `approveData(spender, amt)` | 158-159 | viem `encodeFunctionData(erc20Abi, "approve")`, byte-identical to the engine's `approveData` (`ENGINE:45-48`) |
+| `approveData(spender, amt)` | 158-159 | viem `encodeFunctionData(erc20Abi, "approve")`, byte-identical to the engine's `approveData` (`ENGINE:50-53`) |
 | `planWrites(plan, tonBodyBoc?)` | 166-209 | plan → exact writes in order (one `call approve` per approval, then the source) + `revokes = approvals.map({token, spender})` |
 | `ReviewedSwap` | 212-230 | `{provider, fromChain, fromContract \| null, amountIn, destChain, destToken, recipient, refundAddress, minOut, slippageBps, approvalSpender \| null, nativeFee}` |
 | `executionConstraints(r)` | 238-241 | `{minAmountOut: r.minOut, slippage: r.slippageBps / 10_000}` (the live quote must be asked with the reviewed slippage, or 1Click falls back to 1 % and breaks the floor) |
@@ -1065,12 +1073,12 @@ export function gateAccount<T extends object>(inner: T, gate: SwapGate, chain: s
 - No pins: `near_intents` (deposit addresses) and `jupiter` (Solana).
 - The pins must agree with the provider config. Example: cp0x-api gives LI.FI a Flare Diamond override (`apps/api/src/lib/crossChain/index.ts:293-296`). If the browser does the same, add that address to the pin list, or exclude Flare.
 
-### 7.4 Re-quote pass in swap2-core 0.11.0 (unchanged since 0.10.3): why `requotePlan` and the build observer are not needed
+### 7.4 Re-quote pass in swap2-core 0.14.0 (unchanged since 0.10.3): why `requotePlan` and the build observer are not needed
 
-When the quote expires after the approvals are mined (`ENGINE:992-1003`), the engine recurses with a `carried` handoff `{token, spender, amount, revoke, reviewed}`:
+When the quote expires after the approvals are mined (`ENGINE:1065-1076`), the engine recurses with a `carried` handoff `{token, spender, amount, revoke, reviewed}`:
 
-- Fresh quote has no approval, or a different token/spender/amount → it revokes the allowance and throws `Swap2QuoteError` (`:888-902`).
-- Otherwise `approvalAmounts = []`, and the review rule at `:917-958` applies:
+- Fresh quote has no approval, or a different token/spender/amount → it revokes the allowance and throws `Swap2QuoteError` (`:949-963`).
+- Otherwise `approvalAmounts = []`, and the review rule at `:978-1020` applies:
   - `reviewedIdentity(fresh) !== reviewedIdentity(first)` (a different source call, minimum, recipient…) or `fresh.destAmount < first.destAmount` → `reviewExecution({...plan, requoted: true, approvals: []})`. Our `arm` runs `checkPlan` (which must still pass: the same provider and amount, minimum ≥ the floor, value ceiling) and re-arms `[source]`. **Keep the previous revokes when `planned.revokes` is empty** (mobile `execute.ts:206-207`). A throw here makes the engine revoke.
   - Identical identity → **no second review**. The source write armed by the first review is still unused, so it is consumed.
 
@@ -1080,11 +1088,11 @@ Mobile's observer (`execute.ts:230-234`) arms `requotePlan` from inside `buildDe
 - changed re-quote → `requoted: true`;
 - a moved spender → revoke and abort.
 
-Bump the gate if a future swap2-core changes `:917`.
+Bump the gate if a future swap2-core changes `:978`.
 
 ### 7.5 Revokes, TTL, fees, locks
 
-- **Revoke prompts.** The engine sends `approve(spender, 0)` after *any* failure that follows an approval attempt: a rejected approve, a rejected swap, an expired quote, a preflight error (`:987, 1004, 1018, 1050, 1104`). Mobile allows it as a standing permission. The browser allows it **only if this execution actually granted that allowance** (`gate.granted`). That avoids a pointless second popup when the user rejects the first approval. The UI should explain the popup: "Removing the unused approval — you can reject this".
+- **Revoke prompts.** The engine sends `approve(spender, 0)` after *any* failure that follows an approval attempt: a rejected approve, a rejected swap, an expired quote, a preflight error, a dry run that fails (`:1016-1035, 1060, 1077, 1091, 1123, 1134, 1191`; a declined Permit2 signature costs a revoke only on a re-quote pass, the one that holds an allowance before it signs). Mobile allows it as a standing permission. The browser allows it **only if this execution actually granted that allowance** (`gate.granted`). That avoids a pointless second popup when the user rejects the first approval. The UI should explain the popup: "Removing the unused approval — you can reject this".
 - **TTL.** The browser uses 15 min from each (re)arm, because the wallet prompts and the mining are human-paced. Revokes ignore the TTL until `disarm()`.
 - **Fee caps.**
   - EVM: advisory only (the wallet sets gas). Show the estimate; warn above the `swapFeeCap` budget. The engine still refuses an under-funded swap before the first approval (`Swap2InsufficientGasError`).
@@ -1245,7 +1253,7 @@ Port `swapErrorText`/`swapFailureExpected`/`maybeSent` from `M/swap/execute.ts:3
 
 ## 9. Deposit-address routes with no signer (BTC, ZEC… sources; QR)
 
-`swap2()` cannot run without a signing account (`ENGINE:663-666`), so these routes skip it. What has to be done by hand:
+`swap2()` cannot run without a signing account (`ENGINE:705-708`), so these routes skip it. What has to be done by hand:
 
 ```ts
 const params = {...quoteParams(req), dry: false, refundAddress: userBtcAddress, minAmountOut: executionFloor(reviewedMin).toString()};

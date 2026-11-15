@@ -5,32 +5,32 @@
  *
  * Placeholders live ONLY here, inside the engine's preview round, and only where a venue's dry quote needs a
  * destination it doesn't fill itself (each read in the installed 0.x dists, 2026-11-12):
- *   - uniswap refuses a blank recipient ("recipient must be an EVM address", chunk-XJDPJSBT.js:139);
- *   - curve refuses one the same way (chunk-IFREGXMV.js:767); it quotes with get_dy over RPC, so the sample only
+ *   - uniswap refuses a blank recipient ("recipient must be an EVM address", chunk-6ZGWUPLL.js:145);
+ *   - curve refuses one the same way (chunk-NW2OLRIK.js:789); it quotes with get_dy over RPC, so the sample only
  *     ever sits in calldata that is never sent;
- *   - balancer refuses one the same way (chunk-YF3UW4GH.js:108); it prices with the Vault's queryBatchSwap eth_call,
- *     which moves nothing, the sample as recipient and, with no refund given, as sender too (:159-161);
+ *   - balancer refuses one the same way (chunk-XFRLZ25H.js:125); it prices with the Vault's queryBatchSwap eth_call,
+ *     which moves nothing, the sample as recipient and, with no refund given, as sender too (:176-178);
  *   - thorchain sends the blank destination, gets no memo and refuses "incomplete quote" (protocol-swap2-thorchain
- *     0.4.0 chunk-AYP7O2NT.js:670/722);
+ *     0.4.3 chunk-EIAXGWNG.js:725/781);
  *   - chainflip throws on a blank Solana destination (chunk-SJ6UVIVY.js:119-128);
- *   - near_intents passes the recipient as given (chunk-4GRRM3WT.js:170);
- *   - fynd refuses a blank recipient the same way (protocol-swap2-fynd 0.2.8 chunk-TZUER4XJ.js:154); the sample is
- *     then its sender too, with no EVM refund given (:156), and a dry quote needs no real one: the API is sent both
- *     only as the order's addresses (:167), and the native-input simulation runs the quote's call from the sender with
- *     a state override that gives it the input plus 1 ETH (:216-218), so the sample needs no funds;
+ *   - near_intents passes the recipient as given (chunk-4DBCMQCI.js:198);
+ *   - fynd refuses a blank recipient the same way (protocol-swap2-fynd 0.2.12 chunk-6AQCGGUZ.js:168); the sample is
+ *     then its sender too, with no EVM refund given (:170), and a dry quote needs no real one: the API is sent both
+ *     only as the order's addresses (:181), and the native-input simulation runs the quote's call from the sender with
+ *     a state override that gives it the input plus 1 ETH (:230-232), so the sample needs no funds;
  *   - lifi only for Solana → EVM: its dry quote reuses the SENDER's placeholder as the destination (protocol-swap2-lifi
- *     0.8.0 chunk-GWUGK4SG.js:782/866-867), its own EVM placeholder (the EVM sample, :681) or Solana one (:682, in
+ *     0.8.3 chunk-G26GE46T.js:789/961-962), its own EVM placeholder (the EVM sample, :688) or Solana one (:689, in
  *     VENUE_SAMPLES), right for EVM → EVM and Solana → Solana and an address of the wrong family for Solana → EVM.
- *     EVM → Solana keeps the blank: it prices for its own Solana placeholder (dryRecipient, :782). The sender stays
+ *     EVM → Solana keeps the blank: it prices for its own Solana placeholder (dryRecipient, :789). The sender stays
  *     its own placeholder (or the user's refund); every LI.FI check runs on the dry quote as on a live one, and a
- *     quote priced for a placeholder comes back price-only, without its transaction (placeholderIn, :783-786/1069).
+ *     quote priced for a placeholder comes back price-only, without its transaction (placeholderIn, :790-793/1182).
  * Every other venue keeps its blank address and applies its own handling: relay flags a quote with a blank
- * address as a placeholder and never issues it (chunk-CCMNAZZB.js:128/232) — a value here would bypass that, so it
+ * address as a placeholder and never issues it (chunk-BCY6ZEAE.js:170/276) — a value here would bypass that, so it
  * is NEVER filled; cctp fills its own EVM placeholder; usdt0 fills its own (the EVM sample, or the zero account into
- * TON or Tron) and returns a price-only quote without its transaction (protocol-swap2-usdt0 0.5.0 chunk-V2H32VE3.js:87,
- * :241, :448, :510; never filled here: the TON sample is the zero account it refuses); symbiosis fills its own on a
- * dry quote, the sender too, so it never needs a real one (chunk-BVFMCR2O.js:232-236; VENUE_SAMPLES); omniston's RFQ
- * carries no address, and it checks the addresses only for a live quote (chunk-FDSTD34Z.js:1981-2010; its IndexedDB
+ * TON or Tron) and returns a price-only quote without its transaction (protocol-swap2-usdt0 0.5.3 chunk-7FQDRYVI.js:89,
+ * :285, :494, :556; never filled here: the TON sample is the zero account it refuses); symbiosis fills its own on a
+ * dry quote, the sender too, so it never needs a real one (chunk-K3EPNDVO.js:257-261; VENUE_SAMPLES); omniston's RFQ
+ * carries no address, and it checks the addresses only for a live quote (chunk-DMO24BFW.js:2072-2101; its IndexedDB
  * quote store then holds blank ones); wrap and jupiter quote a blank or lone address.
  * The refund address is the user's real one or absent (never "": NEAR reads `refundAddress ?? its placeholder`).
  * Symbiosis' pacer (providers.ts) is the page's one, shared with live rounds: a preview burst queues in it and never
@@ -49,7 +49,7 @@ import {SIGNER_ONLY_REFUSAL} from "./providerWrappers";
 
 /**
  * One sample address per destination family, copied from the SDK's own table (protocol-swap2-near-intents
- * chunk-4GRRM3WT.js:44-58, which picked live, valid addresses); each passes isAddressFor (preview.test.ts). NEAR's
+ * chunk-4DBCMQCI.js:46-60, which picked live, valid addresses); each passes isAddressFor (preview.test.ts). NEAR's
  * "near" is not an address the app accepts, so NEAR pairs get no preview. Never shown or stored, and never a reason
  * to refuse what a user types: 0xd8dA…6045 is a real account people send to.
  */
@@ -67,9 +67,9 @@ export const SAMPLE_STANDIN = "<sample-address>";
 
 /**
  * Placeholders a venue fills in itself for a blank address, scrubbed like the samples. usdt0, cctp, Symbiosis and
- * LI.FI use the EVM sample above; Symbiosis adds a TON one and the EVM sample in Tron form (chunk-BVFMCR2O.js:31-33/189),
- * which it sends as `to` and its answers can repeat; LI.FI a Solana sender and recipient (chunk-GWUGK4SG.js:682/782),
- * which its checks name ("the Solana transaction is paid by …, not the sender …", :609) and so can its API's messages.
+ * LI.FI use the EVM sample above; Symbiosis adds a TON one and the EVM sample in Tron form (chunk-K3EPNDVO.js:33-35/213),
+ * which it sends as `to` and its answers can repeat; LI.FI a Solana sender and recipient (chunk-G26GE46T.js:689/789),
+ * which its checks name ("the Solana transaction is paid by …, not the sender …", :615) and so can its API's messages.
  */
 const VENUE_SAMPLES: readonly string[] = [
   "EQCD39VS5jcptHL8vMjEXrzGaRcCVYto7HUn4bpAOg8xqB2N",
@@ -138,8 +138,8 @@ export const FILLS_DESTINATION: ReadonlySet<string> = new Set(["uniswap", "curve
 
 /**
  * Venues whose dry quote fills a blank destination with its own placeholder of the SOURCE family (LI.FI: the sender's,
- * chunk-GWUGK4SG.js:866-867): the destination family's sample only when the two families differ, and never for a
- * Solana destination, which LI.FI fills with its own Solana placeholder (dryRecipient, :782).
+ * chunk-G26GE46T.js:961-962): the destination family's sample only when the two families differ, and never for a
+ * Solana destination, which LI.FI fills with its own Solana placeholder (dryRecipient, :789).
  */
 export const FILLS_OTHER_FAMILY: ReadonlySet<string> = new Set(["lifi"]);
 
