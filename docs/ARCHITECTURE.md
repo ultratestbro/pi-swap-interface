@@ -1445,8 +1445,10 @@ showed a minimum near 12.00; the minimum sat ~1% under the quote even at a custo
   route carries it (`WebRoute.floorBps`, set by toWebRoute from the request's slippage) and `routeFloor(route)` is the one
   floor the list, the summary, the review and execution use. At 0.05% the minimum is now 0.1% under the quote, not
   0.55%; at 0.5% and above nothing changes (the 0.5% margin covered ~18 bps of drift while a review is read and signed).
-- **Auto knows correlated pairs**: one asset family (a coin, its wrapper and its liquid-staking forms; USD stables) on
-  one network is 0.05% (`autoSlippageBps(from, to, sameChain)`); across networks a family keeps 0.3% (stables) / 0.5%.
+- **Auto is always a preset** (owner, 2026-11-15, after the first cut still left ETH → USDC at 0.5%): 0.05% on one
+  network when both tokens are liquid (USD stables, majors and their wrappers / liquid-staking forms), 0.3% across
+  networks (a bridge or an intent fills over minutes) or with a long-tail token (`autoSlippageBps(from, to, sameChain)`).
+  The margin follows it: the minimum sits 0.1% under the quote at 0.05%, 0.6% at 0.3%.
 - **Presets 0.01%, 0.05%, 0.3%** and Custom (0.01–50%); every label keeps its precision (`bpsLabel`).
 - **The review once confirmed keeps the terms in view**: the card keeps You pay, You receive, Minimum received and
   Route; the approval, fee, rate and address rows, the Fynd licence note (read before Confirm) and the saved-settings

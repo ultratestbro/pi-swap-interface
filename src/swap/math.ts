@@ -74,29 +74,16 @@ export const DEFAULT_SLIPPAGE_BPS = 50;
 const STABLES = new Set(["USDT", "USDC", "DAI", "USDE", "USDT0", "USDC.E", "USDBC", "PYUSD", "USDG", "USDS", "FDUSD", "TUSD", "USD1", "AUSD", "FRAX", "GHO", "LUSD"]);
 const MAJORS = new Set(["ETH", "WETH", "STETH", "WSTETH", "CBETH", "RETH", "WEETH", "BTC", "WBTC", "CBBTC", "BTCB", "TBTC", "SOL", "JITOSOL", "MSOL", "BNB", "WBNB", "TON", "TRX", "POL", "AVAX", "ARB", "OP"]);
 
-/** web: assets that trade at a near-fixed ratio to each other (a coin, its wrapper and its liquid-staking forms; USD stables). */
-const FAMILY: Readonly<Record<string, string>> = {
-  ETH: "eth", WETH: "eth", STETH: "eth", WSTETH: "eth", CBETH: "eth", RETH: "eth", WEETH: "eth",
-  BTC: "btc", WBTC: "btc", CBBTC: "btc", BTCB: "btc", TBTC: "btc",
-  SOL: "sol", JITOSOL: "sol", MSOL: "sol",
-  BNB: "bnb", WBNB: "bnb",
-};
-const familyOf = (s: string): string | undefined => (STABLES.has(s.toUpperCase()) ? "usd" : FAMILY[s.toUpperCase()]);
-
 /**
- * Auto slippage for a pair: two stablecoins 0.3%, majors and their wrappers / liquid-staking forms 0.5% (a stable
- * with a major too), anything else 1%. web: one asset family on one network (WETH → wstETH, USDC → DAI on Ethereum)
- * 0.05% — those pools barely move, and the market's usual default for them; across networks a family keeps the above.
+ * Auto slippage for a pair — web (owner, 2026-11-15): always one of the presets. 0.05% on one network when both sides
+ * are liquid (USD stables, majors and their wrappers / liquid-staking forms: ETH → USDC, WETH → wstETH, USDC → DAI),
+ * the market's usual default; 0.3% otherwise — across networks (a bridge or an intent is filled over minutes, not one
+ * block) or with a long-tail token. A pair that needs more takes a custom value. (Mobile: 0.3% for two stables, 0.5%
+ * for majors, 1% for anything else.)
  */
 export function autoSlippageBps(fromSymbol: string, toSymbol: string, sameChain = false): number {
-  const family = familyOf(fromSymbol);
-  if (sameChain && family !== undefined && family === familyOf(toSymbol)) return 5;
-  const kind = (s: string) => (STABLES.has(s.toUpperCase()) ? "stable" : MAJORS.has(s.toUpperCase()) ? "major" : "other");
-  const a = kind(fromSymbol);
-  const b = kind(toSymbol);
-  if (a === "stable" && b === "stable") return 30;
-  if (a !== "other" && b !== "other") return 50;
-  return 100;
+  const liquid = (s: string) => STABLES.has(s.toUpperCase()) || MAJORS.has(s.toUpperCase());
+  return sameChain && liquid(fromSymbol) && liquid(toSymbol) ? 5 : 30;
 }
 
 export const slippageLabel = (bps: number) => `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%`;

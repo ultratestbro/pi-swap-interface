@@ -98,7 +98,7 @@ export function SlippageControl({custom, autoBps, onChange}: SlippageProps) {
             </Text>
           ) : (
             <Text as="p" variant="meta" color="var(--dim)">
-              Auto picks 0.05% for one asset on one network (USDC → DAI, WETH → wstETH), 0.3% for stablecoins across networks, 0.5% for majors, 1% for anything else. The review shows the minimum you receive.
+              Auto picks 0.05% on one network between liquid tokens (ETH → USDC, WETH → wstETH, USDC → DAI) and 0.3% across networks or for a smaller token. The review shows the minimum you receive.
             </Text>
           )}
           <Button block title={parsed !== null ? `Use ${bpsLabel(parsed)}` : "Done"} disabled={!!typed && parsed === null} onClick={() => (parsed !== null ? pick(parsed) : close())} />

@@ -74,22 +74,18 @@ describe("sanitizeAmountInput", () => {
 });
 
 describe("slippage", () => {
-  it("cycles 0.5 → 1 → 3 → 0.5 %", () => {
-    expect(autoSlippageBps("USDC", "USDT")).toBe(30);
-    expect(autoSlippageBps("ETH", "usdc")).toBe(50);
-    expect(autoSlippageBps("WBTC", "cbBTC")).toBe(50);
-    expect(autoSlippageBps("ETH", "PEPE")).toBe(100);
-    expect(autoSlippageBps("SSV", "SOL")).toBe(100);
-  });
-  it("web: one asset family on one network is 0.05%; across networks it keeps the pair's usual setting", () => {
+  it("web: auto is always a preset — 0.05% on one network between liquid tokens, 0.3% otherwise", () => {
+    // One network, both liquid (stables, majors and their wrappers / staked forms): 0.05 %.
+    expect(autoSlippageBps("ETH", "usdc", true)).toBe(5);
     expect(autoSlippageBps("WETH", "wstETH", true)).toBe(5);
     expect(autoSlippageBps("USDC", "DAI", true)).toBe(5);
     expect(autoSlippageBps("WBTC", "cbBTC", true)).toBe(5);
-    expect(autoSlippageBps("SOL", "JitoSOL", true)).toBe(5);
-    expect(autoSlippageBps("USDC", "USDT", false)).toBe(30);
-    expect(autoSlippageBps("ETH", "wstETH", false)).toBe(50);
-    expect(autoSlippageBps("ETH", "USDC", true)).toBe(50);
-    expect(autoSlippageBps("ETH", "PEPE", true)).toBe(100);
+    // Across networks, or a long-tail token: 0.3 %.
+    expect(autoSlippageBps("USDC", "USDT")).toBe(30);
+    expect(autoSlippageBps("ETH", "SOL")).toBe(30);
+    expect(autoSlippageBps("ETH", "PEPE", true)).toBe(30);
+    expect(autoSlippageBps("SSV", "SOL")).toBe(30);
+    for (const [a, b, same] of [["ETH", "USDC", true], ["ETH", "PEPE", false]] as const) expect([1, 5, 30]).toContain(autoSlippageBps(a, b, same));
   });
   it("web: the execution margin never exceeds the slippage, and stays 0.5% at or above it", () => {
     expect(floorToleranceBps(5)).toBe(5n);
