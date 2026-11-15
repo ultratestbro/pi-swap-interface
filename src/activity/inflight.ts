@@ -4,7 +4,8 @@
  * ui-port.md §4.12, the QR-deposit mode of §4.6 and the multi-tab heartbeat rule of D16. Public data only — ids,
  * hashes, amounts, own addresses. No React — unit-tested in tests/unit/activity/inflight.test.ts.
  */
-import type {ExecStage, NewRecordInput, StatusView, SwapRecord, SwapStatus, SwapStep} from "../contracts/activity";
+import type {ExecStage, NewRecordInput, RecordSide, StatusView, SwapRecord, SwapStatus, SwapStep} from "../contracts/activity";
+import type {Token} from "../contracts/domain";
 
 const FINAL = new Set<SwapStatus>(["not-sent", "completed", "failed", "refunded", "cancelled", "expired", "partial"]);
 
@@ -277,6 +278,8 @@ export function parseStored(raw: string | null | undefined): SwapRecord[] {
       ...(s(t.localId) ? {localId: t.localId} : {}),
       ...(s(t.fromKey) ? {fromKey: t.fromKey} : {}),
       ...(s(t.toKey) ? {toKey: t.toKey} : {}),
+      ...(s(t.fromImportedContract) ? {fromImportedContract: t.fromImportedContract} : {}),
+      ...(s(t.toImportedContract) ? {toImportedContract: t.toImportedContract} : {}),
       ...(t.mode === "deposit" || t.mode === "wallet" ? {mode: t.mode} : {}),
       ...(deposit ? {deposit} : {}),
       ...(t.depositReceived === true ? {depositReceived: true} : {}),
@@ -322,6 +325,11 @@ export function providerOfId(id: string): string {
 export const visibleSwaps = (list: readonly SwapRecord[], now = Date.now()): SwapRecord[] =>
   list.filter((r) => !isFinal(r.status) || now - r.updatedAt < 10 * 60_000);
 
+/** A swap side as its record keeps it: the token's key for "Try again", and an imported token's contract (D39). */
+export function recordSide(t: Pick<Token, "caip2" | "chain" | "symbol" | "decimals" | "key" | "contract" | "imported">): RecordSide {
+  return {caip2: t.caip2, chain: t.chain, symbol: t.symbol, decimals: t.decimals, key: t.key, ...(t.imported && t.contract ? {importedContract: t.contract} : {})};
+}
+
 /** The record a broadcast (or maybe-broadcast, or a QR deposit) starts tracking with; the first poll comes one interval later. */
 export function newRecord(x: NewRecordInput, now = Date.now()): SwapRecord {
   return {
@@ -344,6 +352,8 @@ export function newRecord(x: NewRecordInput, now = Date.now()): SwapRecord {
     ...(x.maybeSent ? {maybeSent: true} : {}),
     ...(x.from.key ? {fromKey: x.from.key} : {}),
     ...(x.to.key ? {toKey: x.to.key} : {}),
+    ...(x.from.importedContract ? {fromImportedContract: x.from.importedContract} : {}),
+    ...(x.to.importedContract ? {toImportedContract: x.to.importedContract} : {}),
     ...(x.mode ? {mode: x.mode} : {}),
     ...(x.deposit ? {deposit: x.deposit} : {}),
     status: "pending",

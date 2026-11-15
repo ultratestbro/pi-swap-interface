@@ -2,7 +2,7 @@
 // bytes32, decimals bounds, invisible and bidi characters, Solana mints with Token-2022 or Metaplex metadata), the
 // browser store's guard and cap, the look-alike check, and how an import joins prices, search and balances.
 import {getAddressEncoder} from "@solana/kit";
-import {encodeAbiParameters, stringToHex, type Hex} from "viem";
+import {InvalidAddressError, LimitExceededRpcError, encodeAbiParameters, isAddress, stringToHex, type Hex} from "viem";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {
   IMPORTED_TOKENS_CAP,
@@ -12,6 +12,7 @@ import {
   addImportedToken,
   balanceSpecs,
   bytesToBase64,
+  canonicalTokenAddress,
   chainBySlugWeb,
   cleanTokenText,
   decodeTokenString,
@@ -99,6 +100,14 @@ describe("keys and the catalog", () => {
     expect(listedToken(BASE.caip2, DEGEN)).toBeUndefined();
   });
 
+  it("reads and caches an EVM contract under its checksummed spelling, whatever case it was pasted in; a mint verbatim", () => {
+    expect(canonicalTokenAddress(BASE.caip2, DEGEN.toLowerCase())).toBe(DEGEN);
+    expect(canonicalTokenAddress(BASE.caip2, `0x${DEGEN.slice(2).toUpperCase()}`)).toBe(DEGEN);
+    expect(canonicalTokenAddress(BASE.caip2, "0x4ED4e862860beD51a9570b96d89aF5E1B0Efefed")).toBe(DEGEN);
+    expect(canonicalTokenAddress(SOLANA.caip2, BONK)).toBe(BONK);
+    expect(canonicalTokenAddress(BASE.caip2, "garbage")).toBe("garbage");
+  });
+
   it("parses a link's unlisted token key (checksummed on EVM), never a listed, non-importable or malformed one", () => {
     expect(parseTokenKey(`base:${DEGEN.toLowerCase()}`)).toEqual({chain: BASE, address: DEGEN});
     expect(parseTokenKey(`solana:${BONK}`)).toEqual({chain: SOLANA, address: BONK});
@@ -122,6 +131,15 @@ describe("cleanTokenText", () => {
     expect(cleanTokenText("US\u0000DC\u0007", 20)).toBe("USDC");
     // Hangul fillers read as blanks but aren't whitespace.
     expect(cleanTokenText("\u3164USDC\u115f", 20)).toBe("USDC");
+  });
+
+  it("strips the symbols drawn blank that no invisible class holds, and reads a text with nothing visible left as empty", () => {
+    expect(cleanTokenText("USDC\u2800", 20)).toBe("USDC");
+    expect(cleanTokenText("US\u{1D159}DC", 20)).toBe("USDC");
+    expect(cleanTokenText("\u2800\u2800", 20)).toBe("");
+    expect(cleanTokenText("\u0301\u0302", 20)).toBe("");
+    // What draws stays: punctuation, symbols, emoji.
+    expect(cleanTokenText("$🐸", 20)).toBe("$🐸");
   });
 
   it("collapses whitespace, cuts stacks of combining marks and caps the length", () => {
@@ -201,6 +219,36 @@ describe("readEvmToken", () => {
     const down = Object.assign(new Error("HTTP request failed"), {name: "HttpRequestError"});
     await expect(readEvmToken(BASE, DEGEN, client({answers: {...ok, "0x313ce567": down}}))).rejects.toMatchObject({definitive: false});
   });
+
+  it("asks again when a node rate-limits a read with an HTTP 200 JSON-RPC error, rather than calling it no token", async () => {
+    const limited = Object.assign(new Error("Execution failed"), {name: "CallExecutionError", cause: new LimitExceededRpcError(new Error("too many requests"))});
+    await expect(readEvmToken(BASE, DEGEN, client({answers: {...ok, "0x313ce567": limited}}))).rejects.toMatchObject({definitive: false});
+    const coded = Object.assign(new Error("rate limited"), {code: 429});
+    await expect(readEvmToken(BASE, DEGEN, client({answers: {...ok, "0x313ce567": coded}}))).rejects.toMatchObject({definitive: false});
+  });
+
+  it("never keeps UNKNOWN for a symbol() or name() no node answered: it asks again", async () => {
+    const down = Object.assign(new Error("HTTP request failed"), {name: "HttpRequestError"});
+    await expect(readEvmToken(BASE, DEGEN, client({answers: {...ok, "0x95d89b41": down}}))).rejects.toMatchObject({
+      message: "Couldn't reach Base to read this token — try again.",
+      definitive: false,
+    });
+    await expect(readEvmToken(BASE, DEGEN, client({answers: {...ok, "0x06fdde03": new LimitExceededRpcError(new Error("slow down"))}}))).rejects.toMatchObject({definitive: false});
+  });
+
+  it("calls the contract by its checksummed address, whatever case it was pasted in (viem refuses a wrong checksum)", async () => {
+    // A client as strict as viem's call(): a mixed-case address with a wrong checksum is an InvalidAddressError.
+    const strict = client({answers: ok});
+    const call = strict.call;
+    strict.call = vi.fn(async (args: Parameters<TokenReadClient["call"]>[0]) => {
+      if (!args.to || !isAddress(args.to)) throw Object.assign(new Error("Execution failed"), {name: "CallExecutionError", cause: new InvalidAddressError({address: String(args.to)})});
+      return call(args);
+    }) as TokenReadClient["call"];
+    for (const pasted of ["0x4ED4e862860beD51a9570b96d89aF5E1B0Efefed", `0x${DEGEN.slice(2).toUpperCase()}`, DEGEN.toLowerCase()]) {
+      await expect(readEvmToken(BASE, pasted, strict)).resolves.toEqual({decimals: 18, symbol: "DEGEN", name: "Degen"});
+    }
+    expect((strict.call as ReturnType<typeof vi.fn>).mock.calls.every(([a]) => (a as {to: string}).to === DEGEN)).toBe(true);
+  });
 });
 
 // ── Solana ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -253,6 +301,18 @@ describe("Solana mint parsing", () => {
     expect(parseMint(account, true)).toBeNull();
   });
 
+  it("refuses a Token-2022 multisig dressed as a mint, and a mint whose padding before its AccountType isn't zero", () => {
+    // A multisig is 355 bytes; its 11 signer keys (bytes 3..354) are whoever created it's choice — here they forge a
+    // mint's decimals (44), initialized flag (45), AccountType (165) and a metadata TLV naming the account itself.
+    const multisig = new Uint8Array(355);
+    multisig.set(mint2022(6, BONK, {name: "USD Coin", symbol: "USDC"}).subarray(0, 355));
+    expect(multisig[165]).toBe(1);
+    expect(parseMint(multisig, true)).toBeNull();
+    const padded = mint2022(6, BONK, {name: "Bonk 2022", symbol: "BONK"});
+    padded[100] = 7;
+    expect(parseMint(padded, true)).toBeNull();
+  });
+
   it("reads Metaplex metadata with its zero padding stripped, for that mint only", () => {
     expect(metaplexMetadata(metaplex(BONK, "Bonk", "Bonk"), mintBytes(BONK))).toEqual({name: "Bonk", symbol: "Bonk"});
     expect(metaplexMetadata(metaplex(BONK, "Bonk", "Bonk"), mintBytes(SOL_USDC))).toBeNull();
@@ -278,6 +338,15 @@ describe("readSolanaToken", () => {
 
   it("names a mint without metadata UNKNOWN", async () => {
     await expect(readSolanaToken(BONK, rpc([account("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", classicMint(2)), null]))).resolves.toEqual({decimals: 2, symbol: "UNKNOWN", name: "UNKNOWN"});
+  });
+
+  it("refuses a 355-byte Token-2022 account (a multisig) whatever its bytes say", async () => {
+    const forged = new Uint8Array(355);
+    forged.set(mint2022(6, BONK, {name: "USD Coin", symbol: "USDC"}).subarray(0, 355));
+    await expect(readSolanaToken(BONK, rpc([account("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", forged), null]))).rejects.toMatchObject({
+      message: "This address isn't a token mint on Solana.",
+      definitive: true,
+    });
   });
 
   it("refuses no account, another program's account and decimals past 36", async () => {
@@ -317,6 +386,25 @@ describe("lookalikeOf", () => {
     expect(readsAs("ＵＳＤＣ")).toBe(readsAs("USDC"));
     expect(readsAs("USDC.e")).toBe(readsAs("USDCE"));
     expect(lookalikeOf(degen({symbol: "UЅDС"}))?.symbol).toBe("USDC");
+  });
+
+  it("folds Greek capitals by their own shape, before case (Η is H, η is n)", () => {
+    expect(lookalikeOf(degen({symbol: "WΕΤΗ"}))?.symbol).toBe("WETH");
+    expect(lookalikeOf(degen({symbol: "ΕΤΗ"}))).toMatchObject({symbol: "ETH", contract: null});
+    const bsc = chainBySlugWeb("bsc")!;
+    expect(lookalikeOf({caip2: bsc.caip2, symbol: "ΒΝΒ", name: "x"})).toMatchObject({symbol: "BNB", contract: null});
+    expect(readsAs("η")).toBe("n");
+    expect(readsAs("μSDC")).toBe("usdc");
+  });
+
+  it("folds Lisu, Cherokee and small-capital look-alikes, combining marks, blank glyphs and ticks", () => {
+    for (const fake of ["ꓴꓢꓓꓚ", "USDC\u0323", "USDC\u2800", "USDC ✓", "ᴜꜱᴅᴄ", "Ü.S.D.C"]) expect(lookalikeOf(degen({symbol: fake}))?.symbol, fake).toBe("USDC");
+    expect(lookalikeOf(degen({symbol: "ᎬᎢᎻ"}))?.symbol).toBe("ETH");
+    // A Cherokee small letter is drawn like its capital.
+    expect(readsAs("ꭼꭲꮋ")).toBe("eth");
+    // Letters with no Latin look-alike don't make a match; an all-foreign text reads as nothing.
+    expect(lookalikeOf(degen({symbol: "ДЕGEN", name: "狗"}))).toBeNull();
+    expect(readsAs("狗狗币")).toBe("");
   });
 
   it("names the network's own coin, and ignores UNKNOWN", () => {

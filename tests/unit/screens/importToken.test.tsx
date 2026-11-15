@@ -13,7 +13,8 @@ import {importedToken, chainBySlugWeb, TOKENS, swapTokens} from "../../../src/ca
 import {DEMO_EVM_ADDRESS, demoPorts, resetDemoState} from "../../../src/mocks";
 import {SwapScreen} from "../../../src/screens";
 import {openingPair} from "../../../src/screens/form/useSwapForm";
-import {IMPORT_WARNING, linkedToken, lookalikeLine, lookupNetwork, provisional, tokenAt, unsupportedLine} from "../../../src/screens/tokens/importModel";
+import {IMPORT_WARNING, linkedToken, lookalikeLine, lookupNetwork, provisional, showsAddress, tokenAt, unsupportedLine} from "../../../src/screens/tokens/importModel";
+import {TokenSheet} from "../../../src/screens/tokens/TokenSheet";
 
 const SLOW = {timeout: 4000};
 const DEGEN = "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed";
@@ -63,7 +64,7 @@ describe("the token sheet's import", () => {
     expect(importButton.disabled).toBe(false);
     fireEvent.click(importButton);
 
-    await waitFor(() => expect(screen.getByTestId("swap-receive-token").getAttribute("aria-label")).toBe("USDC on Base, change token"), SLOW);
+    await waitFor(() => expect(screen.getByTestId("swap-receive-token").getAttribute("aria-label")).toBe("USDC (imported) on Base, change token"), SLOW);
     // Listed under the catalog with its badge, and removable.
     fireEvent.click(screen.getByTestId("swap-receive-token"));
     const again = await screen.findByTestId("swap-token-sheet");
@@ -96,6 +97,32 @@ describe("the token sheet's import", () => {
     expect(within(sheet).getByTestId("swap-import-unsupported").textContent).toBe(unsupportedLine("ton"));
   });
 
+  it("shows a listed TON, Tron or NEAR token's address as that token's row, with no 'can't be imported' line above it", async () => {
+    const list = swapTokens(TOKENS, {}, {}, {});
+    const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
+    render(
+      <QueryClientProvider client={client}>
+        <PortsProvider ports={demoPorts}>
+          <TokenSheet open side="receive" tokens={list} onPick={() => {}} onClose={() => {}} />
+        </PortsProvider>
+      </QueryClientProvider>,
+    );
+    const sheet = await screen.findByTestId("swap-token-sheet");
+    const search = within(sheet).getByTestId("swap-token-search");
+    for (const [address, key] of [
+      ["EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs", "ton:eqcxe6mutqjkfngfarotkot1lzbdiix1kcixrv7nw2id_sds"],
+      ["TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", "tron:tr7nhqjekqxgtci8q8zy4pl8otszgjlj6t"],
+      ["usdt.tether-token.near", "near:usdt.tether-token.near"],
+    ] as const) {
+      fireEvent.change(search, {target: {value: address}});
+      expect(within(sheet).getByTestId(`swap-token-${key}`)).toBeTruthy();
+      expect(within(sheet).queryByTestId("swap-import-unsupported")).toBeNull();
+    }
+    // An unlisted jetton still says why it can't be imported.
+    fireEvent.change(search, {target: {value: "EQAvlWFDxGF2lXm67y4yzC17wYKD9A0guwPkMs1gOsM__NOT"}});
+    expect(within(sheet).getByTestId("swap-import-unsupported").textContent).toBe(unsupportedLine("ton"));
+  });
+
   it("goes back from the confirmation to the search", async () => {
     renderScreen("#/");
     fireEvent.click(screen.getByTestId("swap-receive-token"));
@@ -121,7 +148,7 @@ describe("a pair link naming an unlisted token (D39)", () => {
     expect((screen.getByTestId("swap-review") as HTMLButtonElement).textContent).toBe("Select a token");
     fireEvent.click(within(confirm).getByTestId("swap-import-understand"));
     fireEvent.click(within(confirm).getByTestId("swap-import-confirm-button"));
-    await waitFor(() => expect(screen.getByTestId("swap-receive-token").getAttribute("aria-label")).toBe("DEGEN on Base, change token"), SLOW);
+    await waitFor(() => expect(screen.getByTestId("swap-receive-token").getAttribute("aria-label")).toBe("DEGEN (imported) on Base, change token"), SLOW);
     expect(screen.getByTestId("swap-pay-token").getAttribute("aria-label")).toBe("ETH on Arbitrum, change token");
     // Relay serves EVM → EVM with any destination token in the demo, as the real one does.
     await waitFor(() => expect((screen.getByTestId("swap-review") as HTMLButtonElement).textContent).toMatch(/^Review via /), {timeout: 6000});
@@ -168,6 +195,13 @@ describe("import decisions", () => {
     expect(tokenAt(LIST, "base", "0x833589FCD6EDB6E08F4C7C32D4F71B54BDA02913")?.symbol).toBe("USDC");
     expect(tokenAt(LIST, "arbitrum", "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")).toBeUndefined();
     expect(tokenAt(LIST, "solana", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")?.symbol).toBe("USDC");
+  });
+
+  it("tells whether a shown token holds a pasted address, in any case", () => {
+    expect(showsAddress(LIST, " eqcxe6mutqjkfngfarotkot1lzbdiix1kcixrv7nw2id_sds ")).toBe(true);
+    expect(showsAddress(LIST, "usdt.tether-token.near")).toBe(true);
+    expect(showsAddress(LIST, "EQAvlWFDxGF2lXm67y4yzC17wYKD9A0guwPkMs1gOsM__NOT")).toBe(false);
+    expect(showsAddress([], "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t")).toBe(false);
   });
 
   it("words the look-alike line by address, or as the network's own coin", () => {

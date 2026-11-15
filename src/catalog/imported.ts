@@ -71,6 +71,15 @@ function solanaKey(a: string): boolean {
 const canonical = (family: string, a: string): string => (family === "evm" ? checksumAddress(a.toLowerCase() as Address) : a);
 
 /**
+ * The address an import is read and cached under: an EVM contract checksummed (a pasted one may carry a wrong checksum
+ * or none, and viem refuses to call a mis-checksummed address), anything else verbatim. One read per token, whichever
+ * spelling the sheet, the confirmation or a link handed it.
+ */
+export function canonicalTokenAddress(caip2: string, address: string): string {
+  return chainByCaip2Web(caip2)?.family === "evm" && /^0x[0-9a-fA-F]{40}$/.test(address) ? canonical("evm", address) : address;
+}
+
+/**
  * An imported token's key: `<slug>:<contract>` — lowercased on EVM like every catalog key, verbatim on Solana, where a
  * lowercased mint is another (or no) address and a shared link must still name the token.
  */
@@ -101,12 +110,19 @@ export function parseTokenKey(key: string): {chain: Chain; address: string} | nu
 
 // ── text a deployer wrote ───────────────────────────────────────────────────────────────────────────────────────
 
-/** Control, format (bidi overrides, zero-width), private-use, separator and other default-ignorable characters (Hangul fillers…). */
-const INVISIBLE = /[\p{Cc}\p{Cf}\p{Co}\p{Cs}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/gu;
+/**
+ * Control, format (bidi overrides, zero-width), private-use, separator and other default-ignorable characters (Hangul
+ * fillers…), plus the symbols drawn blank that none of those classes holds: U+2800 Braille pattern blank, U+1D159
+ * musical null notehead.
+ */
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Co}\p{Cs}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800\u{1D159}]/gu;
+/** Something that draws: a letter, a digit, punctuation or a symbol (marks alone and spaces don't). */
+const VISIBLE = /[\p{L}\p{N}\p{P}\p{S}]/u;
 
 /**
  * A symbol or name fit to show: invisible and direction-changing characters stripped, stacks of combining marks cut to
- * two, whitespace collapsed, at most `max` characters ("…" when cut). "" when nothing readable is left.
+ * two, whitespace collapsed, at most `max` characters ("…" when cut). "" when nothing readable is left (blank glyphs,
+ * marks with nothing to sit on), so it reads "UNKNOWN" rather than an empty-looking symbol.
  */
 export function cleanTokenText(raw: string, max: number): string {
   const text = raw
@@ -115,6 +131,7 @@ export function cleanTokenText(raw: string, max: number): string {
     .replace(/\p{M}{3,}/gu, (m) => Array.from(m).slice(0, 2).join(""))
     .replace(/\s+/gu, " ")
     .trim();
+  if (!VISIBLE.test(text)) return "";
   const chars = Array.from(text);
   return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : text;
 }
@@ -159,19 +176,60 @@ export function decodeTokenString(data: string | undefined): string | null {
 
 // ── what reads alike ────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Letters drawn like Latin ones (Cyrillic, Greek) and the digits read as letters, folded before comparing. */
-const CONFUSABLE: Readonly<Record<string, string>> = {
-  а: "a", в: "b", е: "e", ё: "e", һ: "h", н: "h", і: "l", ї: "l", ј: "j", к: "k", м: "m", о: "o", р: "p", с: "c", т: "t", у: "y", х: "x", ѕ: "s", ԁ: "d", ԛ: "q", ԝ: "w", ӏ: "l",
-  α: "a", β: "b", ε: "e", η: "n", ι: "l", κ: "k", μ: "m", ν: "v", ο: "o", ρ: "p", τ: "t", υ: "u", χ: "x", ζ: "z", γ: "y",
-  "0": "o", "1": "l", i: "l", "|": "l",
+/**
+ * Letters drawn like a Latin one, by the letter they pass for: Cyrillic, Greek, Armenian, Lisu (Fraser), Cherokee and
+ * small capitals, in the case that looks like it (Greek capital Eta reads H, its small letter n), plus the digits and
+ * signs read as letters. A subset of UTS #39's confusables for what a token symbol can fake; NFKD already folds
+ * fullwidth, mathematical and circled forms, and accents are stripped before this.
+ */
+const LOOKS_LIKE: Readonly<Record<string, string>> = {
+  a: "аАαΑꓮᎪᴀ",
+  b: "вВьЬβΒꓐᏴʙ",
+  c: "сСϲϹꓚᏟᴄ",
+  d: "ԁԀꓓᎠᴅ",
+  e: "еЕεΕꓰᎬᴇ",
+  f: "ꓝꜰ",
+  g: "ԍԌꓖᏀᏳɢ",
+  h: "һҺнНΗꓧᎻᏂʜհ",
+  j: "јЈϳꓙᎫᴊȷ",
+  k: "кКκΚꓗᏦᴋ",
+  l: "іІїЇӏӀιΙꓲꓡᏞᎥʟɪı|1i",
+  m: "мМΜꓟᎷᴍ",
+  n: "ηΝꓠɴո",
+  o: "оОοΟσօՕꓳᴏ0",
+  p: "рРρΡꓑᏢᴘ",
+  q: "ԛԚ",
+  r: "ꓣᏒᎡʀ",
+  s: "ѕЅꓢᏚᏕꜱ",
+  t: "тТτΤꓔᎢᴛ₮",
+  u: "υμꓴᴜսՍ",
+  v: "νꓦᏙᴠ",
+  w: "ԝԜѡωꓪᏔᎳᴡ",
+  x: "хХχΧꓫ",
+  y: "уУүҮγΥꓬᎩʏ",
+  z: "ζΖꓜᏃᴢ",
+};
+const CONFUSABLE: ReadonlyMap<string, string> = new Map(Object.entries(LOOKS_LIKE).flatMap(([latin, alike]) => Array.from(alike, (c) => [c, latin] as const)));
+
+/**
+ * One character as the Latin letter it passes for: its own entry, else its capital's (a Cherokee small letter is drawn
+ * like its capital), else its small letter's; anything else lower-cased.
+ */
+const fold = (c: string): string => {
+  const lower = c.toLowerCase();
+  return CONFUSABLE.get(c) ?? CONFUSABLE.get(c.toUpperCase()) ?? CONFUSABLE.get(lower) ?? lower;
 };
 
-/** A text as it reads: NFKC (fullwidth, ligatures), lower case, look-alike letters folded, no spaces or dots. */
+/**
+ * A text as it reads: NFKD (fullwidth, ligatures, mathematical letters) with accents and other marks stripped,
+ * look-alike letters folded before case (Greek Η is H, η is n), lower case, then only a–z and 0–9 kept — spaces, dots,
+ * blank glyphs, ticks and letters with no Latin look-alike don't change what it passes for.
+ */
 export const readsAs = (text: string): string =>
-  Array.from(text.normalize("NFKC").toLowerCase())
-    .map((c) => CONFUSABLE[c] ?? c)
+  Array.from(text.normalize("NFKD").replace(/\p{M}/gu, ""))
+    .map(fold)
     .join("")
-    .replace(/[\s.\-_]/g, "");
+    .replace(/[^a-z0-9]/g, "");
 
 /**
  * The listed token an imported one reads like on the same network (D39): its symbol, or its name, reads as a catalog
@@ -231,12 +289,19 @@ const DECIMALS = "0x313ce567";
 const SYMBOL = "0x95d89b41";
 const NAME = "0x06fdde03";
 
-/** A request that never reached a node (every RPC down, offline), as opposed to the contract's own answer. */
+/**
+ * viem's errors for a request no node answered (every RPC down, offline, timed out), or one a node turned away without
+ * running it (rate-limited or overloaded, even with HTTP 200: JSON-RPC -32005 / -32002, or 429).
+ */
+const UNREACHABLE_ERRORS = new Set(["HttpRequestError", "TimeoutError", "WebSocketRequestError", "LimitExceededRpcError", "ResourceUnavailableRpcError"]);
+const UNREACHABLE_CODES = new Set([-32005, -32002, 429]);
+
+/** A request that never got the contract's own answer (asking again may change it), as opposed to that answer. */
 function unreachable(e: unknown): boolean {
   for (let x = e, i = 0; x && typeof x === "object" && i < 8; x = (x as {cause?: unknown}).cause, i++) {
-    const name = (x as {name?: unknown}).name;
-    if (name === "HttpRequestError" || name === "TimeoutError" || name === "WebSocketRequestError") return true;
-    if (/failed to fetch|fetch failed|network ?error|no rpc is configured/i.test(String((x as {message?: unknown}).message ?? ""))) return true;
+    const {name, code, message} = x as {name?: unknown; code?: unknown; message?: unknown};
+    if (UNREACHABLE_ERRORS.has(String(name)) || UNREACHABLE_CODES.has(Number(code))) return true;
+    if (/failed to fetch|fetch failed|network ?error|no rpc is configured/i.test(String(message ?? ""))) return true;
   }
   return false;
 }
@@ -244,22 +309,28 @@ function unreachable(e: unknown): boolean {
 /** The read surface of a viem public client (a fake one in tests). */
 export type TokenReadClient = Pick<PublicClient, "getCode" | "call">;
 
-/** An ERC-20's decimals, symbol and name, read on `chain` (D39). Throws TokenReadError. */
+/**
+ * An ERC-20's decimals, symbol and name, read on `chain` (D39). Throws TokenReadError. The contract is checksummed
+ * first: a pasted address may carry a wrong checksum (or none), and viem refuses to call one that does. A symbol() or
+ * name() that didn't answer for want of a node is asked again, never kept as "UNKNOWN" — only one the contract lacks is.
+ */
 export async function readEvmToken(chain: Chain, contract: string, client: TokenReadClient = publicClient(chain.chainId!)): Promise<TokenMeta> {
-  const to = contract as Address;
+  const to = checksumAddress(contract.toLowerCase() as Address);
+  const offline = () => new TokenReadError(`Couldn't reach ${chain.name} to read this token — try again.`, false);
   let code: string | undefined;
   try {
     code = await client.getCode({address: to});
   } catch {
-    throw new TokenReadError(`Couldn't reach ${chain.name} to read this token — try again.`, false);
+    throw offline();
   }
   if (!code || code === "0x" || DELEGATION.test(code)) throw new TokenReadError(`No token contract at this address on ${chain.name}.`, true);
   const call = async (data: `0x${string}`) => (await client.call({to, data})).data;
   const [dec, sym, name] = await Promise.allSettled([call(DECIMALS), call(SYMBOL), call(NAME)]);
-  if (dec.status === "rejected" && unreachable(dec.reason)) throw new TokenReadError(`Couldn't reach ${chain.name} to read this token — try again.`, false);
+  if (dec.status === "rejected" && unreachable(dec.reason)) throw offline();
   const decimals = dec.status === "fulfilled" ? decodeUint(dec.value) : null;
   if (decimals === null) throw new TokenReadError(`This contract doesn't read as a token on ${chain.name} — it has no decimals().`, true);
   if (decimals > BigInt(MAX_TOKEN_DECIMALS)) throw new TokenReadError(`This token says it has ${decimals} decimals — more than ${MAX_TOKEN_DECIMALS}, so it can't be swapped here.`, true);
+  if ([sym, name].some((r) => r.status === "rejected" && unreachable(r.reason))) throw offline();
   return {
     decimals: Number(decimals),
     symbol: symbolText(sym.status === "fulfilled" ? decodeTokenString(sym.value) : null),
@@ -273,6 +344,8 @@ const METAPLEX_PROGRAM = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
 /** SPL mint layout: 82 bytes; Token-2022 pads a mint with extensions to 165 and marks it AccountType::Mint (1). */
 const MINT_LEN = 82;
 const ACCOUNT_TYPE_AT = 165;
+/** A multisig account's size (Multisig::LEN): Token-2022 never sizes a mint to it, so an account this long is never one. */
+const MULTISIG_LEN = 355;
 /** Token-2022's TokenMetadata extension (ExtensionType 19). */
 const EXT_TOKEN_METADATA = 19;
 
@@ -290,13 +363,16 @@ function borshString(b: Uint8Array, at: number, max = 256): {text: string; end: 
 
 /**
  * A mint account's data: decimals and whether it is initialized, plus Token-2022's extension area. null when the bytes
- * aren't a mint of that program (a token account, a multisig, too short).
+ * aren't a mint of that program (a token account, a multisig, too short) — held to spl-token-2022's own unpacking: no
+ * account of a multisig's length, and the padding between the mint and its AccountType byte all zero (a multisig's
+ * signer keys, which whoever creates it picks, would otherwise pass for a mint's decimals and metadata).
  */
 export function parseMint(data: Uint8Array, token2022: boolean): {decimals: number; extensions: Uint8Array | null} | null {
   if (data.length < MINT_LEN) return null;
   let extensions: Uint8Array | null = null;
   if (data.length !== MINT_LEN) {
-    if (!token2022 || data.length <= ACCOUNT_TYPE_AT || data[ACCOUNT_TYPE_AT] !== 1) return null;
+    if (!token2022 || data.length <= ACCOUNT_TYPE_AT || data.length === MULTISIG_LEN || data[ACCOUNT_TYPE_AT] !== 1) return null;
+    if (data.subarray(MINT_LEN, ACCOUNT_TYPE_AT).some((b) => b !== 0)) return null;
     extensions = data.subarray(ACCOUNT_TYPE_AT + 1);
   }
   if (data[45] !== 1) return null;
@@ -369,8 +445,9 @@ export async function readTokenForImport(caip2: string, address: string): Promis
   if (!isTokenAddress(chain.caip2, address)) throw new TokenReadError(`That isn't a token address on ${chain.name}.`, true);
   const listed = listedToken(chain.caip2, address);
   if (listed) throw new TokenReadError(`This is the listed ${listed.symbol} — pick it from the list.`, true);
-  const meta = chain.family === "evm" ? await readEvmToken(chain, address) : await readSolanaToken(address);
-  return importedToken(chain, address, meta);
+  const contract = canonical(chain.family, address);
+  const meta = chain.family === "evm" ? await readEvmToken(chain, contract) : await readSolanaToken(contract);
+  return importedToken(chain, contract, meta);
 }
 
 // ── kept in this browser ────────────────────────────────────────────────────────────────────────────────────────

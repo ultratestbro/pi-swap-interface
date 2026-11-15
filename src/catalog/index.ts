@@ -12,6 +12,7 @@ export {
   TokenReadError,
   UNKNOWN_TOKEN_TEXT,
   addImportedToken,
+  canonicalTokenAddress,
   cleanTokenText,
   decodeTokenString,
   decodeUint,

@@ -15,7 +15,7 @@ import {chainByCaip2Web, formatAmount, shortAddress, txUrl} from "../../catalog"
 import {providerName} from "../../swap";
 import {isFinal, isLocalId, isUntrackedMaybeSent, statusView, swapSteps} from "../../activity";
 import {swapErrorText} from "../../execute";
-import {Button, LinkButton, ProviderLogo, SheetHeader, SwapSteps, Text, TxReviewCard} from "../../ui";
+import {Button, LinkButton, ProviderLogo, SheetHeader, SwapSteps, Tag, Text, TxReviewCard} from "../../ui";
 import {DepositDetails} from "../review/DepositPanel";
 import {TONE_COLOR, walletFamilyOf} from "../labels";
 import s from "./Activity.module.css";
@@ -129,14 +129,18 @@ export function StatusView({id, wallets, onClose, onBack, onTryAgain, onConnect}
     }
   }
 
-  // The review's compact rows (D34): one line each, the network and the floor dim beside the amounts.
+  // The review's compact rows (D34): one line each, the network and the floor dim beside the amounts. A side imported by
+  // its address (D39) carries an amber "Imported" tag and its contract under the amount, as the review showed it.
+  const imported = (contract: string | undefined): Pick<ReviewRow, "badge" | "sub"> =>
+    contract ? {badge: <Tag tone="amber">Imported</Tag>, sub: `Contract ${shortAddress(contract, 8, 6)}`} : {};
   const rows: ReviewRow[] = [
-    {k: "Paid", v: `${formatAmount(r.amountIn, r.fromDecimals)} ${r.fromSymbol}`, note: `on ${fromName}`, testId: "swap-status-paid"},
+    {k: "Paid", v: `${formatAmount(r.amountIn, r.fromDecimals)} ${r.fromSymbol}`, note: `on ${fromName}`, testId: "swap-status-paid", ...imported(r.fromImportedContract)},
     {
       k: "Receive",
       v: `≈ ${formatAmount(r.expectedOut, r.toDecimals)} ${r.toSymbol}`,
       note: `≥ ${formatAmount(r.minOut, r.toDecimals)} on ${toName}`,
       testId: "swap-status-receive",
+      ...imported(r.toImportedContract),
     },
     {k: "Route", v: providerName(r.provider), icon: <ProviderLogo provider={r.provider} size={18} />},
     {k: "To", v: shortAddress(r.recipient, 8, 6)},

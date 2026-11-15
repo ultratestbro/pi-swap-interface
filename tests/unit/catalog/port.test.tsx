@@ -128,3 +128,39 @@ describe("catalogPort.useSwapTokens / useBalances", () => {
     expect(result.current.byKey).not.toBe(stable);
   });
 });
+
+describe("catalogPort.useTokenLookup (D39)", () => {
+  it("reads a pasted contract once, under its checksummed spelling: a wrong checksum still reads, and the confirmation shares the read", async () => {
+    const DEGEN = "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed";
+    const word = (hex: string) => hex.padStart(64, "0");
+    const hex = (s: string) => Array.from(new TextEncoder().encode(s), (b) => b.toString(16).padStart(2, "0")).join("");
+    const abiString = (s: string) => `0x${word("20")}${word(s.length.toString(16))}${hex(s).padEnd(64, "0")}`;
+    const methods: string[] = [];
+    type Rpc = {id: number; method: string; params: [{to?: string; data?: string}?]};
+    const answer = (r: Rpc) => {
+      methods.push(r.method);
+      const reply = (result: string) => ({jsonrpc: "2.0", id: r.id, result});
+      if (r.method === "eth_getCode") return reply("0x6080604052");
+      if (r.method === "eth_chainId") return reply("0x2105");
+      const data = r.params[0]?.data;
+      if (r.method === "eth_call" && r.params[0]?.to === DEGEN && data === "0x313ce567") return reply(`0x${word("12")}`);
+      if (r.method === "eth_call" && r.params[0]?.to === DEGEN && data === "0x95d89b41") return reply(abiString("DEGEN"));
+      if (r.method === "eth_call" && r.params[0]?.to === DEGEN && data === "0x06fdde03") return reply(abiString("Degen"));
+      return {jsonrpc: "2.0", id: r.id, error: {code: 3, message: "execution reverted", data: "0x"}};
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: string | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as Rpc | Rpc[];
+        const out = Array.isArray(body) ? body.map(answer) : answer(body);
+        return new Response(JSON.stringify(out), {status: 200, headers: {"content-type": "application/json"}});
+      }),
+    );
+    // The search result holds the pasted text (here with a wrong checksum); the confirmation the checksummed contract.
+    const {result} = renderHook(() => [catalogPort.useTokenLookup("eip155:8453", "0x4ED4e862860beD51a9570b96d89aF5E1B0Efefed"), catalogPort.useTokenLookup("eip155:8453", DEGEN)], {wrapper});
+    await waitFor(() => expect(result.current.map((l) => l.status)).toEqual(["found", "found"]));
+    for (const l of result.current) expect(l).toMatchObject({token: {contract: DEGEN, symbol: "DEGEN", name: "Degen", decimals: 18}});
+    expect(methods.filter((m) => m === "eth_getCode")).toHaveLength(1);
+    expect(client.getQueryCache().findAll({queryKey: ["token-meta"]}).map((q) => q.queryKey)).toEqual([["token-meta", "eip155:8453", DEGEN]]);
+  });
+});

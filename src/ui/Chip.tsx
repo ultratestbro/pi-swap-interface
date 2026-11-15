@@ -31,7 +31,7 @@ export interface TokenChipToken {
   contract: string | null;
   chain: string;
   chainName: string;
-  /** Imported by its address (D39): a monogram, never a logo found by its symbol. */
+  /** Imported by its address (D39): a monogram, never a logo found by its symbol, and "(imported)" in its label. */
   imported?: boolean;
 }
 
@@ -40,11 +40,14 @@ export interface TokenChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElem
   token: TokenChipToken | null;
 }
 
-/** 44 px chip: TokenIcon 28 with its network, symbol (600) over the chain name (10.5 px dim), chevron. */
+/**
+ * 44 px chip: TokenIcon 28 with its network, symbol (600) over the chain name (10.5 px dim), chevron. An imported
+ * token's label says so: a copy named USDC never reads as "USDC on Base" to a screen reader.
+ */
 export function TokenChip({token, className, type = "button", ...rest}: TokenChipProps) {
   return (
     <button
-      aria-label={token ? `${token.symbol} on ${token.chainName}, change token` : "Select a token"}
+      aria-label={token ? `${token.symbol}${token.imported ? " (imported)" : ""} on ${token.chainName}, change token` : "Select a token"}
       {...rest}
       type={type}
       className={cx(s.token, className)}

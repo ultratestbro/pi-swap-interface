@@ -12,6 +12,7 @@ import {newRecord} from "../../../src/activity";
 import {txUrl} from "../../../src/catalog";
 import {DEMO_EVM_ADDRESS, demoPorts} from "../../../src/mocks";
 import {StatusView, activeDetail} from "../../../src/screens/activity/StatusView";
+import {ActivityDrawer} from "../../../src/screens/activity/ActivityDrawer";
 
 const SRC = `0x${"a1".repeat(32)}`;
 const DEST = `0x${"b2".repeat(32)}`;
@@ -72,6 +73,41 @@ describe("the status view's look (D34)", () => {
     expect(within(card).getByText("0xa1a1a1…a1a1a1")).toBeTruthy();
     expect(within(card).getByText("0xb2b2b2…b2b2b2")).toBeTruthy();
     expect(looks(within(view).getByTestId("swap-steps"))).toContain("compact");
+  });
+});
+
+describe("an imported token in the status view (D39)", () => {
+  it("tags the imported side and shows its contract, so a copy named USDC never reads as the listed USDC", () => {
+    const FAKE = "0x1111111111111111111111111111111111111111";
+    const view = renderStatus(record({status: "completed", toSymbol: "USDC", toDecimals: 6, expectedOut: "5000000", minOut: "4900000", toImportedContract: FAKE}));
+    const card = view.querySelector("dl")!;
+    const receive = within(view).getByTestId("swap-status-receive").closest("div")!;
+    expect(receive.textContent).toContain("Imported");
+    expect(receive.textContent).toContain("Contract 0x111111…111111");
+    const paid = within(view).getByTestId("swap-status-paid").closest("div")!;
+    expect(paid.textContent).not.toContain("Imported");
+    expect(within(card).getAllByText("Imported")).toHaveLength(1);
+  });
+
+  it("tags an activity row with an imported side, in its label too; a listed pair's row has no tag", () => {
+    const FAKE = "0x1111111111111111111111111111111111111111";
+    const fake = record({status: "completed", toSymbol: "USDC", toImportedContract: FAKE, updatedAt: Date.now()});
+    const listed = record({id: "awk1.relay.listed", status: "completed", updatedAt: Date.now()});
+    const item = (r: SwapRecord) => ({record: r, view: {label: "Completed", tone: "ok" as const, detail: ""}, urgency: "done" as const, fromChainName: "Arbitrum", toChainName: "Ethereum"});
+    const ports: AppPorts = {...demoPorts, activity: {...demoPorts.activity, useActivity: () => ({items: [item(fake), item(listed)], badge: null, visibleCount: 2, loaded: true})}};
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <PortsProvider ports={ports}>
+          <ActivityDrawer open statusId={null} wallets={wallets} onOpenStatus={vi.fn()} onBack={vi.fn()} onClose={vi.fn()} onTryAgain={vi.fn()} onConnect={vi.fn()} />
+        </PortsProvider>
+      </QueryClientProvider>,
+    );
+    const row = screen.getByTestId(`swap-activity-${ID}`);
+    expect(row.textContent).toContain("Imported");
+    expect(row.getAttribute("aria-label")).toBe("ETH to USDC (imported), Completed, Arbitrum → Ethereum");
+    const plain = screen.getByTestId("swap-activity-awk1.relay.listed");
+    expect(plain.textContent).not.toContain("Imported");
+    expect(plain.getAttribute("aria-label")).toBe("ETH to ETH, Completed, Arbitrum → Ethereum");
   });
 });
 

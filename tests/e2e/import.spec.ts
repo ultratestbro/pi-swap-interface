@@ -4,9 +4,11 @@
  * answers a mint and its Metaplex metadata, the price APIs answer empty maps, and every other request is recorded and
  * aborted — so the run is deterministic and nothing reaches a venue.
  * - Paste an EVM contract → the confirmation with the warning → "I understand" → imported; the next round asks the
- *   venues for that contract with its decimals (a preview: no wallet; Balancer's SOR query carries both), and the venues
- *   with their own token lists read "Listed tokens only".
+ *   venues for that contract with its decimals (a preview: no wallet; Balancer's SOR query carries both); the venues
+ *   with their own token lists read "Listed tokens only" between networks, and keep their network line on one.
+ * - A contract pasted with a wrong checksum reads as the token (viem refuses to call a mis-checksummed address).
  * - A token whose symbol is a listed one's shows the amber look-alike line.
+ * - A long imported symbol and name ellipsize: the row's remove button stays inside the list on a phone.
  * - A Solana mint imports from its mint account and Metaplex metadata.
  * - A pair link naming an unlisted token opens with that side empty and the confirmation up, and asks no venue for it
  *   until the viewer confirms.
@@ -186,7 +188,7 @@ test("an EVM contract imports after the warning, and the next round asks the ven
 
   await confirm.getByTestId("swap-import-understand").check();
   await confirm.getByTestId("swap-import-confirm-button").click();
-  await expect(page.getByTestId("swap-pay-token")).toHaveAttribute("aria-label", "DEGEN on Base, change token");
+  await expect(page.getByTestId("swap-pay-token")).toHaveAttribute("aria-label", "DEGEN (imported) on Base, change token");
   await expect(page.getByTestId("swap-pay-usd")).toHaveText("Imported token · no price");
   await page.getByTestId("swap-amount").fill("1000");
 
@@ -197,11 +199,22 @@ test("an EVM contract imports after the warning, and the next round asks the ven
   expect(seen.filter(asksFor).length).toBeGreaterThan(0);
   await expect(page.getByTestId("swap-review")).toHaveText(/^Connect EVM wallet to swap$/);
   if (!isPhone(info)) {
-    // (Phones list the venues in the route sheet; the wording is the same.)
+    // (Phones list the venues in the route sheet; the wording is the same.) On one network the bridges with their own
+    // token lists keep their network line — they wouldn't swap within Base for a listed token either.
     const uncovered = page.getByTestId("swap-uncovered-toggle");
+    const notForPair = page.getByRole("list", {name: "Not for this pair"});
     await expect(uncovered).toBeVisible({timeout: 15_000});
     await uncovered.click();
-    await expect(page.getByRole("list", {name: "Not for this pair"})).toContainText("Listed tokens only");
+    await expect(notForPair).toContainText("Between networks only");
+    await expect(notForPair).not.toContainText("Listed tokens only");
+    // Into Arbitrum, the import is what keeps them out.
+    await page.getByTestId("swap-receive-token").click();
+    await page.getByTestId("swap-net-arbitrum").click();
+    await page.getByTestId("swap-token-arbitrum:0xaf88d065e77c8cc2239327c5edb3a432268e5831").click();
+    await expect(page.getByTestId("swap-receive-token")).toHaveAttribute("aria-label", "USDC on Arbitrum, change token");
+    await expect(uncovered).toBeVisible({timeout: 15_000});
+    if ((await uncovered.getAttribute("aria-expanded")) !== "true") await uncovered.click();
+    await expect(notForPair).toContainText("Listed tokens only", {timeout: 15_000});
   }
 
   // Kept in this browser: listed under the catalog with its badge after a reload.
@@ -209,6 +222,42 @@ test("an EVM contract imports after the warning, and the next round asks the ven
   await page.getByTestId("swap-receive-token").click();
   await page.getByTestId("swap-net-base").click();
   await expect(page.getByTestId(`swap-token-base:${DEGEN.toLowerCase()}`)).toContainText("Imported");
+});
+
+test("a contract pasted with a wrong checksum reads as the token, under its checksummed address", async ({page, baseURL}) => {
+  const seen = await stubNetwork(page, new URL(baseURL!).origin);
+  await page.goto(`./#/?${BASE_PAIR}`);
+  await page.getByTestId("swap-receive-token").click();
+  await paste(page, "0x4ED4e862860beD51a9570b96d89aF5E1B0Efefed");
+  const result = page.getByTestId("swap-import-result");
+  await expect(result.getByTestId("swap-import-open")).toContainText("DEGEN");
+  await result.getByTestId("swap-import-open").click();
+  const confirm = page.getByTestId("swap-import-confirm");
+  await expect(confirm.getByTestId("swap-import-symbol")).toHaveText("DEGEN");
+  await expect(confirm.getByTestId("swap-import-address")).toHaveText(DEGEN);
+  // The search result and its confirmation share one read.
+  expect(seen.filter((x) => /"method":"eth_getCode"/.test(x.body) && x.body.toLowerCase().includes(DEGEN.toLowerCase()))).toHaveLength(1);
+});
+
+test("a long imported symbol and name ellipsize, and the row's remove button stays inside the list", async ({page, baseURL}) => {
+  await stubNetwork(page, new URL(baseURL!).origin);
+  // At the caps: a 20-character symbol and a 48-character name, kept in this browser.
+  const stored = [{chain: "base", contract: DEGEN, symbol: "ABCDEFGHIJKLMNOPQRST", name: "A very long token name that fills every characte", decimals: 18}];
+  await page.addInitScript((v) => localStorage.setItem("cp0x.swap.tokens.v1", v), JSON.stringify(stored));
+  await page.goto(`./#/?${BASE_PAIR}`);
+  await page.getByTestId("swap-receive-token").click();
+  await page.getByTestId("swap-net-base").click();
+  const row = page.getByTestId(`swap-token-base:${DEGEN.toLowerCase()}`);
+  await expect(row).toContainText("Imported");
+  const remove = page.getByTestId(`swap-token-remove-base:${DEGEN.toLowerCase()}`);
+  const list = page.getByRole("list", {name: "Base"});
+  const [r, l] = await Promise.all([remove.boundingBox(), list.boundingBox()]);
+  expect(r && l, "the remove button and the list are laid out").toBeTruthy();
+  expect(r!.x + r!.width, "the remove button ends inside the list").toBeLessThanOrEqual(l!.x + l!.width + 0.5);
+  expect(await list.evaluate((el) => el.scrollWidth - el.clientWidth), "the list scrolls sideways").toBeLessThanOrEqual(0);
+  await expectNoHorizontalScroll(page);
+  await remove.click();
+  await expect(row).toHaveCount(0);
 });
 
 test("a token named like a listed one shows the amber look-alike line", async ({page, baseURL}) => {
@@ -236,7 +285,7 @@ test("a Solana mint imports from its mint account and Metaplex metadata", async 
   await expect(confirm).toContainText("Solana · 5 decimals");
   await confirm.getByTestId("swap-import-understand").check();
   await confirm.getByTestId("swap-import-confirm-button").click();
-  await expect(page.getByTestId("swap-receive-token")).toHaveAttribute("aria-label", "BONK on Solana, change token");
+  await expect(page.getByTestId("swap-receive-token")).toHaveAttribute("aria-label", "BONK (imported) on Solana, change token");
   expect(seen.some((s) => s.body.includes('"getMultipleAccounts"') && s.body.includes(BONK)), "the mint was read on Solana").toBe(true);
 });
 

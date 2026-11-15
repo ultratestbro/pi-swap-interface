@@ -1093,7 +1093,8 @@ to, with "All networks" the other side's, else this side's, else Ethereum; below
 (`TokenIcon` 34 monogram, `listTitle` symbol, `meta` dim "{name} · {network} · {short address}", an amber `Import` tag;
 `swap-import-open`), a skeleton row "Reading it on {network}…", or the reason in amber (`swap-import-failed`). A TON,
 Tron, NEAR, Bitcoin or Zcash address shows one muted line instead ("TON tokens can't be imported yet — importing by
-address works on EVM networks and Solana.", `swap-import-unsupported`).
+address works on EVM networks and Solana.", `swap-import-unsupported`) — unless a listed token's contract is that
+address (TON USDT's master): then only its row shows.
 Opening it replaces the list with the confirmation (`swap-import-confirm`): `SheetHeader` "Import token" / "on
 {network}" with Back (to the search) and close; `TokenIcon` 52 monogram with the network badge, `title` symbol,
 `small` ink2 name, `meta` muted "{network} · {n} decimals"; an address box (surface2, radius 14: `caps` "CONTRACT
@@ -1105,7 +1106,9 @@ listed {SYMBOL} — that one's address is {short}"; a 20 px checkbox "I understa
 disabled until checked) and a ghost "Cancel". Imported, the form takes the token and the sheet closes. A pair link
 naming an unlisted token opens the sheet on this confirmation alone (no Back). Imported rows sit after the catalog's
 with an amber "Imported" tag beside the symbol, the name in the sub line, and a 30 px flat close button beside the row
-("Remove the imported {SYMBOL} on {network}", `swap-token-remove-<key>`).
+("Remove the imported {SYMBOL} on {network}", `swap-token-remove-<key>`); the row gives way to it (`min-width: 0`), so a
+long symbol or name ellipsizes and the button stays inside the list at 375 px. The form's chip reads "{SYMBOL}
+(imported) on {network}, change token" for an imported token.
 
 ### 5.8 ReviewSheet: review → approve → swap steps
 
@@ -1194,9 +1197,12 @@ color: {dark: "#06131a", light: "#ffffff"}})`. Never render a QR for an expired 
   Item list = `lib/txDock.ts` ranking restricted to swaps: action → failed → pending → done (done visible 8 s), from
   `visibleSwaps` (all records in this browser; drop the `accountId` filter, show the payer chip instead).
 - ActivityDrawer: `SheetHeader` "Activity"; rows (TxDock list row look on surface, not glass): dot 8 in tone + `swap`
-  15 ink2 + `small` 600 "{A} → {B}" + `meta` tone label (`statusView(r).label`) + network chip; tap → StatusView in
-  place (back arrow returns to the list). Older finished swaps (pruned after 7 days) under a caps "Earlier" header.
-- StatusView = `app/swap/status.tsx` §2.7, in the review's compact look (§2.7 web notes: it fits without scrolling, in
+  15 ink2 + `small` 600 "{A} → {B}" (+ an amber "Imported" tag when a side was imported by its address, D39, and
+  "(imported)" after that symbol in the row's label) + `meta` tone label (`statusView(r).label`) + network chip; tap →
+  StatusView in place (back arrow returns to the list). Older finished swaps (pruned after 7 days) under a caps
+  "Earlier" header.
+- StatusView = `app/swap/status.tsx` §2.7 (an imported side's "Paid" / "Receive" row carries an amber "Imported" tag
+  and "Contract {short}" under the amount, D39), in the review's compact look (§2.7 web notes: it fits without scrolling, in
   the review's dialog and the 380 px drawer alike), with `useLocalSearchParams` → prop `id`, `Linking.openURL` → `<a
   target="_blank" rel="noopener noreferrer">` in the secondary button's look (`LinkButton`, §2.7 web note), `Alert.alert` claim confirm → a `Sheet` with the same title/body and
   "Cancel"/"Claim", `router.push("/swap", {pay, receive, amount})` "Try again" → set form state (pair + amount) and

@@ -49,6 +49,14 @@
   min-width: 0;
 }
 
+/* "{A} → {B}" with an imported side's tag (D39): the symbols ellipsize, the tag stays whole */
+.rowTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .rowRight {
   display: flex;
   flex: none;

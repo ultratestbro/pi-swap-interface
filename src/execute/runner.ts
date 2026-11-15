@@ -10,16 +10,13 @@
  */
 import type {Hex} from "viem";
 import type {ExecStage, SwapRecord} from "../contracts/activity";
-import type {SwapToken} from "../contracts/domain";
 import type {EvmSourceSigner, ExecutionPhase, ExecutionPhaseDetail, StartSwapInput, TronSourceSigner} from "../contracts/execution";
-import {newRecord, replaceSwap, saveSwap, setRunning, updateSwap, getSwaps, findSwap} from "../activity";
+import {newRecord, recordSide, replaceSwap, saveSwap, setRunning, updateSwap, getSwaps, findSwap} from "../activity";
 import {chainByCaip2Web, tronPost} from "../catalog";
 import {PERMIT2_VENUES} from "../swap/providerMeta";
 import {executeSwap, type ExecuteDeps} from "./execute";
 import {maybeSent, swapErrorText, swapFailureExpected} from "./errors";
 import {decodeSwapId, encodeSwapId} from "./ids";
-
-const side = (t: SwapToken) => ({caip2: t.caip2, chain: t.chain, symbol: t.symbol, decimals: t.decimals, key: t.key});
 
 /** The native coin's symbol for error texts ("Not enough ETH…"). */
 export const nativeSymbolOf = (caip2: string): string => chainByCaip2Web(caip2)?.native.symbol ?? "the native coin";
@@ -40,8 +37,8 @@ export function startSwap(input: StartSwapInput, deps: ExecuteDeps = {}): Promis
   const base = {
     accountId,
     provider: reviewed.provider,
-    from: side(from),
-    to: side(to),
+    from: recordSide(from),
+    to: recordSide(to),
     amountIn: reviewed.amountIn,
     expectedOut,
     minOut: reviewed.minOut,

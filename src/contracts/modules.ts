@@ -10,7 +10,7 @@ import type {Chain as ViemChain, PublicClient} from "viem";
 import type {Swap2RefusalReason} from "@anywalletkit/protocol-swap2-core/errors";
 import type {CrossChainProvider, QuoteParams} from "@anywalletkit/protocol-swap2-core/types";
 import type {CrossChainRouter} from "@anywalletkit/protocol-swap2-router/router";
-import type {NewRecordInput, StatusView, SwapRecord, SwapStatus, SwapStep} from "./activity";
+import type {NewRecordInput, RecordSide, StatusView, SwapRecord, SwapStatus, SwapStep} from "./activity";
 import type {ProviderName} from "./config";
 import type {
   Chain,
@@ -108,6 +108,8 @@ export interface CatalogModule {
   listedToken(caip2: string, contract: string): Token | undefined;
   /** A pair link's key naming an importable unlisted token, or null. */
   parseTokenKey(key: string): {chain: Chain; address: string} | null;
+  /** The address an import is read and cached under: checksummed on EVM, verbatim elsewhere. */
+  canonicalTokenAddress(caip2: string, address: string): string;
   /** The listed token an imported one reads like on its network (symbol or name, look-alike letters folded), or null. */
   lookalikeOf(t: Pick<Token, "caip2" | "symbol" | "name">, listed?: readonly Token[]): Token | null;
 }
@@ -232,6 +234,8 @@ export interface ActivityModule {
   isLocalId(id: string): boolean;
   findSwap(list: readonly SwapRecord[], id: string | undefined): SwapRecord | undefined;
   newRecord(x: NewRecordInput, now?: number): SwapRecord;
+  /** A swap side as its record keeps it (the token's key; an imported token's contract, D39). */
+  recordSide(t: Pick<Token, "caip2" | "chain" | "symbol" | "decimals" | "key" | "contract" | "imported">): RecordSide;
   /** Unfinished swaps plus anything changed in the last 10 minutes (web: every payer in this browser). */
   visibleSwaps(list: readonly SwapRecord[], now?: number): SwapRecord[];
   STUCK_MS: number;

@@ -479,6 +479,12 @@ function upsertRecord(r: SwapRecord, replaceId?: string) {
   records.set([r, ...recordList().filter((x) => x.id !== r.id && x.id !== replaceId)].sort((a, b) => b.createdAt - a.createdAt));
 }
 
+/** An imported side's contract on the record (D39), as the real runner keeps it. */
+const importedContracts = (from: SwapToken, to: SwapToken): Pick<SwapRecord, "fromImportedContract" | "toImportedContract"> => ({
+  ...(from.imported && from.contract ? {fromImportedContract: from.contract} : {}),
+  ...(to.imported && to.contract ? {toImportedContract: to.contract} : {}),
+});
+
 function patchRecord(id: string, change: (r: SwapRecord) => SwapRecord) {
   const r = recordList().find((x) => x.id === id);
   if (r) upsertRecord({...change(r), id});
@@ -595,6 +601,7 @@ async function demoStartSwap(input: StartSwapInput): Promise<string> {
     failures: 0,
     fromKey: from.key,
     toKey: to.key,
+    ...importedContracts(from, to),
   });
   void (async () => {
     if (approvals) {
@@ -657,6 +664,7 @@ async function demoIssueDeposit(input: IssueDepositInput): Promise<DepositTicket
     failures: 0,
     fromKey: req.from.key,
     toKey: req.to.key,
+    ...importedContracts(req.from, req.to),
   });
   return ticket;
 }

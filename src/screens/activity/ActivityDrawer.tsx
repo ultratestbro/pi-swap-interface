@@ -9,7 +9,7 @@ import type {ActivityItem, SwapRecord} from "../../contracts/activity";
 import type {WalletFamily, WalletsApi} from "../../contracts/wallets";
 import {usePorts} from "../../config";
 import {visibleSwaps} from "../../activity";
-import {Icon, Sheet, SheetHeader, Text} from "../../ui";
+import {Icon, Sheet, SheetHeader, Tag, Text} from "../../ui";
 import {TONE_COLOR, agoLabel} from "../labels";
 import {useNow} from "../useNow";
 import {StatusView} from "./StatusView";
@@ -89,17 +89,33 @@ function Section({title, items, now, onOpen}: {title?: string; items: readonly A
   );
 }
 
-/** Tone dot, swap glyph, "{A} → {B}", the status label in its tone, the networks and how long ago. */
+/**
+ * Tone dot, swap glyph, "{A} → {B}", the status label in its tone, the networks and how long ago. A side imported by
+ * its address (D39) adds an amber "Imported" tag (and "(imported)" in the label): a swap into a copy named USDC never
+ * reads like one into the listed USDC.
+ */
 function ActivityRow({item, now, onOpen}: {item: ActivityItem; now: number; onOpen(): void}) {
   const {record: r, view} = item;
   const color = TONE_COLOR[view.tone];
   const chains = item.fromChainName === item.toChainName ? item.fromChainName : `${item.fromChainName} → ${item.toChainName}`;
+  const mark = (imported: string | undefined) => (imported ? " (imported)" : "");
   return (
-    <button type="button" className={s.row} onClick={onOpen} data-testid={`swap-activity-${r.id}`} aria-label={`${r.fromSymbol} to ${r.toSymbol}, ${view.label}, ${chains}`}>
+    <button
+      type="button"
+      className={s.row}
+      onClick={onOpen}
+      data-testid={`swap-activity-${r.id}`}
+      aria-label={`${r.fromSymbol}${mark(r.fromImportedContract)} to ${r.toSymbol}${mark(r.toImportedContract)}, ${view.label}, ${chains}`}
+    >
       <span className={s.dot} style={{background: color}} aria-hidden="true" />
       <Icon name="swap" size={15} color="var(--ink2)" />
       <span className={s.rowText}>
-        <Text variant="small" weight={600} lines={1}>{`${r.fromSymbol} → ${r.toSymbol}`}</Text>
+        <span className={s.rowTitle}>
+          <Text variant="small" weight={600} lines={1}>{`${r.fromSymbol} → ${r.toSymbol}`}</Text>
+          {r.fromImportedContract || r.toImportedContract ? (
+            <Tag tone="amber">Imported</Tag>
+          ) : null}
+        </span>
         <Text variant="meta" color={color} lines={1}>
           {view.label}
         </Text>

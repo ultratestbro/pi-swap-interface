@@ -76,6 +76,12 @@ export interface SwapRecord {
   /** Token keys — "Try again" reopens the form with them. */
   fromKey?: string;
   toKey?: string;
+  /**
+   * A side imported by its address (D39): its contract. The activity row and the status view mark it "Imported" with
+   * the contract, so a swap into a copy named USDC never reads like one into the listed USDC afterwards.
+   */
+  fromImportedContract?: string;
+  toImportedContract?: string;
   // ── web additions (ui-port.md §4.6) ──
   /** "deposit" = a QR payment to a deposit address (no wallet signed). Absent = "wallet". */
   mode?: "wallet" | "deposit";
@@ -104,6 +110,8 @@ export interface RecordSide {
   decimals: number;
   /** Token key — kept for "Try again". */
   key?: string;
+  /** Imported by its address (D39): its contract, kept on the record. */
+  importedContract?: string;
 }
 
 /** newRecord's input (mobile inflight.ts), plus the web's deposit mode. */

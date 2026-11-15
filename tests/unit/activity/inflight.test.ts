@@ -21,6 +21,7 @@ import {
   pollFailed,
   providerOfId,
   prune,
+  recordSide,
   statusView,
   swapIncident,
   swapSteps,
@@ -81,6 +82,17 @@ describe("newRecord", () => {
   });
   it("keeps the deposit mode", () => {
     expect(deposit()).toMatchObject({mode: "deposit", deposit: {address: "bc1qdeposit", amount: "1250000"}});
+  });
+  it("keeps an imported side's contract (D39), so the history never reads it as the listed token", () => {
+    const fake = {caip2: "eip155:8453", chain: "base", symbol: "USDC", decimals: 6, key: "base:0x1111111111111111111111111111111111111111", contract: "0x1111111111111111111111111111111111111111", imported: true as const};
+    const listed = {caip2: "eip155:1", chain: "ethereum", symbol: "USDC", decimals: 6, key: "ethereum:0xa0b8", contract: "0xa0b8"};
+    expect(recordSide(fake)).toEqual({caip2: "eip155:8453", chain: "base", symbol: "USDC", decimals: 6, key: fake.key, importedContract: fake.contract});
+    expect(recordSide(listed)).toEqual({caip2: "eip155:1", chain: "ethereum", symbol: "USDC", decimals: 6, key: "ethereum:0xa0b8"});
+    const r = newRecord({id: "awk1.lifi.x", accountId: "evm:0xme", provider: "lifi", from: recordSide(listed), to: recordSide(fake), amountIn: 1n, expectedOut: 1n, minOut: 1n, recipient: "0xme"}, T0);
+    expect(r.toImportedContract).toBe(fake.contract);
+    expect("fromImportedContract" in r).toBe(false);
+    expect(parseStored(JSON.stringify([r]))[0]).toMatchObject({toImportedContract: fake.contract});
+    expect(parseStored(JSON.stringify([{...r, toImportedContract: 5}]))[0]!.toImportedContract).toBeUndefined();
   });
 });
 

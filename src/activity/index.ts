@@ -28,6 +28,7 @@ export {
   providerOfId,
   prune,
   readsSent,
+  recordSide,
   statusView,
   STUCK_MS,
   swapIncident,

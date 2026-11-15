@@ -171,14 +171,31 @@ function acrossScope(from: ScopeSide, to: ScopeSide): string {
 }
 
 /**
+ * The lines that blame the tokens (or don't say), where an imported side is the reason a listed-only venue passed: they
+ * read "Listed tokens only" then. A network line stands — a venue that can't serve these networks wouldn't serve the
+ * pair with listed tokens either.
+ */
+const TOKEN_LINES: ReadonlySet<string> = new Set(["Doesn't cover this pair", "Doesn't list one of these tokens", "Moves USDC only", "Moves USDT only"]);
+
+/** An imported side as a coin-only bridge reads it: no symbol, since a copy named USDC isn't USDC to CCTP. */
+const unlisted = (x: ScopeSide): ScopeSide => (x.imported ? {...x, symbol: ""} : x);
+
+/**
  * Why an enabled venue wasn't asked for this pair, in one honest line (the route list's "Not for this pair" group).
- * A venue that serves listed tokens only reads "Listed tokens only" for a token imported by its address (D39).
+ * A venue that serves listed tokens only reads "Listed tokens only" for a token imported by its address (D39) — unless
+ * its usual line names the networks, which stands (Omniston on Solana: "Doesn't cover these networks").
  * The decision itself is each provider's supportsRoute (D17); these lines only name the venue's scope, and stay
  * generic ("Doesn't cover this pair") where the answer is in a venue's token list — THORChain has no USDT on Solana,
  * for one, but the app would only be guessing which token is missing.
  */
 export function venueScope(provider: string, from: ScopeSide, to: ScopeSide): string {
-  if ((from.imported || to.imported) && LISTED_ONLY_VENUES.has(provider)) return "Listed tokens only";
+  if (!(from.imported || to.imported) || !LISTED_ONLY_VENUES.has(provider)) return usualScope(provider, from, to);
+  const usual = usualScope(provider, unlisted(from), unlisted(to));
+  return TOKEN_LINES.has(usual) ? "Listed tokens only" : usual;
+}
+
+/** A venue's scope line for the pair, by the first reason that holds (venueScope's, before an import's). */
+function usualScope(provider: string, from: ScopeSide, to: ScopeSide): string {
   const sameNet = from.caip2 === to.caip2;
   const evm = from.family === "evm" && to.family === "evm";
   switch (provider) {

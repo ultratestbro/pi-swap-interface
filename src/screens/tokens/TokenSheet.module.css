@@ -169,6 +169,12 @@
   gap: 2px;
 }
 
+/* the row gives way to the remove button: a long symbol or name ellipsizes instead of pushing it out of the list */
+.tokenItem > .token {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .symbolLine {
   display: flex;
   align-items: center;

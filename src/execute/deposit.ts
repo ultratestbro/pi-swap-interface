@@ -9,7 +9,7 @@
 import type {CrossChainRouter} from "@anywalletkit/protocol-swap2-router/router";
 import {Swap2QuoteError} from "@anywalletkit/protocol-swap2-core/errors";
 import type {DepositTicket, IssueDepositInput} from "../contracts/execution";
-import {newRecord, saveSwap} from "../activity";
+import {newRecord, recordSide, saveSwap} from "../activity";
 import {isAddressFor, QR_FALLBACK_FAMILIES, SIGNING_FAMILIES} from "../catalog";
 import {appRouter, quoteParams} from "../swap";
 import {refusal} from "./errors";
@@ -86,8 +86,8 @@ export async function issueDeposit(input: IssueDepositInput, deps: DepositDeps =
         id,
         accountId: `deposit:${req.refundAddress}`,
         provider: q.provider,
-        from: {caip2: from.caip2, chain: from.chain, symbol: from.symbol, decimals: from.decimals, key: from.key},
-        to: {caip2: to.caip2, chain: to.chain, symbol: to.symbol, decimals: to.decimals, key: to.key},
+        from: recordSide(from),
+        to: recordSide(to),
         amountIn: sourceAmount,
         expectedOut: destAmount,
         minOut,

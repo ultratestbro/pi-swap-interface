@@ -9,7 +9,7 @@ import type {Owners, PriceMap, TokenLookup} from "../contracts/domain";
 import type {CatalogPort, SwapTokensState} from "../contracts/ports";
 import {useBalances} from "./balances";
 import {isContractAddress} from "./evm";
-import {TokenReadError, addImportedToken, readTokenForImport, removeImportedToken, useImportedTokens} from "./imported";
+import {TokenReadError, addImportedToken, canonicalTokenAddress, readTokenForImport, removeImportedToken, useImportedTokens} from "./imported";
 import {CHAIN_LIST} from "./network";
 import {lastKnownPrices, loadPrices} from "./prices";
 import {TOKENS, swapTokens} from "./tokens";
@@ -80,15 +80,17 @@ export function useIsContract(caip2: string, address: string | null): boolean | 
 const retryRead = (failures: number, e: unknown): boolean => failures < 1 && !(e instanceof TokenReadError && e.definitive);
 
 /**
- * An import's on-chain read (D39): react-query key `["token-meta", caip2, address]`, kept 10 min (the token sheet and a
- * pair link asking for the same address share one read). Idle while either is null.
+ * An import's on-chain read (D39): react-query key `["token-meta", caip2, address]` with the address checksummed on EVM
+ * (`canonicalTokenAddress`), kept 10 min — the search result, its confirmation and a pair link share one read, however
+ * the address was spelled. Idle while either is null.
  */
 export function useTokenLookup(caip2: string | null, address: string | null): TokenLookup {
-  const enabled = !!caip2 && !!address;
+  const at = caip2 && address ? canonicalTokenAddress(caip2, address) : null;
+  const enabled = !!caip2 && !!at;
   const {data, error} = useQuery({
-    queryKey: ["token-meta", caip2, address],
+    queryKey: ["token-meta", caip2, at],
     enabled,
-    queryFn: () => readTokenForImport(caip2!, address!),
+    queryFn: () => readTokenForImport(caip2!, at!),
     staleTime: 600_000,
     gcTime: 1_800_000,
     retry: retryRead,

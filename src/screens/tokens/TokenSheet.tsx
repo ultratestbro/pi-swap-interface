@@ -12,7 +12,8 @@
  * chooser for another; a mint on Solana. Opening it shows the confirmation
  * (ImportToken.tsx); a confirmed import is kept in this browser and listed
  * under the catalog with an "Imported" badge and a remove button. An address of
- * TON, Tron, NEAR, Bitcoin or Zcash says it can't be imported yet.
+ * TON, Tron, NEAR, Bitcoin or Zcash says it can't be imported yet (unless it is a
+ * listed token's, which simply shows as its row).
  */
 import {useVirtualizer} from "@tanstack/react-virtual";
 import {useMemo, useRef, useState, type ReactNode, type RefObject} from "react";
@@ -21,7 +22,7 @@ import {usePorts} from "../../config";
 import {chainBySlugWeb, detectTokenAddress, formatAmount, formatUsd, importable, matchesToken, pickerNetworks} from "../../catalog";
 import {AssetIcon, Divider, Field, Icon, IconButton, Sheet, SheetHeader, Tag, Text, TokenIcon} from "../../ui";
 import {ImportConfirm, ImportResult} from "./ImportToken";
-import {lookupNetwork, tokenAt, unsupportedLine} from "./importModel";
+import {lookupNetwork, showsAddress, tokenAt, unsupportedLine} from "./importModel";
 import s from "./TokenSheet.module.css";
 
 const ALL = "all";
@@ -148,9 +149,12 @@ function Picker({title, side, tokens, selected, other, importing, onPick, onClos
 
   const importBlock = pasted ? (
     pasted.family === "unsupported" ? (
-      <Text as="p" variant="small" color="var(--muted)" className={s.empty} data-testid="swap-import-unsupported">
-        {unsupportedLine(pasted.addressFamily)}
-      </Text>
+      // A listed token's address (TON USDT's master, say) is just that token's row below.
+      showsAddress(shown, q) ? null : (
+        <Text as="p" variant="small" color="var(--muted)" className={s.empty} data-testid="swap-import-unsupported">
+          {unsupportedLine(pasted.addressFamily)}
+        </Text>
+      )
     ) : lookupFor && lookupSlug ? (
       <ImportResult
         chain={lookupSlug}

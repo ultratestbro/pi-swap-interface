@@ -546,15 +546,21 @@ A token the catalog doesn't list, on an EVM network or Solana, pasted by its add
   (TON, Tron, NEAR, Bitcoin, Zcash: not importable in v1). `listedToken(caip2, contract)`: the catalog token there, if
   any (EVM any case, Solana exact) — then there is nothing to import.
 - **Read** — `readTokenForImport(caip2, address)`, through `catalogPort.useTokenLookup` (react-query `["token-meta",
-  caip2, address]`, 10 min; a network failure retried once): EVM `eth_getCode` (code, not an EIP-7702 delegation) then
-  `decimals()` 0x313ce567 (required, 0..36), `symbol()` 0x95d89b41 and `name()` 0x06fdde03 (ABI `string` or legacy
-  `bytes32`, `decodeTokenString`) over `publicClient(chainId)`; Solana one `getMultipleAccounts([mint, metaplexPda],
-  base64)` over `solanaRpcUrls()`: owner SPL Token or Token-2022, `parseMint` (82 bytes, or a Token-2022 mint padded to
-  165 with AccountType 1 at byte 165; initialized at 45, decimals at 44, ≤ 36), the name / symbol from Token-2022's
+  caip2, address]` with the address `canonicalTokenAddress` — checksummed on EVM, verbatim elsewhere — so every spelling
+  shares one read; 10 min; a network failure retried once): EVM the contract checksummed (viem's `call` refuses a
+  mis-checksummed `to`), `eth_getCode` (code, not an EIP-7702 delegation) then `decimals()` 0x313ce567 (required,
+  0..36), `symbol()` 0x95d89b41 and `name()` 0x06fdde03 (ABI `string` or legacy `bytes32`, `decodeTokenString`) over
+  `publicClient(chainId)` — a call no node answered (`HttpRequestError`, `TimeoutError`, `LimitExceededRpcError`,
+  `ResourceUnavailableRpcError`, JSON-RPC -32005 / -32002 / 429) is "try again" for any of the three, never "not a
+  token" or a kept "UNKNOWN"; Solana one `getMultipleAccounts([mint, metaplexPda], base64)` over `solanaRpcUrls()`:
+  owner SPL Token or Token-2022, `parseMint` (82 bytes, or a Token-2022 mint padded to 165 with AccountType 1 at byte
+  165, bytes 82..164 zero and never 355 bytes long — Multisig::LEN, as spl-token-2022 unpacks it; initialized at 45,
+  decimals at 44, ≤ 36), the name / symbol from Token-2022's
   TokenMetadata extension (TLV type 19, its mint field = the mint), else the Metaplex account (key 4, mint at 33..65,
   borsh name ≤ 64 and symbol ≤ 32 bytes, zero padding stripped), else "UNKNOWN". Texts go through `cleanTokenText`
-  (control / format / private-use / default-ignorable characters stripped, combining-mark stacks cut to two,
-  whitespace collapsed, symbol ≤ 20 and name ≤ 48 characters). Errors are `TokenReadError` (`definitive` unless the RPC
+  (control / format / private-use / default-ignorable characters and the blank-drawn U+2800 / U+1D159 stripped,
+  combining-mark stacks cut to two, whitespace collapsed, symbol ≤ 20 and name ≤ 48 characters; nothing visible left —
+  no letter, digit, punctuation or symbol — reads "UNKNOWN"). Errors are `TokenReadError` (`definitive` unless the RPC
   didn't answer), worded for the sheet ("No token contract at this address on Base.").
 - **Model** — `importedToken(chain, contract, meta)`: a `Token` with `imported: true`, `name`, `token2022?`,
   `catalogSymbol` = the contract (checksummed on EVM, verbatim on Solana), `gasToken: false`, key `importKey` =
@@ -568,8 +574,10 @@ A token the catalog doesn't list, on an EVM network or Solana, pasted by its add
   read per network with imports (`imported: true`, key `["bal", slug, owner, "imported", …keys]`); `ataOf(owner, mint,
   token2022)` derives an imported Token-2022 mint's account under Token-2022.
 - **Look-alikes** — `lookalikeOf(token)`: the listed token on the same network whose symbol (or catalog symbol) reads
-  like the import's symbol or name (`readsAs`: NFKC, lower case, Cyrillic / Greek look-alikes, 0→o, 1/i/|→l, no spaces,
-  dots, dashes or underscores).
+  like the import's symbol or name (`readsAs`: NFKD, combining marks stripped, look-alike letters folded by their own
+  shape before case — Cyrillic, Greek, Armenian, Lisu, Cherokee (small letters as their capitals) and small capitals, a
+  UTS #39 confusables subset; Greek Η → h, η → n, Μ → m, μ → u —, 0→o, 1/i/|→l, ₮→t, then lower case and everything
+  but `a-z0-9` dropped). No two catalog tokens on one network read alike under it.
 - **Links** — `parseTokenKey(key)`: a hash key naming an importable unlisted token, or null.
 
 ### 3.5 Logos

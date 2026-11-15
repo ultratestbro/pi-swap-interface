@@ -48,6 +48,15 @@ export function lookalikeLine(t: Pick<Token, "caip2" | "symbol" | "name" | "chai
     : `Not the listed ${listed.symbol} — that one is ${t.chainName}'s own coin`;
 }
 
+/**
+ * Whether a token shown holds this address as its contract (any case): a pasted TON, Tron or NEAR address of a listed
+ * token is that token's row, with no "can't be imported" line above the token the viewer can pick.
+ */
+export function showsAddress(shown: readonly Pick<SwapToken, "contract">[], address: string): boolean {
+  const a = address.trim().toLowerCase();
+  return shown.some((t) => t.contract !== null && t.contract.toLowerCase() === a);
+}
+
 const FAMILY_NAME: Readonly<Partial<Record<ChainFamily, string>>> = {ton: "TON", tron: "Tron", near: "NEAR", btc: "Bitcoin", zcash: "Zcash"};
 
 /** What a pasted address of a family that can't be imported says (TON, Tron, NEAR, Bitcoin, Zcash in v1). */

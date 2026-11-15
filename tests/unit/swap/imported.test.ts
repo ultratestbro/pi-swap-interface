@@ -78,16 +78,43 @@ describe("a quote round for an imported token", () => {
     expect(final.asked).toEqual(["uniswap"]);
     expect(final.venues).toEqual(["uniswap", "cctp"]);
     expect(final.routes.map((r) => r.provider)).toEqual(["uniswap"]);
-    expect(venueScope("cctp", DEGEN, USDC_BASE)).toBe("Listed tokens only");
+    expect(venueScope("cctp", DEGEN, USDC_ARB)).toBe("Listed tokens only");
   });
 });
 
+const SOL = token({chain: "solana", caip2: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", chainName: "Solana", family: "solana", symbol: "SOL", decimals: 9});
+/** An SPL mint imported on Solana (a copy named CASH). */
+const CASH = token({
+  chain: "solana",
+  caip2: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+  chainName: "Solana",
+  family: "solana",
+  symbol: "CASH",
+  decimals: 6,
+  contract: "CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH",
+  catalogSymbol: "CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH",
+  imported: true,
+});
+
 describe("venueScope with an imported token", () => {
-  it("reads 'Listed tokens only' for every venue with its own token list, either side", () => {
+  it("reads 'Listed tokens only' for every venue with its own token list, either side, where it covers the networks", () => {
     for (const v of LISTED_ONLY_VENUES) {
       expect(venueScope(v, DEGEN, USDC_ARB)).toBe("Listed tokens only");
       expect(venueScope(v, USDC_ARB, DEGEN)).toBe("Listed tokens only");
     }
+  });
+
+  it("keeps a listed-only venue's network reason: the import isn't why it can't serve these networks", () => {
+    // SOL → an imported mint on Solana: none of these swaps within Solana, whatever the token.
+    expect(venueScope("omniston", SOL, CASH)).toBe("Doesn't cover these networks");
+    expect(venueScope("cctp", SOL, CASH)).toBe("Solana isn't supported here yet");
+    expect(venueScope("usdt0", SOL, CASH)).toBe("Solana isn't supported here");
+    expect(venueScope("symbiosis", SOL, CASH)).toBe("Solana isn't supported here");
+    for (const v of ["thorchain", "chainflip", "near_intents"]) expect(venueScope(v, SOL, CASH), v).toBe("Between networks only");
+    // The same on one EVM network: bridges never swap within one.
+    for (const v of ["cctp", "usdt0", "across", "thorchain", "symbiosis", "omniston"]) expect(venueScope(v, DEGEN, USDC_BASE), v).toBe("Between networks only");
+    // The same lines a listed pair on those networks reads.
+    expect(venueScope("omniston", SOL, {...CASH, imported: false})).toBe("Doesn't cover these networks");
   });
 
   it("keeps the network reason for venues that take any token, and says nothing new for listed pairs", () => {
