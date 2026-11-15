@@ -218,6 +218,9 @@ describe("the review after Confirm", () => {
     expect(screen.queryByTestId("sheet-close")).toBeNull();
     fireEvent.keyDown(screen.getByRole("dialog"), {key: "Escape"});
     expect(onClose).not.toHaveBeenCalled();
+    // Compact once confirmed (D37): the amounts, the floor and the venue stay above the steps; the rest was reviewed.
+    for (const id of ["swap-review-amount", "swap-review-pay", "swap-review-receive", "swap-review-min", "swap-review-route"]) expect(within(body).getByTestId(id)).toBeTruthy();
+    for (const id of ["swap-review-approval", "swap-review-to"]) expect(within(body).queryByTestId(id)).toBeNull();
 
     // The approval went out — not the swap: still the review.
     set(submitting({stage: "signing", approved: true}));

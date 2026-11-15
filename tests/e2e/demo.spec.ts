@@ -180,7 +180,9 @@ test("a new slippage re-quotes in place: the route list, the summary and the CTA
   if (info.project.name === "phone") expect(await page.evaluate(() => window.scrollY), "the phone page scrolled").toBeGreaterThan(0);
 
   await sampleLayout(page);
-  await sheet.getByRole("group", {name: "Slippage presets"}).getByRole("button", {name: "1%", exact: true}).click();
+  // 1 % is typed: the presets are 0.01 %, 0.05 % and 0.3 %.
+  await sheet.getByLabel("Custom").fill("1");
+  await sheet.getByLabel("Custom").press("Enter");
   await expect(sheet).toBeHidden();
   // The new round is in: every venue answered for 1 %, and the summary holds the new minimum.
   await expect(status).toHaveText(/^2 routes · updated/, {timeout: 15_000});

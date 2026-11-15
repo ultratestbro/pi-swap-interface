@@ -1426,6 +1426,25 @@ trusting the engine's summary (which skips a custom payload and doesn't read the
     DeDust's pinned native vault, 2.1 TON and the exact recorded body — and the same swap re-routed after the review
     through DeDust CPMM v2 is refused before the wallet is asked.
 
+
+**D37 — Prices read the way the market reads them (team feedback, 2026-11-15).** Compared against an aggregator on
+WETH → wstETH (15.14 WETH), three things read wrong: the receive card showed the expected 12.1235 while every route row
+showed a minimum near 12.00; the minimum sat ~1% under the quote even at a custom 0.05% slippage; and the presets were
+0.1 / 0.5 / 1 / 3%. Now:
+- **Rows show the expected amount**, the same number as the receive card, with the minimum the swap enforces under it
+  ("min 12.0582"); the label reads "about … at least …". Ranking is unchanged.
+- **The execution margin scales with the slippage**: `floorToleranceBps(bps)` = min(0.5%, slippage) (math.ts, web). The
+  route carries it (`WebRoute.floorBps`, set by toWebRoute from the request's slippage) and `routeFloor(route)` is the one
+  floor the list, the summary, the review and execution use. At 0.05% the minimum is now 0.1% under the quote, not
+  0.55%; at 0.5% and above nothing changes (the 0.5% margin covered ~18 bps of drift while a review is read and signed).
+- **Auto knows correlated pairs**: one asset family (a coin, its wrapper and its liquid-staking forms; USD stables) on
+  one network is 0.05% (`autoSlippageBps(from, to, sameChain)`); across networks a family keeps 0.3% (stables) / 0.5%.
+- **Presets 0.01%, 0.05%, 0.3%** and Custom (0.01–50%); every label keeps its precision (`bpsLabel`).
+- **The review once confirmed keeps the terms in view**: the card keeps You pay, You receive, Minimum received and
+  Route; the approval, fee, rate and address rows, the Fynd licence note (read before Confirm) and the saved-settings
+  notice step aside, so the steps and Confirm fit under the headline.
+The rate itself (ours 0.0002 wstETH under the aggregator's best on that trade) is the venues': 1inch, KyberSwap and
+Velora aren't venues here, and the aggregator's numbers are before the positive slippage it keeps.
 ---
 
 ## 5. Conventions

@@ -6,6 +6,7 @@
 import type {Quote} from "@anywalletkit/protocol-swap2-core/types";
 import type {Execution, WebRoute} from "../contracts/routes";
 import type {QuoteGasLike} from "./gas";
+import {executionFloor, floorToleranceBps, FLOOR_TOLERANCE_BPS} from "./math";
 import {toRouteView, type QuoteLike} from "./routes";
 import {venueTrust} from "./venues";
 
@@ -54,12 +55,16 @@ function tonSwapSteps(q: QuoteLike): string[] | undefined {
   }
 }
 
-/** toRouteView + the web fields. `native`: the source chain's native coin at its price, for the bridge fee in USD. */
+/**
+ * toRouteView + the web fields. `native`: the source chain's native coin at its price, for the bridge fee in USD;
+ * `slippageBps`: the setting it was quoted at, which sets its execution margin (floorBps).
+ */
 export function toWebRoute(
   q: QuoteLike & Partial<Pick<Quote, "depositMemo">>,
   source?: {chain: string; isToken: boolean},
   gasUsd?: (q: QuoteGasLike) => number,
   native?: {usd: number; decimals: number},
+  slippageBps?: number,
 ): WebRoute {
   const view = toRouteView(q, source, gasUsd);
   const bridgeFeeUsd =
@@ -72,5 +77,10 @@ export function toWebRoute(
     trust: venueTrust(q.provider),
     ...(bridgeFeeUsd > 0 ? {bridgeFeeUsd} : {}),
     ...(steps ? {tonSwapSteps: steps} : {}),
+    ...(slippageBps !== undefined ? {floorBps: Number(floorToleranceBps(slippageBps))} : {}),
   };
 }
+
+/** The minimum a route is held to — what the list, the summary and the review show, and the swap enforces. */
+export const routeFloor = (route: Pick<WebRoute, "minDestAmount" | "floorBps">): bigint =>
+  executionFloor(route.minDestAmount, route.floorBps !== undefined ? BigInt(route.floorBps) : FLOOR_TOLERANCE_BPS);

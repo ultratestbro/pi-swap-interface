@@ -162,7 +162,7 @@ export interface SwapModule {
   fieldText(value: bigint, decimals: number, digits?: number): string;
   formatFee(value: bigint, decimals: number, sig?: number): string;
   usdOf(value: bigint, decimals: number, priceUsd: number | undefined): number | undefined;
-  autoSlippageBps(fromSymbol: string, toSymbol: string): number;
+  autoSlippageBps(fromSymbol: string, toSymbol: string, sameChain?: boolean): number;
   slippageLabel(bps: number): string;
   executionFloor(minDest: bigint, toleranceBps?: bigint): bigint;
   impliedSlippagePct(expected: bigint, min: bigint): number;

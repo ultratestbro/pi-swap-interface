@@ -22,7 +22,7 @@ import type {WebRoute} from "../../contracts/routes";
 import type {WalletFamily, WalletsApi} from "../../contracts/wallets";
 import {savedOverrides, usePorts} from "../../config";
 import {chainBySlugWeb, destTokenId} from "../../catalog";
-import {FYND_LICENSE_URL, balanceProblem, executionFloor, fyndRouterNotice, isStale} from "../../swap";
+import {FYND_LICENSE_URL, balanceProblem, fyndRouterNotice, isStale, routeFloor} from "../../swap";
 import {swapErrorText, swapFeeCap, uncappedFeeText} from "../../execute";
 import {statusView, swapSteps, wasInterrupted} from "../../activity";
 import {Button, Icon, ReviewSkeleton, Sheet, SheetHeader, SwapSteps, Text, TokenIcon, TxReviewCard, formatCountdown, showToast} from "../../ui";
@@ -140,7 +140,7 @@ export function ReviewSheet({open, draft, tokens, wallets, slippage, onClose, on
   async function confirm() {
     if (busy.current || !route || problem || requote.gone || stale) return;
     busy.current = true;
-    const minOut = executionFloor(route.minDestAmount);
+    const minOut = routeFloor(route);
     const reviewed: ReviewedSwap = {
       provider: route.provider,
       fromChain: from.caip2,
@@ -192,7 +192,7 @@ export function ReviewSheet({open, draft, tokens, wallets, slippage, onClose, on
     const held = route;
     setPhase({step: "issuing", route: held, ...(renewFrom ? {ticket: renewFrom} : {})});
     try {
-      const ticket = await ports.execute.issueDeposit({req, provider: held.provider, minOut: executionFloor(held.minDestAmount)});
+      const ticket = await ports.execute.issueDeposit({req, provider: held.provider, minOut: routeFloor(held)});
       setPhase({step: "deposit", route: held, ticket: auto === "expired" && !renewFrom ? {...ticket, validUntilMs: Date.now() - 1} : ticket});
     } catch (e) {
       setPhase({step: "error", title: "No deposit address", message: swapErrorText(e, from.symbol)});
@@ -330,6 +330,9 @@ interface ReviewBodyProps {
   onLeave(): void;
 }
 
+/** The review rows still shown once Confirm is pressed: the amounts, the floor and the venue. */
+const EXECUTING_ROWS: ReadonlySet<string> = new Set(["swap-review-pay", "swap-review-receive", "swap-review-min", "swap-review-route"]);
+
 /** The review phase: headline, rows, warnings, fine print, Confirm (or "Get deposit address"); while executing, the steps. */
 function ReviewBody({draft, from, native, slippage, route, gone, failed, problem, executing, record, leave, issuing, now, onConfirm, onClose, onLeave}: ReviewBodyProps) {
   const {req} = draft;
@@ -360,7 +363,9 @@ function ReviewBody({draft, from, native, slippage, route, gone, failed, problem
         {`${amountText(req.amountIn, from.decimals, from.symbol)} → ${to.symbol}`}
       </Text>
       {route ? (
-        <TxReviewCard compact rows={reviewRows({req, route, from, to, native, slippage})} />
+        // Once confirmed, the card keeps what is being swapped, at what price and through whom; the rest was reviewed,
+        // and the steps and Confirm must stay on screen with the swap's terms above them (web, D37).
+        <TxReviewCard compact rows={executing ? reviewRows({req, route, from, to, native, slippage}).filter((r) => r.testId !== undefined && EXECUTING_ROWS.has(r.testId)) : reviewRows({req, route, from, to, native, slippage})} />
       ) : gone ? null : (
         <ReviewSkeleton label="Getting a fresh quote…" />
       )}
@@ -374,7 +379,7 @@ function ReviewBody({draft, from, native, slippage, route, gone, failed, problem
           </Text>
         </div>
       ) : null}
-      {route?.provider === "fynd" ? (
+      {route?.provider === "fynd" && !executing ? (
         <div className={s.licenseBox} role="note" data-testid="swap-review-fynd-license">
           <Text as="p" variant="meta" color="var(--ink2)" selectable className={s.fine}>
             {`${fyndRouterNotice(from.chainName)} `}
@@ -402,7 +407,7 @@ function ReviewBody({draft, from, native, slippage, route, gone, failed, problem
           {problem}
         </Text>
       ) : null}
-      <SavedNotice overrides={savedOverrides()} />
+      {executing ? null : <SavedNotice overrides={savedOverrides()} />}
       {/* Once confirmed, the steps take the fine print's place: what it promised is what they show happening. */}
       {executing ? (
         record ? (

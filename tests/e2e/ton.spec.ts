@@ -335,7 +335,9 @@ async function reviewSymbiosis(page: Page) {
   // The recording was asked with 0.5 % slippage: the review and its live quote are asked as it was.
   await page.getByTestId("swap-slippage").click();
   const sheet = page.getByRole("dialog", {name: "Max slippage"});
-  await sheet.getByRole("group", {name: "Slippage presets"}).getByRole("button", {name: "0.5%", exact: true}).click();
+  // 0.5 % is typed: the presets are 0.01 %, 0.05 % and 0.3 %.
+  await sheet.getByLabel("Custom").fill("0.5");
+  await sheet.getByLabel("Custom").press("Enter");
   await expect(sheet).toBeHidden();
   await page.getByTestId("swap-recipient").fill(SYM.params.destAddress);
   await expect(page.getByTestId("swap-review")).toHaveText("Review via Symbiosis", {timeout: 30_000});
@@ -744,7 +746,9 @@ async function reviewOmnistonSwap(page: Page) {
   await expect(page.getByTestId("swap-wallet-pill-ton")).toBeVisible();
   await page.getByTestId("swap-slippage").click();
   const sheet = page.getByRole("dialog", {name: "Max slippage"});
-  await sheet.getByRole("group", {name: "Slippage presets"}).getByRole("button", {name: "1%", exact: true}).click();
+  // 1 % is typed: the presets are 0.01 %, 0.05 % and 0.3 %.
+  await sheet.getByLabel("Custom").fill("1");
+  await sheet.getByLabel("Custom").press("Enter");
   await expect(sheet).toBeHidden();
   await expect(page.getByTestId("swap-review")).toHaveText("Review via Omniston", {timeout: 30_000});
   await page.getByTestId("swap-review").click();

@@ -3,8 +3,10 @@
  * route (radio: venue, Best/Fastest, trust badge, guaranteed amount, ETA,
  * fees, gas), a venue still quoting, a venue that sat out (its short reason,
  * and behind a disclosure why and the venue's own text), and an enabled venue
- * that doesn't serve the pair. The row shows the guaranteed minimum, never
- * the expected amount; a preview row (D7) marks it as an estimate ("≈", a
+ * that doesn't serve the pair. The row shows the expected amount — the number
+ * the receive card shows for the chosen route — and the guaranteed minimum the
+ * swap enforces under it (web, D37: the minimum alone read as a worse price than
+ * the receive card's); a preview row (D7) marks it as an estimate ("≈", a
  * "Preview" tag), since it was priced before the user's addresses existed. A
  * row whose route was quoted for the previous slippage or address keeps its
  * place with its numbers dimmed until the venue answers again (D32); it says
@@ -14,7 +16,7 @@ import type {Ref} from "react";
 import type {SwapToken} from "../../contracts/domain";
 import type {RouteRejection, WebRoute} from "../../contracts/routes";
 import {formatAmount, formatUsd} from "../../catalog";
-import {etaLabel, executionFloor, providerName, venueTrustText} from "../../swap";
+import {etaLabel, providerName, routeFloor, venueTrustText} from "../../swap";
 import {Badge, CopyButton, Icon, ProviderLogo, Spinner, Text, VenueBadge, useBreakpoint} from "../../ui";
 import type {Held, NotForPair} from "../form/model";
 import s from "./Routes.module.css";
@@ -54,11 +56,10 @@ export const PREVIEW_TAG_TEXT = "Priced for a sample address — your own quote 
 
 export function RouteRow({route, to, payChainName, selected, tabbable, trustLine, preview, held, onSelect, ref}: RouteRowProps) {
   const name = providerName(route.provider);
-  // The minimum the swap enforces (the execution floor), the same number the summary and the review show — not the
-  // venue's own minimum, which sits FLOOR_TOLERANCE above it.
-  const floor = executionFloor(route.minDestAmount);
-  const out = formatAmount(floor.toString(), to.decimals);
-  const usd = to.priceUsd !== undefined ? (Number(floor) / 10 ** to.decimals) * to.priceUsd : undefined;
+  // The expected amount, as the receive card shows it, and under it the minimum the swap enforces (the execution
+  // floor), the same number the summary and the review show — not the venue's own minimum, a margin above it.
+  const out = formatAmount(route.destAmount.toString(), to.decimals);
+  const min = formatAmount(routeFloor(route).toString(), to.decimals);
   return (
     <button
       ref={ref}
@@ -66,7 +67,7 @@ export function RouteRow({route, to, payChainName, selected, tabbable, trustLine
       role="radio"
       aria-checked={selected}
       tabIndex={tabbable ? 0 : -1}
-      aria-label={`${preview ? `${name}, preview, about ${out} ${to.symbol}` : `${name}, at least ${out} ${to.symbol}`}, ${etaLabel(route.etaSeconds)}${held ? `, ${held}` : ""}`}
+      aria-label={`${name}, ${preview ? "preview, " : ""}about ${out} ${to.symbol}, at least ${min} ${to.symbol}, ${etaLabel(route.etaSeconds)}${held ? `, ${held}` : ""}`}
       aria-busy={held === "updating" || undefined}
       data-testid={`swap-route-${route.provider}`}
       data-provider={route.provider}
@@ -102,7 +103,7 @@ export function RouteRow({route, to, payChainName, selected, tabbable, trustLine
           {`${preview ? "≈ " : ""}${out} ${to.symbol}`}
         </Text>
         <Text variant="meta" color="var(--dim)" tabular lines={1}>
-          {preview ? (usd !== undefined ? `est. min · ${formatUsd(usd)}` : "est. minimum") : usd !== undefined ? `min · ${formatUsd(usd)}` : "minimum"}
+          {`${preview ? "est. min" : "min"} ${min}`}
         </Text>
       </span>
     </button>

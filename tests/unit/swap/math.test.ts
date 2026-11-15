@@ -11,6 +11,7 @@ import {
   trimNativeMax,
   minWithSlippage,
   autoSlippageBps,
+  floorToleranceBps,
   rate,
   parsePastedAmount,
   sanitizeAmountInput,
@@ -79,6 +80,23 @@ describe("slippage", () => {
     expect(autoSlippageBps("WBTC", "cbBTC")).toBe(50);
     expect(autoSlippageBps("ETH", "PEPE")).toBe(100);
     expect(autoSlippageBps("SSV", "SOL")).toBe(100);
+  });
+  it("web: one asset family on one network is 0.05%; across networks it keeps the pair's usual setting", () => {
+    expect(autoSlippageBps("WETH", "wstETH", true)).toBe(5);
+    expect(autoSlippageBps("USDC", "DAI", true)).toBe(5);
+    expect(autoSlippageBps("WBTC", "cbBTC", true)).toBe(5);
+    expect(autoSlippageBps("SOL", "JitoSOL", true)).toBe(5);
+    expect(autoSlippageBps("USDC", "USDT", false)).toBe(30);
+    expect(autoSlippageBps("ETH", "wstETH", false)).toBe(50);
+    expect(autoSlippageBps("ETH", "USDC", true)).toBe(50);
+    expect(autoSlippageBps("ETH", "PEPE", true)).toBe(100);
+  });
+  it("web: the execution margin never exceeds the slippage, and stays 0.5% at or above it", () => {
+    expect(floorToleranceBps(5)).toBe(5n);
+    expect(floorToleranceBps(30)).toBe(30n);
+    expect(floorToleranceBps(50)).toBe(50n);
+    expect(floorToleranceBps(100)).toBe(50n);
+    expect(floorToleranceBps(0)).toBe(1n);
   });
   it("labels", () => {
     expect(slippageLabel(50)).toBe("0.5%");

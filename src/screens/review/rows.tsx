@@ -10,7 +10,7 @@ import type {SwapToken} from "../../contracts/domain";
 import type {QuoteRequest, WebRoute} from "../../contracts/routes";
 import type {ReviewRow} from "../../contracts/ui";
 import {formatUsd, shortAddress} from "../../catalog";
-import {FLOOR_TOLERANCE_BPS, TWO_PHASE, etaLabel, executionFloor, formatRate, impliedSlippagePct, providerName, rate, slippageLabel, usdOf} from "../../swap";
+import {FLOOR_TOLERANCE_BPS, TWO_PHASE, etaLabel, formatRate, impliedSlippagePct, providerName, rate, routeFloor, usdOf} from "../../swap";
 import {ProviderLogo, VenueBadge, venueTrustText} from "../../ui";
 import {bpsLabel} from "../form/FormParts";
 import {amountText} from "../labels";
@@ -56,10 +56,10 @@ export function reviewRows({req, route, from, to, native, slippage}: ReviewRowsI
     },
     {
       k: "Minimum received",
-      v: amountText(executionFloor(route.minDestAmount), to.decimals, to.symbol),
+      v: amountText(routeFloor(route), to.decimals, to.symbol),
       note: `${bpsLabel(req.slippageBps)} + margin`,
       // The venue's own minimum is `slippage` under the quote; the enforced floor is a further margin below it.
-      tip: `${slippage} + ${slippageLabel(Number(FLOOR_TOLERANCE_BPS))} margin · quoted ${impliedSlippagePct(route.destAmount, route.minDestAmount).toFixed(2)}%. The swap is refused if it would deliver less.`,
+      tip: `${slippage} + ${bpsLabel(route.floorBps ?? Number(FLOOR_TOLERANCE_BPS))} margin · quoted ${impliedSlippagePct(route.destAmount, route.minDestAmount).toFixed(2)}%. The swap is refused if it would deliver less.`,
       testId: "swap-review-min",
     },
     {k: "Rate", v: r !== null ? `1 ${from.symbol} = ${formatRate(r)} ${to.symbol}` : "—"},

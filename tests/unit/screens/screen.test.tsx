@@ -354,7 +354,7 @@ describe("a slippage change keeps the screen's shape (D32)", () => {
     const uniswap = screen.getByTestId("swap-route-uniswap");
     const balancer = screen.getByTestId("swap-route-balancer");
     const min = screen.getByTestId("swap-min-received").textContent;
-    await pickSlippage("1%");
+    await pickSlippage("0.3%");
 
     // At once: the same rows (not remounted), in place and dimmed; the summary and the receive amount still there.
     expect(screen.getByTestId("swap-route-uniswap")).toBe(uniswap);
@@ -364,7 +364,7 @@ describe("a slippage change keeps the screen's shape (D32)", () => {
     expect(screen.getByTestId("swap-min-received").textContent).toBe(min);
     expect(screen.getByRole("status", {name: "Updating"})).toBeTruthy();
     expect(screen.getByTestId("swap-receive-amount").textContent).not.toBe("0");
-    // A number quoted for 0.5 % is never reviewable at 1 %.
+    // A number quoted for 0.5 % is never reviewable at 0.3 %.
     expect(cta().textContent).toBe("Updating quote…");
     expect(cta().disabled).toBe(true);
     expect(cta().dataset.state).toBe("updating");
@@ -372,14 +372,14 @@ describe("a slippage change keeps the screen's shape (D32)", () => {
     fireEvent.click(cta());
     expect(screen.queryByTestId("swap-review-body")).toBeNull();
 
-    // Uniswap answers for 1 %: its row and the summary take the new minimum in place.
+    // Uniswap answers for 0.3 %: its row and the summary take the new minimum in place.
     await waitFor(() => expect(cta().textContent).toBe("Review via Uniswap"), SLOW);
     expect(screen.getByTestId("swap-route-uniswap")).toBe(uniswap);
     expect(uniswap.getAttribute("aria-busy")).toBeNull();
     const fresh = screen.getByTestId("swap-min-received").textContent;
     expect(fresh).not.toBe(min);
     expect(screen.queryByRole("status", {name: "Updating"})).toBeNull();
-    // Reviewed while the round still runs (Balancer is asked until 550 ms), the review drafts Uniswap's 1 % quote. Read
+    // Reviewed while the round still runs (Balancer is asked until 550 ms), the review drafts Uniswap's 0.3 % quote. Read
     // at once: the review's own re-quote (600 ms after it opens, in demo) would replace the drafted route anyway.
     fireEvent.click(cta());
     const sheet = await screen.findByTestId("swap-review-body");
@@ -393,7 +393,7 @@ describe("a slippage change keeps the screen's shape (D32)", () => {
     await settled();
     fireEvent.click(screen.getByTestId("swap-route-balancer"));
     await waitFor(() => expect(cta().textContent).toBe("Review via Balancer"));
-    await pickSlippage("1%");
+    await pickSlippage("0.3%");
     expect(cta().textContent).toBe("Updating quote…");
     // Uniswap answers first: Balancer, the chosen one, is still quoted for 0.5 %.
     await waitFor(() => expect(screen.getByTestId("swap-route-uniswap").getAttribute("aria-busy")).toBeNull(), SLOW);

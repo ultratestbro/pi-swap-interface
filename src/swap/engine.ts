@@ -275,7 +275,7 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
       unknownEta.has(w.provider) ? {...w, ...(sameChain ? {} : {etaSeconds: 0}), tags: w.tags.filter((t) => t !== "fastest")} : w;
     const view = (quotes: RouteSet["quotes"], pending: string[], rejections: readonly string[]): RouteSnapshot => ({
       mode,
-      routes: orderRoutes(quotes.map((q) => shown(toWebRoute(q, source, gas, native)))),
+      routes: orderRoutes(quotes.map((q) => shown(toWebRoute(q, source, gas, native, req.slippageBps)))),
       pending,
       rejections: parseRejections(scrub ? rejections.map(scrub) : rejections, req.from).map((x) =>
         skipped.has(x.provider) ? {...x, skipped: true as const} : x,
@@ -368,7 +368,7 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
     const native = sourceNative(req, prices);
     const set = await one.getQuotes(quoteParams(req));
     const q = set?.quotes.find((x) => x.provider === provider);
-    if (q) return {route: tagRoutes([toWebRoute(q, {chain: req.from.caip2, isToken: req.from.contract !== null}, gas, native)])[0]!, reason: null};
+    if (q) return {route: tagRoutes([toWebRoute(q, {chain: req.from.caip2, isToken: req.from.contract !== null}, gas, native, req.slippageBps)])[0]!, reason: null};
     return {route: null, reason: parseRejections(one.lastRejections, req.from)[0]?.reason ?? "No route right now"};
   }
 

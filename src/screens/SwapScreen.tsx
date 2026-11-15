@@ -17,7 +17,7 @@ import type {SwapDraft} from "../contracts/execution";
 import type {RoutesRequest} from "../contracts/routes";
 import type {WalletFamily} from "../contracts/wallets";
 import {isDemo, readHash, savedOverrides, setHashQuery, useHashRoute, usePorts} from "../config";
-import {keepSelection, providerName, slippageLabel} from "../swap";
+import {keepSelection, providerName} from "../swap";
 import {useBreakpoint} from "../ui";
 import {ActivityDrawer} from "./activity/ActivityDrawer";
 import {RecipientBox, RefundBox} from "./form/AddressBoxes";
@@ -309,7 +309,7 @@ export function SwapApp({scene}: {scene: Scene | null}) {
           draft={review.draft}
           tokens={tokens}
           wallets={wallets}
-          slippage={form.slippage === null ? `Auto slippage ${slippageLabel(form.autoBps)}` : `Slippage ${bpsLabel(form.slippage)}`}
+          slippage={form.slippage === null ? `Auto slippage ${bpsLabel(form.autoBps)}` : `Slippage ${bpsLabel(form.slippage)}`}
           auto={sceneAuto && review.n === 1 ? sceneAuto : "none"}
           onClose={() => setReviewOpen(false)}
           onShowStatus={(id) => {

@@ -91,7 +91,7 @@ export function useSwapForm(tokens: SwapTokensState, preset: FormPreset, hasWall
   const from = pair ? tokens.byKey.get(pair.pay) : undefined;
   const to = pair ? tokens.byKey.get(pair.receive) : undefined;
   const amountIn = from ? parseUnits(text, from.decimals) : null;
-  const autoBps = from && to ? autoSlippageBps(from.symbol, to.symbol) : DEFAULT_SLIPPAGE_BPS;
+  const autoBps = from && to ? autoSlippageBps(from.symbol, to.symbol, from.caip2 === to.caip2) : DEFAULT_SLIPPAGE_BPS;
   const slippageBps = slippage ?? autoBps;
   const balance = from && from.balance === "loaded" ? BigInt(from.amount) : null;
   const problem = balance !== null ? balanceProblem(amountIn, balance) : null;

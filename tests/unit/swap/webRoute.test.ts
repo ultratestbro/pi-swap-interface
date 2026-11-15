@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
 import {friendlyReason, orderRoutes, parseRejections, toRouteView} from "../../../src/swap/routes";
-import {executionOf, toWebRoute} from "../../../src/swap/webRoute";
+import {executionOf, routeFloor, toWebRoute} from "../../../src/swap/webRoute";
 import {routeMeta} from "../../../src/screens/routelist/RouteRow";
 
 const q = (provider: string, min: string, extra: Record<string, unknown> = {}) =>
@@ -92,6 +92,15 @@ describe("toWebRoute", () => {
     expect(toWebRoute(q("usdt0", "1", {feeUsd: 0.3}), undefined, undefined, eth)).not.toHaveProperty("bridgeFeeUsd");
     expect(toWebRoute(q("usdt0", "1", tron))).not.toHaveProperty("bridgeFeeUsd");
     expect(routeMeta(toWebRoute(q("usdt0", "1", tron)))).toContain("fees $0.30");
+  });
+  it("the floor sits a margin under the venue's minimum: min(0.5%, the slippage the route was quoted at)", () => {
+    const tight = toWebRoute(q("uniswap", "1000000"), undefined, undefined, undefined, 5);
+    expect(tight.floorBps).toBe(5);
+    expect(routeFloor(tight)).toBe(999_500n); // −0.05 %
+    const usual = toWebRoute(q("uniswap", "1000000"), undefined, undefined, undefined, 100);
+    expect(usual.floorBps).toBe(50);
+    expect(routeFloor(usual)).toBe(995_000n); // −0.5 %
+    expect(routeFloor(toWebRoute(q("uniswap", "1000000")))).toBe(995_000n); // no slippage known: the 0.5 % margin
   });
   it("orderRoutes keeps the web fields", () => {
     const list = orderRoutes([toWebRoute(q("a", "1", {relativeValue: 0.9})), toWebRoute(q("b", "2", {tags: ["best"]}))]);

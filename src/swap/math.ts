@@ -74,12 +74,23 @@ export const DEFAULT_SLIPPAGE_BPS = 50;
 const STABLES = new Set(["USDT", "USDC", "DAI", "USDE", "USDT0", "USDC.E", "USDBC", "PYUSD", "USDG", "USDS", "FDUSD", "TUSD", "USD1", "AUSD", "FRAX", "GHO", "LUSD"]);
 const MAJORS = new Set(["ETH", "WETH", "STETH", "WSTETH", "CBETH", "RETH", "WEETH", "BTC", "WBTC", "CBBTC", "BTCB", "TBTC", "SOL", "JITOSOL", "MSOL", "BNB", "WBNB", "TON", "TRX", "POL", "AVAX", "ARB", "OP"]);
 
+/** web: assets that trade at a near-fixed ratio to each other (a coin, its wrapper and its liquid-staking forms; USD stables). */
+const FAMILY: Readonly<Record<string, string>> = {
+  ETH: "eth", WETH: "eth", STETH: "eth", WSTETH: "eth", CBETH: "eth", RETH: "eth", WEETH: "eth",
+  BTC: "btc", WBTC: "btc", CBBTC: "btc", BTCB: "btc", TBTC: "btc",
+  SOL: "sol", JITOSOL: "sol", MSOL: "sol",
+  BNB: "bnb", WBNB: "bnb",
+};
+const familyOf = (s: string): string | undefined => (STABLES.has(s.toUpperCase()) ? "usd" : FAMILY[s.toUpperCase()]);
+
 /**
- * Auto slippage for a pair (the swap has no manual setting): two stablecoins
- * 0.3%, majors and their wrappers / liquid-staking forms 0.5% (a stable with
- * a major too), anything else 1%.
+ * Auto slippage for a pair: two stablecoins 0.3%, majors and their wrappers / liquid-staking forms 0.5% (a stable
+ * with a major too), anything else 1%. web: one asset family on one network (WETH → wstETH, USDC → DAI on Ethereum)
+ * 0.05% — those pools barely move, and the market's usual default for them; across networks a family keeps the above.
  */
-export function autoSlippageBps(fromSymbol: string, toSymbol: string): number {
+export function autoSlippageBps(fromSymbol: string, toSymbol: string, sameChain = false): number {
+  const family = familyOf(fromSymbol);
+  if (sameChain && family !== undefined && family === familyOf(toSymbol)) return 5;
   const kind = (s: string) => (STABLES.has(s.toUpperCase()) ? "stable" : MAJORS.has(s.toUpperCase()) ? "major" : "other");
   const a = kind(fromSymbol);
   const b = kind(toSymbol);
@@ -97,6 +108,15 @@ export const slippageLabel = (bps: number) => `${(bps / 100).toFixed(bps % 100 =
  * received", so the floor IS what was reviewed.
  */
 export const FLOOR_TOLERANCE_BPS = 50n;
+
+/**
+ * web: the execution margin for a slippage setting — FLOOR_TOLERANCE, but never more than the slippage itself: at
+ * 0.05% a fixed 0.5% margin put the "minimum" 0.55% under the quote, eleven times what the user chose.
+ */
+export const floorToleranceBps = (slippageBps: number): bigint => {
+  const bps = BigInt(Math.max(1, Math.round(slippageBps)));
+  return bps < FLOOR_TOLERANCE_BPS ? bps : FLOOR_TOLERANCE_BPS;
+};
 
 export function executionFloor(minDest: bigint, toleranceBps: bigint = FLOOR_TOLERANCE_BPS): bigint {
   const floor = (minDest * (10_000n - toleranceBps)) / 10_000n;

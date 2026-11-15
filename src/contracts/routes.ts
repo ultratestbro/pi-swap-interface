@@ -64,6 +64,11 @@ export interface WebRoute extends RouteView {
    * accepts by it: execute decides by the contract the exact BoC pays (ARCHITECTURE D35 part C). Absent otherwise.
    */
   tonSwapSteps?: readonly string[];
+  /**
+   * The execution margin under the venue's minimum for the slippage this route was quoted at, in bps: min(0.5%,
+   * slippage) (floorToleranceBps). The floor every screen shows and the swap enforces is `routeFloor(route)`.
+   */
+  floorBps?: number;
 }
 
 /** The token being paid, for minimums a venue states in its base units (mobile routes.ts PaySide). */

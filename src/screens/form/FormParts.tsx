@@ -8,22 +8,23 @@ import {useState} from "react";
 import type {SwapToken} from "../../contracts/domain";
 import type {WebRoute} from "../../contracts/routes";
 import {formatAmount} from "../../catalog";
-import {FLOOR_TOLERANCE_BPS, executionFloor, formatRate, providerName, rate, slippageLabel} from "../../swap";
+import {FLOOR_TOLERANCE_BPS, formatRate, providerName, rate, routeFloor} from "../../swap";
 import {Button, Field, Icon, ProviderLogo, Sheet, SheetHeader, Spinner, Text, TxReviewCard} from "../../ui";
 import type {CtaState, Held} from "./model";
 import s from "./Form.module.css";
 
-const PRESETS = [10, 50, 100, 300] as const;
+/** The market's usual presets (0.01%, 0.05%, 0.3%); anything else is typed. */
+const PRESETS = [1, 5, 30] as const;
 /** Bounds of a typed slippage (0.01 %–50 %): below that nothing fills, above it the floor means little. */
 const MIN_BPS = 1;
 const MAX_BPS = 5000;
 
-/** "0.5%", "0.05%" — the custom value keeps its own precision (slippageLabel rounds to one decimal). */
+/** "0.5%", "0.05%" — every slippage keeps its own precision (math.ts slippageLabel rounds to one decimal). */
 export const bpsLabel = (bps: number): string => `${Number((bps / 100).toFixed(2))}%`;
 
 /** What the slippage row says: "Auto · 0.5%" or "1% (custom)". */
 export const slippageText = (custom: number | null, autoBps: number): string =>
-  custom === null ? `Auto · ${slippageLabel(autoBps)}` : `${bpsLabel(custom)} (custom)`;
+  custom === null ? `Auto · ${bpsLabel(autoBps)}` : `${bpsLabel(custom)} (custom)`;
 
 /** Typed percent → bps within bounds, or null. */
 export function parseSlippage(text: string): number | null {
@@ -67,7 +68,7 @@ export function SlippageControl({custom, autoBps, onChange}: SlippageProps) {
           <SheetHeader title="Max slippage" sub="How far the price may move before the swap is refused" onClose={close} />
           <div className={s.presets} role="group" aria-label="Slippage presets">
             <button type="button" className={s.preset} aria-pressed={custom === null} onClick={() => pick(null)}>
-              {`Auto ${slippageLabel(autoBps)}`}
+              {`Auto ${bpsLabel(autoBps)}`}
             </button>
             {PRESETS.map((bps) => (
               <button key={bps} type="button" className={s.preset} aria-pressed={custom === bps} onClick={() => pick(bps)}>
@@ -97,7 +98,7 @@ export function SlippageControl({custom, autoBps, onChange}: SlippageProps) {
             </Text>
           ) : (
             <Text as="p" variant="meta" color="var(--dim)">
-              Auto picks 0.3% for two stablecoins, 0.5% for majors, 1% for anything else. The review shows the minimum you receive.
+              Auto picks 0.05% for one asset on one network (USDC → DAI, WETH → wstETH), 0.3% for stablecoins across networks, 0.5% for majors, 1% for anything else. The review shows the minimum you receive.
             </Text>
           )}
           <Button block title={parsed !== null ? `Use ${bpsLabel(parsed)}` : "Done"} disabled={!!typed && parsed === null} onClick={() => (parsed !== null ? pick(parsed) : close())} />
@@ -120,10 +121,11 @@ export interface SummaryProps {
 }
 
 /**
- * The minimum the swap enforces sits FLOOR_TOLERANCE below the venue's own (its slippage): said next to every
- * "Minimum received", so "Max slippage 0.5%" is not read as the whole tolerance.
+ * The minimum the swap enforces sits an execution margin below the venue's own (its slippage) — min(0.5%, slippage),
+ * the route's floorBps: said next to every "Minimum received", so "Max slippage 0.5%" is not read as the whole tolerance.
  */
-export const FLOOR_MARGIN_TEXT = `Slippage plus a ${slippageLabel(Number(FLOOR_TOLERANCE_BPS))} execution margin`;
+export const floorMarginText = (route: Pick<WebRoute, "floorBps">): string =>
+  `Slippage plus a ${bpsLabel(route.floorBps ?? Number(FLOOR_TOLERANCE_BPS))} execution margin`;
 
 /**
  * Rate, route, slippage and the minimum received — the floor the review will hold the swap to. On a preview price
@@ -134,7 +136,7 @@ export const FLOOR_MARGIN_TEXT = `Slippage plus a ${slippageLabel(Number(FLOOR_T
 export function SummaryCard({from, to, amountIn, route, slippage, preview, held}: SummaryProps) {
   const r = rate(amountIn, from.decimals, route.destAmount, to.decimals);
   const cross = to.chain !== from.chain;
-  const floor = `${formatAmount(executionFloor(route.minDestAmount).toString(), to.decimals)} ${to.symbol}`;
+  const floor = `${formatAmount(routeFloor(route).toString(), to.decimals)} ${to.symbol}`;
   const wait = held ? {color: "var(--dim)"} : {};
   const spinner = held === "updating" ? {icon: <Spinner size={12} color="var(--dim)" label="Updating" />} : {};
   return (
@@ -149,7 +151,7 @@ export function SummaryCard({from, to, amountIn, route, slippage, preview, held}
         {k: "Slippage", v: slippage},
         preview
           ? {k: "Estimated minimum", v: `≈ ${floor}`, testId: "swap-min-estimate", ...wait, ...spinner}
-          : {k: "Minimum received", v: floor, sub: FLOOR_MARGIN_TEXT, testId: "swap-min-received", ...wait, ...spinner},
+          : {k: "Minimum received", v: floor, sub: floorMarginText(route), testId: "swap-min-received", ...wait, ...spinner},
       ]}
     />
   );

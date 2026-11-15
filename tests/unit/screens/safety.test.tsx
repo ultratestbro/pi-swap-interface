@@ -157,14 +157,14 @@ describe("a re-quote that fails over a held route (D32)", () => {
 
   it("stays unreviewable, stops saying it is updating, and the CTA only asks again", async () => {
     const refresh = vi.fn();
-    // The list at the pair's own slippage (Auto, 0.3 %) is in; every round at 1 % fails before any venue answers.
+    // The list at the pair's own slippage (Auto, 0.3 %) is in; every round at 0.05 % fails before any venue answers.
     function useRoutes(r: RoutesRequest | null): RoutesState & {refresh(): void} {
       const bps = r?.req.slippageBps;
       const mode = r?.mode;
       return useMemo(() => {
         const idle = {loading: false, limitedUntil: 0, refresh};
         if (!mode) return {...idle, snapshot: null, error: null, updatedAt: 0};
-        if (bps === 100) return {...idle, snapshot: null, error: "Couldn't reach the venue", updatedAt: 2};
+        if (bps === 5) return {...idle, snapshot: null, error: "Couldn't reach the venue", updatedAt: 2};
         return {...idle, snapshot: {...demoSnapshot(), mode}, error: null, updatedAt: 1};
       }, [bps, mode]);
     }
@@ -174,7 +174,7 @@ describe("a re-quote that fails over a held route (D32)", () => {
     expect(cta().textContent).toBe("Review via Circle CCTP");
     fireEvent.click(screen.getByTestId("swap-slippage"));
     const sheet = await screen.findByRole("dialog", {name: "Max slippage"});
-    fireEvent.click(within(within(sheet).getByRole("group", {name: "Slippage presets"})).getByRole("button", {name: "1%"}));
+    fireEvent.click(within(within(sheet).getByRole("group", {name: "Slippage presets"})).getByRole("button", {name: "0.05%"}));
 
     // The rows and the summary stay, dimmed; nothing claims to be updating (no spinner, no aria-busy): the status says why.
     await waitFor(() => expect(cta().dataset.state).toBe("retry"));

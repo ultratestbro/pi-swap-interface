@@ -251,7 +251,7 @@ const status = !req ? null
 - **Hint** (L489-493) when no `req`: `small` dim centred, margin-top 6: "Loading your tokens…" ‖ "Enter an amount to
   see routes from every venue."
 - **Summary** (L495-512): `TxReviewCard` rows — Rate `1 {A} = {formatRate(r)} {B}`; Route `{Provider}` (+ ` · {A
-  chain} → {B chain}` cross-chain) with `ProviderLogo` 18; Slippage `Auto · {slippageLabel}`; Minimum received
+  chain} → {B chain}` cross-chain) with `ProviderLogo` 18; Slippage `Auto · {bpsLabel}` (presets 0.01 / 0.05 / 0.3 %, web D37); Minimum received
   `{formatAmount(executionFloor(route.minDestAmount))} {SYM}`.
 - **CTA** (L515-517): bottom bar padding `8px 20px (8 + safe-area)`, Button 54 "Review swap", disabled when no route or
   zero amount. Problems (balance) do **not** disable it — the review blocks Confirm.
