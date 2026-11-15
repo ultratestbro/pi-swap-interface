@@ -1116,7 +1116,10 @@ deposit-only. Held dot only for connected families.
    transaction" → "Swap {A} → {B}" → "Deliver …"; the confirmation step is the wallet's — active ("Waiting for your
    wallet") while it holds the swap, "You confirmed the transaction" and green only once it signed (the broadcast) —
    instead of mobile's first "You confirmed the review", which read as done while the wallet's prompt was still
-   open. EVM chain mismatch: the wallet spec switches chain before the first write; a refused switch
+   open. A 0x token sale (D38) asks for its one-time Permit2 signature first: a "Sign the Permit2 transfer" step
+   (`permit` on the record, stage `permit`, "Signing the Permit2 transfer") comes before the approval, which stays
+   todo meanwhile and reads "{SYM} already approved for Permit2" when a standing allowance spared it; a tab closed
+   at the permit is not-sent, never maybe-sent. EVM chain mismatch: the wallet spec switches chain before the first write; a refused switch
    ends in the error phase with "Switch your wallet to {Chain} to swap."
 3. **Stopped before broadcast** → mobile error phase (§2.6). **Broadcast** → the sheet becomes `StatusView` (§2.7)
    with "Continue in background" while `submitting`, "Done" after.

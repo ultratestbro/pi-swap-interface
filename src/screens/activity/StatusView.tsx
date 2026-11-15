@@ -23,6 +23,7 @@ import s from "./Activity.module.css";
 /** What the running step waits on, under its label (mobile status.tsx activeDetail, web wording). */
 export function activeDetail(r: SwapRecord): string | undefined {
   if (r.status === "submitting") {
+    if (r.stage === "permit") return "Waiting for your wallet — a signature, nothing is sent";
     if (r.stage === "approving") return (r.approvals ?? 1) > 1 ? "Two approvals — waiting for the network" : "Waiting for the network to confirm it";
     if (r.stage === "requoting") return "The approval took a while — refreshing the quote";
     if (r.stage === "preflight") return "Checking the route";

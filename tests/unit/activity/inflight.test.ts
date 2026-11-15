@@ -260,6 +260,41 @@ describe("submission (execute's runner records)", () => {
     expect(swapSteps(rec({status: "action-required"}), "Base").at(-1)).toMatchObject({label: "Claim USDC on Base", state: "active"});
   });
 
+  it("a Permit2 venue's token sale (0x, D38): the permit first — the approval and the swap untouched while the wallet holds it", () => {
+    const zx = (over: Partial<SwapRecord> = {}) => sub({provider: "zeroex", permit: true, fromSymbol: "USDC", ...over});
+    const states = (r: SwapRecord) => swapSteps(r, "Base").map((s) => `${s.key}:${s.state}`);
+    const label = (r: SwapRecord, key: string) => swapSteps(r, "Base").find((s) => s.key === key)!.label;
+    // The wallet shows the Permit2 typed data: nothing approved, nothing to confirm yet.
+    expect(states(zx({stage: "permit"}))).toEqual(["permit:active", "approve:todo", "confirm:todo", "swap:todo", "deliver:todo"]);
+    expect(label(zx({stage: "permit"}), "permit")).toBe("Sign the Permit2 transfer");
+    expect(statusView(zx({stage: "permit"}), "Base")).toMatchObject({label: "Signing the Permit2 transfer", tone: "progress"});
+    // Then Permit2's approval, then the swap's own prompt.
+    expect(states(zx({stage: "approving"}))).toEqual(["permit:done", "approve:active", "confirm:todo", "swap:todo", "deliver:todo"]);
+    expect(label(zx({stage: "approving"}), "permit")).toBe("You signed the Permit2 transfer");
+    expect(states(zx({stage: "preflight", approved: true}))).toEqual(["permit:done", "approve:done", "confirm:active", "swap:todo", "deliver:todo"]);
+    expect(label(zx({stage: "signing", approved: true}), "approve")).toBe("Approve USDC");
+    expect(states(zx({stage: "broadcast", approved: true, sourceHash: "0xs"}))).toEqual(["permit:done", "approve:done", "confirm:done", "swap:active", "deliver:todo"]);
+    // A standing Permit2 allowance covered the input: no approval was sent, and the step says so.
+    expect(states(zx({stage: "signing"}))).toEqual(["permit:done", "approve:done", "confirm:active", "swap:todo", "deliver:todo"]);
+    expect(label(zx({stage: "signing"}), "approve")).toBe("USDC already approved for Permit2");
+    // A re-quote's new permit (the approval is in place): the swap's prompt is not open yet.
+    expect(states(zx({stage: "permit", approved: true}))).toEqual(["permit:active", "approve:done", "confirm:todo", "swap:todo", "deliver:todo"]);
+    // Declined at the permit: that step failed, the rest was never reached.
+    expect(states(zx({status: "not-sent", stage: "permit"}))).toEqual(["permit:failed", "approve:todo", "confirm:todo", "swap:todo", "deliver:todo"]);
+    expect(states(zx({status: "not-sent", stage: "approving"}))).toEqual(["permit:done", "approve:failed", "confirm:todo", "swap:todo", "deliver:todo"]);
+    expect(states(zx({status: "not-sent", stage: "signing", approved: true}))).toEqual(["permit:done", "approve:done", "confirm:failed", "swap:todo", "deliver:todo"]);
+  });
+
+  it("a tab gone while the wallet held the permit swapped nothing: not-sent (the permit is off-chain, only that tab could spend it)", () => {
+    const [r] = markInterrupted([sub({provider: "zeroex", permit: true, stage: "permit", fromSymbol: "USDC", heartbeatAt: T0})], new Set(), T0 + 31_000);
+    expect(r).toMatchObject({status: "not-sent", error: INTERRUPTED_TEXT, approved: false});
+    expect(r!.maybeSent).toBeUndefined();
+    expect(wasInterrupted(r!)).toBe(true);
+    // A re-quote's permit, after Permit2's approval was mined: that approval may still be live.
+    const [requoted] = markInterrupted([sub({provider: "zeroex", permit: true, stage: "permit", approved: true, fromSymbol: "USDC", heartbeatAt: T0})], new Set(), T0 + 31_000);
+    expect(requoted).toMatchObject({status: "not-sent", error: `${INTERRUPTED_TEXT} The USDC approval may still be active.`});
+  });
+
   it("deposit steps: address issued → send the amount → delivery", () => {
     const states = (r: SwapRecord) => swapSteps(r, "Ethereum").map((s) => `${s.key}:${s.state}`);
     expect(swapSteps(deposit(), "Ethereum").map((s) => s.label)).toEqual(["Deposit address issued", "Send 0.0125 BTC", "Deliver ETH on Ethereum"]);
@@ -338,5 +373,7 @@ describe("submission (execute's runner records)", () => {
   it("keeps the submission fields through storage", () => {
     const r = sub({stage: "approving", approvals: 2, approved: true, error: "x", fromKey: "base:native", toKey: "base:0xusdc", heartbeatAt: 5});
     expect(parseStored(JSON.stringify([r]))[0]).toMatchObject({status: "submitting", stage: "approving", approvals: 2, approved: true, error: "x", localId: "local.1", fromKey: "base:native", toKey: "base:0xusdc", heartbeatAt: 5});
+    expect(parseStored(JSON.stringify([sub({stage: "permit", permit: true})]))[0]).toMatchObject({stage: "permit", permit: true});
+    expect(parseStored(JSON.stringify([{...sub(), permit: "yes"}]))[0]!.permit).toBeUndefined();
   });
 });

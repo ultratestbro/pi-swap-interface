@@ -19,8 +19,12 @@ export type SwapStatus =
   | "expired"
   | "partial";
 
-/** The engine's execution steps (= ExecutionPhase; mobile name kept). */
-export type ExecStage = ExecutionPhase;
+/**
+ * The engine's execution steps (= ExecutionPhase; mobile name kept), plus `permit`: a Permit2 venue's token sale (0x,
+ * D38) is asked for its one-time Permit2 signature first — the engine calls that `signing` too, but it is off-chain
+ * and sends nothing (the runner tells the two apart).
+ */
+export type ExecStage = ExecutionPhase | "permit";
 
 export interface SwapRecord {
   /** The swap2 id (`awk1.<provider>.<intent>[.<sourceTxHash>[.<destTxHash>[.ok]]]`), or `local.<ts>` before the engine names it. */
@@ -62,6 +66,8 @@ export interface SwapRecord {
   stage?: ExecStage;
   /** Approvals the route needs before the swap (0 = none). */
   approvals?: number;
+  /** The route signs a one-time Permit2 transfer before its approval (a Permit2 venue's token sale, D38). */
+  permit?: boolean;
   approved?: boolean;
   /** Why it stopped before broadcast (`not-sent`), in the user's words (swapErrorText). */
   error?: string;
@@ -126,7 +132,7 @@ export interface StatusView {
 export type StepState = "done" | "active" | "todo" | "failed";
 
 export interface SwapStep {
-  key: "confirm" | "approve" | "swap" | "deliver";
+  key: "permit" | "confirm" | "approve" | "swap" | "deliver";
   label: string;
   state: StepState;
 }

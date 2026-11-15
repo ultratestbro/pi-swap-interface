@@ -1321,6 +1321,10 @@ the provider plus `ownGasEstimate: true` and the `settlerResolver` it reads the 
 - **Availability** as Fynd's: before health answers, while "anonymous", after a stop, 0x is not asked and lists no
   row; `enabled()` stays the module's. A failure at the proxy or an upstream 401/403/429 stops the slot (D30's
   durations), never retried direct; "API key rejected" / "API answered HTTP …" read "Unavailable right now — try later".
+  Not a 403 whose body names one of the module's per-request refusals (`USER_NOT_AUTHORIZED`,
+  `TAKER_`/`RECIPIENT_`/`BUY_TOKEN_`/`SELL_TOKEN_NOT_AUTHORIZED_FOR_TRADE`, `XSTOCKS_NOT_AUTHORIZED`: 0x doesn't serve
+  that token, account or recipient — `unsupported_pair`): it goes back to the module and 0x stays on for every other
+  pair (`REQUEST_REFUSALS`, standard.ts).
 
 ### 4.19 Across, `across`: Standard only (2026-11-15; ARCHITECTURE D38)
 

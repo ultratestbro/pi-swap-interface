@@ -127,6 +127,45 @@ describe("the page's 0x and Across slots (standardProxyOnly) and buildProviders'
     expect(providers.find((p) => p.name === "across")?.supportsRoute(...baseToArb)).toBe(false);
   });
 
+  it("a 0x 403 about one token (BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE) refuses that pair only: 0x stays on for every other", async () => {
+    vi.resetModules();
+    const health = {...HEALTH, venues: {...HEALTH.venues, zeroex: "keyed"}};
+    const sent: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      sent.push(url);
+      if (url.includes("/venue/zeroex/")) {
+        const body = {name: "BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE", message: "Buy token not authorized for trade", data: {zid: "0x1"}};
+        return new Response(JSON.stringify(body), {status: 403, headers: {"content-type": "application/json", "x-swap-web-answer": "upstream"}});
+      }
+      return new Response(JSON.stringify(health), {status: 200});
+    }) as unknown as typeof fetch;
+    const cfg = await import("../../../src/config");
+    const {buildProviders} = await import("../../../src/swap/providers");
+    const {config, plan} = cfg.standardSlots(cfg.DEFAULT_RUNTIME_CONFIG, API);
+    cfg.setRuntimeConfig(config, undefined, {mode: "standard", api: API, plan, keys: {}});
+    cfg.startConnection();
+    await vi.waitFor(() => expect(cfg.connectionStatus().health).toBe("ok"));
+    const zeroex = buildProviders().find((p) => p.name === "zeroex")!;
+    const heard: {text: string; reason?: string}[] = [];
+    const q = await zeroex.getQuote({
+      sourceChain: "eip155:8453",
+      destChain: "eip155:8453",
+      sourceToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      destToken: "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+      amountIn: "25000000",
+      destAddress: "",
+      dry: true,
+      onRefusal: (text, info) => heard.push({text, reason: info?.reason}),
+    });
+    expect(q).toBeNull();
+    expect(heard).toEqual([{text: "zeroex: 0x does not serve the token being bought (BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE)", reason: "unsupported_pair"}]);
+    expect(sent.filter((u) => u.includes("/venue/zeroex/swap/permit2/price?"))).toHaveLength(1);
+    expect(cfg.proxyVenueLive("zeroex")).toBe(true);
+    expect(zeroex.supportsRoute(...sameBase)).toBe(true);
+    expect(cfg.connectionStatus()).toMatchObject({viaProxy: ["fynd", "zeroex"], fellBack: []});
+  });
+
   it.each(["public", "custom"] as const)("%s: no slots, neither built, no cp0x request", async (mode) => {
     const {cfg, sent, build} = await boot(mode);
     expect([cfg.standardProxyOnly("zeroex"), cfg.standardProxyOnly("across")]).toEqual([undefined, undefined]);

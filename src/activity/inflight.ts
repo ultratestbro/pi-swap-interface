@@ -12,6 +12,7 @@ const FINAL = new Set<SwapStatus>(["not-sent", "completed", "failed", "refunded"
 export const isFinal = (s: SwapStatus): boolean => FINAL.has(s);
 
 const STAGE_LABEL: Record<ExecStage, (symbol: string) => string> = {
+  permit: () => "Signing the Permit2 transfer",
   approving: (s) => `Approving ${s}`,
   requoting: () => "Refreshing the quote",
   preflight: () => "Checking the route",
@@ -270,6 +271,7 @@ export function parseStored(raw: string | null | undefined): SwapRecord[] {
       ...(t.stuckReported === true ? {stuckReported: true} : {}),
       ...(typeof t.stage === "string" && t.stage in STAGE_LABEL ? {stage: t.stage as ExecStage} : {}),
       ...(n(t.approvals) ? {approvals: t.approvals} : {}),
+      ...(t.permit === true ? {permit: true} : {}),
       ...(t.approved === true ? {approved: true} : {}),
       ...(s(t.error) ? {error: t.error} : {}),
       ...(s(t.localId) ? {localId: t.localId} : {}),
@@ -360,9 +362,11 @@ const amountText = (units: string, decimals: number) => {
 };
 
 /**
- * The progress sheet's steps: (approve) → the wallet's confirmation → swap → delivery. The approve step shows only when
- * the route needs one; a stop before broadcast fails the step it stopped on; a claim waiting for the user is the
- * delivery step, active. A QR deposit: address issued → send the amount → delivery.
+ * The progress sheet's steps: (Permit2 signature) → (approve) → the wallet's confirmation → swap → delivery. The
+ * approve step shows only when the route needs one, the permit step only for a Permit2 venue's token sale (D38: its
+ * one-time signature comes before the approval, which a standing Permit2 allowance spares); a stop before broadcast
+ * fails the step it stopped on; a claim waiting for the user is the delivery step, active. A QR deposit: address
+ * issued → send the amount → delivery.
  */
 export function swapSteps(r: SwapRecord, toChainName: string): SwapStep[] {
   const delivered = r.status === "completed" || r.status === "partial";
@@ -389,22 +393,36 @@ export function swapSteps(r: SwapRecord, toChainName: string): SwapStep[] {
   const sent = r.status !== "submitting" && r.status !== "not-sent" && !unsure;
   const stopped = r.status === "not-sent";
   const approving = r.status === "submitting" && r.stage === "approving";
-  const pastApproval = sent || unsure || r.approved === true || (!!r.stage && r.stage !== "approving");
+  // The wallet holds the Permit2 signature (the first, or a re-quote's new one): no approval or swap prompt yet.
+  const atPermit = r.stage === "permit";
+  const permitting = r.status === "submitting" && atPermit;
+  const pastApproval = sent || unsure || r.approved === true || (!!r.stage && r.stage !== "approving" && !atPermit);
   // web (owner, 2026-11-13): the confirmation step is the wallet's, green only once the wallet signed the swap (its
   // broadcast) — a done "You confirmed the review" first read as already confirmed while the wallet's prompt was open.
   const signed = sent || (r.status === "submitting" && r.stage === "broadcast");
   const steps: SwapStep[] = [];
+  if (r.permit) {
+    const permitted = sent || unsure || (!!r.stage && !atPermit);
+    steps.push({
+      key: "permit",
+      label: permitted ? "You signed the Permit2 transfer" : "Sign the Permit2 transfer",
+      state: permitted ? "done" : stopped ? "failed" : permitting ? "active" : "todo",
+    });
+  }
   if ((r.approvals ?? 0) > 0) {
+    // Past the permit with no approval sent: a standing Permit2 allowance already covered the input (the engine leaves it).
+    const covered = r.permit === true && !sent && !unsure && !r.approved && !!r.stage && r.stage !== "approving" && !atPermit;
     steps.push({
       key: "approve",
-      label: `Approve ${r.fromSymbol}`,
-      state: pastApproval ? "done" : stopped ? "failed" : approving ? "active" : "todo",
+      label: covered ? `${r.fromSymbol} already approved for Permit2` : `Approve ${r.fromSymbol}`,
+      // A stop at the permit never reached the approval.
+      state: pastApproval ? "done" : stopped ? (atPermit ? "todo" : "failed") : approving ? "active" : "todo",
     });
   }
   steps.push({
     key: "confirm",
     label: signed ? "You confirmed the transaction" : "Confirm the transaction",
-    state: signed ? "done" : stopped ? (pastApproval || !(r.approvals ?? 0) ? "failed" : "todo") : unsure || (pastApproval && !approving) ? "active" : "todo",
+    state: signed ? "done" : stopped ? (!atPermit && (pastApproval || !(r.approvals ?? 0)) ? "failed" : "todo") : unsure || (pastApproval && !approving && !permitting) ? "active" : "todo",
   });
   steps.push({key: "swap", label: `Swap ${r.fromSymbol} → ${r.toSymbol}`, state: sent ? "done" : signed ? "active" : "todo"});
   steps.push(deliver(sent));
@@ -443,10 +461,12 @@ export const HEARTBEAT_SILENCE_MS = 30_000;
 const SWAP_PROMPTED = new Set<ExecStage>(["signing", "broadcast"]);
 
 /**
- * Records left `submitting` by a tab that is gone. Before the swap's own prompt (approving, re-quoting, preflight)
- * nothing was swapped: `not-sent`, with a note on an approval that may be live. From `signing` on the wallet may have
- * broadcast without the tab (D25): `pending` + `maybeSent`, never `not-sent`, so it is never offered again. `running`
- * holds the ids this tab is executing; a record another tab still executes keeps beating (heartbeatAt) and is left alone.
+ * Records left `submitting` by a tab that is gone. Before the swap's own prompt (a Permit2 signature, approving,
+ * re-quoting, preflight) nothing was swapped: `not-sent`, with a note on an approval that may be live. A permit is
+ * off-chain and only this tab could have spent it, so a wallet that signs it after the tab is gone sends nothing. From
+ * `signing` on the wallet may have broadcast without the tab (D25): `pending` + `maybeSent`, never `not-sent`, so it is
+ * never offered again. `running` holds the ids this tab is executing; a record another tab still executes keeps beating
+ * (heartbeatAt) and is left alone.
  */
 export function markInterrupted(list: readonly SwapRecord[], running: ReadonlySet<string>, now = Date.now()): SwapRecord[] {
   return list.map((r) => {

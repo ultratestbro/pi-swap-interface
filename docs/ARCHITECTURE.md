@@ -1480,7 +1480,10 @@ so — like Fynd, and like keyed LI.FI — they exist only in Standard mode and 
   base, no config base, `plan.venues.<v> = null`), `standardProxyOnly(venue)` (standardFynd is its Fynd case), the
   providers built behind `whileLive(slot.live)` (a page whose health doesn't key one never asks it, and lists no row
   for it), an unused slot failing without a request, a failure at the proxy or an upstream 401/403/429 stopping the
-  slot with no direct retry. Previews ask them through their slot too (`KEYED_PREVIEW_VENUES`, `PREVIEW_VENUES`): each
+  slot with no direct retry — except 0x's 403 that names a token, account or recipient it doesn't serve
+  (`BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE`, `XSTOCKS_NOT_AUTHORIZED`… — the module's `unsupported_pair`; xStocks behind
+  the proxy are judged by the region of cp0x's server): that refuses one request, goes back to the module as its
+  answer and stops nothing (`REQUEST_REFUSALS`, standard.ts). Previews ask them through their slot too (`KEYED_PREVIEW_VENUES`, `PREVIEW_VENUES`): each
   fills its own blank addresses (0x asks its price without a `taker`; Across prices for its own placeholder and never
   builds that quote). Across's keyless relayer-fee quote (`https://app.across.to/api/suggested-fees`, CORS `*`,
   checked 2026-11-15) stays straight from the browser, as the module defaults: no key, and the module holds V5's price
@@ -1502,7 +1505,12 @@ so — like Fynd, and like keyed LI.FI — they exist only in Standard mode and 
 - **UI.** Names "0x" and "Across", trust "API", logos (web3icons' ZRX / ACX marks on the venue tile, LICENSES.md).
   0x's price answer has no transaction, so it is `SIGNED_ONLY` (never a deposit address) and its approval spender is
   named here (`orderSpender` → Permit2); the review's Approval row reads "Permit2 … + a one-time signature" and the
-  wallet steps name the signature before the approval (`walletSteps`). "Not for this pair": 0x "Same-network swaps
+  wallet steps name the signature before the approval (`walletSteps`). The engine calls the permit's prompt `signing`,
+  like the swap's own; the runner records the first `signing` of a 0x token sale (and the first after a re-quote) as
+  stage `permit` with `permit: true` on the record, so the steps read "Sign the Permit2 transfer" → "Approve {SYM}"
+  (or "{SYM} already approved for Permit2" when a standing allowance spared it) → "Confirm the transaction", the status
+  "Signing the Permit2 transfer", and a tab closed at the permit is `not-sent` ("nothing was swapped"), never
+  maybe-sent: the signature is off-chain and only that tab could spend it. "Not for this pair": 0x "Same-network swaps
   only" / "Not on this network"; Across by its module's own route check (`acrossRouteOf`, `acrossRouteUnpriced`):
   "EVM networks only here", "Between networks only", "Not on one of these networks", "Same token on both networks
   only", "Delivers ETH, not WETH — pick ETH", "Moves ETH as a native coin only", "Doesn't list one of these tokens",
@@ -1521,7 +1529,8 @@ so — like Fynd, and like keyed LI.FI — they exist only in Standard mode and 
   `standardProxyOnly`, `ProxyOnlyVenue`; swap exports `PROXY_KEY_PLACEHOLDER`, `zeroExSettlers`, `PERMIT2_VENUES`;
   `ProviderExtras` + `zeroex`, `across`; execute's `VenueRule` (pins) + `permit2?`, `ArmedWrite` + `{kind:
   "permit2"}` and the call's `permit2Signed`, `matches(…, permitSignature?)`, `permit2Problem`, the gate's
-  `recordSignature`; screens' `walletSteps`.
+  `recordSignature`; screens' `walletSteps`; activity's `ExecStage` + `"permit"`, `SwapRecord.permit`, `SwapStep.key`
+  + `"permit"`.
 
 ---
 

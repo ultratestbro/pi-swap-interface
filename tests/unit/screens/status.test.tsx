@@ -11,7 +11,7 @@ import type {WalletsApi} from "../../../src/contracts/wallets";
 import {newRecord} from "../../../src/activity";
 import {txUrl} from "../../../src/catalog";
 import {DEMO_EVM_ADDRESS, demoPorts} from "../../../src/mocks";
-import {StatusView} from "../../../src/screens/activity/StatusView";
+import {StatusView, activeDetail} from "../../../src/screens/activity/StatusView";
 
 const SRC = `0x${"a1".repeat(32)}`;
 const DEST = `0x${"b2".repeat(32)}`;
@@ -139,5 +139,17 @@ describe("the status view's actions (D34)", () => {
     expect(order(within(view).getByTestId("swap-done").parentElement!)).toEqual(["swap-done"]);
     expect(looks(within(view).getByTestId("swap-done"))).toEqual(expect.arrayContaining(["secondary", "h48"]));
     expect(within(view).queryByTestId("swap-explorer-source")).toBeNull();
+  });
+});
+
+describe("the status view while the wallet holds a 0x permit (D38)", () => {
+  it("the Permit2 step is the active one, read as a signature that sends nothing; Approve and the confirmation wait", () => {
+    const r = record({id: "local.9", localId: "local.9", provider: "zeroex", status: "submitting", stage: "permit", permit: true, approvals: 1, sourceHash: undefined});
+    expect(activeDetail(r)).toBe("Waiting for your wallet — a signature, nothing is sent");
+    const view = renderStatus(r);
+    expect(within(view).getByTestId("swap-step-permit-active").textContent).toContain("Sign the Permit2 transfer");
+    expect(within(view).getByTestId("swap-step-approve-todo")).toBeTruthy();
+    expect(within(view).getByTestId("swap-step-confirm-todo")).toBeTruthy();
+    expect(within(view).getByText("Signing the Permit2 transfer")).toBeTruthy();
   });
 });

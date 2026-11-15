@@ -11,7 +11,7 @@ vi.mock("../../../src/execute/execute", () => ({
 }));
 
 import {Swap2MaybeSentError} from "@anywalletkit/protocol-swap2-core/errors";
-import {getSwaps, INTERRUPTED_SENT_TEXT, loadSwaps, markInterrupted} from "../../../src/activity";
+import {getSwaps, INTERRUPTED_SENT_TEXT, INTERRUPTED_TEXT, loadSwaps, markInterrupted, swapSteps} from "../../../src/activity";
 import {startSwap, watchSourceTx, watchTronTx} from "../../../src/execute/runner";
 import {SwapReviewMismatch} from "../../../src/execute/gate";
 
@@ -160,6 +160,95 @@ describe("startSwap", () => {
     await flush();
     await flush();
     expect(find(id)).toMatchObject({id: "awk1.near_intents.q.0xm", status: "pending", maybeSent: true, sourceHash: "0xm"});
+  });
+
+  describe("a Permit2 venue's token sale (0x, D38): its first signature is the permit, not the swap", () => {
+    const zeroex = (over: Partial<StartSwapInput["reviewed"]> = {}): StartSwapInput => {
+      const base = input();
+      return {...base, reviewed: {...base.reviewed, provider: "zeroex", approvalSpender: "0x000000000022D473030F116dDEE9F6B43aC78BA3", ...over}};
+    };
+
+    it("permit → approve → preflight → the swap's own signing → broadcast, each read as what the wallet is asked", async () => {
+      let phase!: Phase;
+      let finish!: (v: unknown) => void;
+      exec.run = (onPhase) => {
+        phase = onPhase;
+        return new Promise((resolve) => {
+          finish = resolve;
+          onPhase("signing");
+        });
+      };
+      const id = await startSwap(zeroex());
+      expect(find(id)).toMatchObject({status: "submitting", stage: "permit", permit: true, approvals: 1});
+      phase("approving", {total: 1});
+      expect(find(id)).toMatchObject({stage: "approving", approved: false});
+      phase("preflight");
+      phase("signing");
+      expect(find(id)).toMatchObject({stage: "signing", approved: true});
+      phase("broadcast", {hash: "0xzx"});
+      expect(find(id)).toMatchObject({stage: "broadcast", sourceHash: "0xzx"});
+      finish({id: "awk1.zeroex.q.0xzx", hash: "0xzx"});
+      await flush();
+    });
+
+    it("a standing Permit2 allowance (no approval) and a re-quote's new permit", async () => {
+      let phase!: Phase;
+      exec.run = (onPhase) => {
+        phase = onPhase;
+        return new Promise(() => onPhase("signing"));
+      };
+      const id = await startSwap(zeroex());
+      phase("preflight");
+      phase("signing");
+      expect(find(id)).toMatchObject({stage: "signing", approved: false});
+
+      const again = await startSwap(zeroex());
+      phase("approving", {total: 1});
+      phase("requoting");
+      phase("signing");
+      expect(find(again)).toMatchObject({stage: "permit", approved: true});
+      phase("preflight");
+      phase("signing");
+      expect(find(again)).toMatchObject({stage: "signing"});
+    });
+
+    it("a native sale signs no permit; another venue's first signing stays the swap's", async () => {
+      exec.run = (onPhase) => new Promise(() => onPhase("signing"));
+      const native = await startSwap(zeroex({fromContract: null, approvalSpender: null}));
+      expect(find(native)).toMatchObject({stage: "signing", approvals: 0});
+      expect(find(native)!.permit).toBeUndefined();
+      const lifi = await startSwap(input());
+      expect(find(lifi)).toMatchObject({stage: "signing"});
+      expect(find(lifi)!.permit).toBeUndefined();
+    });
+
+    it("a tab that closes while the wallet holds the permit swapped nothing: not-sent, never maybe-sent", async () => {
+      exec.run = (onPhase) => new Promise(() => onPhase("signing"));
+      const id = await startSwap(zeroex());
+      const [after] = markInterrupted([find(id)!], new Set(), Date.now() + 31_000);
+      expect(after).toMatchObject({status: "not-sent", error: INTERRUPTED_TEXT, approved: false});
+      expect(after!.maybeSent).toBeUndefined();
+    });
+
+    it("a declined permit is not-sent, the steps failing at the permit and the approval never reached", async () => {
+      exec.run = (onPhase) =>
+        new Promise((_, reject) => {
+          onPhase("signing");
+          setTimeout(() => reject(Object.assign(new Error("User rejected the request."), {code: 4001})), 0);
+        });
+      const id = await startSwap(zeroex());
+      await flush();
+      await flush();
+      const r = find(id)!;
+      expect(r).toMatchObject({status: "not-sent", stage: "permit"});
+      expect(swapSteps(r, "Ethereum").map((st) => [st.key, st.state])).toEqual([
+        ["permit", "failed"],
+        ["approve", "todo"],
+        ["confirm", "todo"],
+        ["swap", "todo"],
+        ["deliver", "todo"],
+      ]);
+    });
   });
 
   it("a swap with no step (a gasless order) resolves with its id once sent", async () => {

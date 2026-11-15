@@ -560,6 +560,49 @@ describe("the routing fetch", () => {
     expect(h.calls.some((c) => /0x\.org|across\.to/.test(c.url))).toBe(false);
   });
 
+  it.each([
+    "USER_NOT_AUTHORIZED",
+    "TAKER_NOT_AUTHORIZED_FOR_TRADE",
+    "RECIPIENT_NOT_AUTHORIZED_FOR_TRADE",
+    "BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE",
+    "SELL_TOKEN_NOT_AUTHORIZED_FOR_TRADE",
+    "XSTOCKS_NOT_AUTHORIZED",
+  ])("0x's 403 %s is about one token or account, not cp0x's key: its answer goes back to the module, 0x stays on", async (name) => {
+    const keyed: SwapWebHealth = {...HEALTH, venues: {...HEALTH.venues, zeroex: "keyed"}};
+    const h = harness(keyed, () => answer(403, {name, message: "x", data: {zid: "0x1"}}, "upstream"));
+    const price = `${BASE}/venue/zeroex/swap/permit2/price?chainId=8453`;
+    const res = await h.f(price, {method: "GET"});
+    expect(res.status).toBe(403);
+    // The module still reads the body (its refusal names the reason).
+    expect(await res.json()).toMatchObject({name});
+    expect(h.stopped.size).toBe(0);
+    await h.f(price, {method: "GET"});
+    expect(h.calls).toHaveLength(2);
+  });
+
+  it.each([
+    ["an upstream 401 naming a request refusal", () => answer(401, {name: "BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE"}, "upstream")],
+    ["an upstream 403 without a name", () => answer(403, {message: "Forbidden"}, "upstream")],
+    ["an upstream 403 naming something else", () => answer(403, {name: "INVALID_API_KEY"}, "upstream")],
+    ["an upstream 403 that isn't JSON", () => new Response("<html>Forbidden</html>", {status: 403, headers: {"x-swap-web-answer": "upstream"}})],
+    ["the proxy's own 403 (its Origin gate) naming one", () => answer(403, {name: "BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE"}, "proxy")],
+  ] as const)("0x after %s: that refuses cp0x, so the slot stops for the page", async (_, respond) => {
+    const keyed: SwapWebHealth = {...HEALTH, venues: {...HEALTH.venues, zeroex: "keyed"}};
+    const h = harness(keyed, respond);
+    const price = `${BASE}/venue/zeroex/swap/permit2/price?chainId=8453`;
+    expect((await h.f(price, {method: "GET"})).status).toBe(respond().status);
+    expect(h.stopped.get("venue:zeroex")).toBe(Infinity);
+    await expect(h.f(price, {method: "GET"})).rejects.toThrow(UNUSED_SLOT);
+  });
+
+  it("only 0x reads a 403 that way: Fynd's and Across' 403 naming the same still stop their slot", async () => {
+    const keyed: SwapWebHealth = {...FYND_KEYED, venues: {...FYND_KEYED.venues, across: "keyed"}};
+    const h = harness(keyed, () => answer(403, {name: "BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE"}, "upstream"));
+    await h.f(FYND_SDK, FYND_INIT);
+    await h.f(`${BASE}/venue/across/v1/quotes`, {method: "POST", body: "{}"});
+    expect([h.stopped.get("venue:fynd"), h.stopped.get("venue:across")]).toEqual([Infinity, Infinity]);
+  });
+
   it("Symbiosis while keyed: its quote and limits go through the proxy as the SDK sent them, its own answers untouched; no key here", async () => {
     const h = harness(SYMBIOSIS_KEYED, (url) =>
       url.endsWith("/swap-limits") ? answer(200, [{chainId: 8453, address: "0x0", min: "0", max: "0"}]) : answer(400, {message: "Route not found"}, "upstream"),

@@ -19,7 +19,8 @@
  * - A proxy-only venue (Fynd: no CORS on its API, cp0x's key; 0x and Across: a key no page may hold, D38) never goes
  *   direct: an unused slot fails at once WITHOUT a request, like an RPC slot, and a failure at the proxy or an upstream
  *   401/403/429 only stops the slot (the answer goes back to the SDK as it came). providers.ts asks each only while
- *   its slot is live (`standardProxyOnly`). Fynd's SDK path under the per-chain endpoint it is given
+ *   its slot is live (`standardProxyOnly`). 0x's 403 naming a token, account or recipient it doesn't serve
+ *   (REQUEST_REFUSALS) is about that request, not cp0x's key: it stops nothing. Fynd's SDK path under the per-chain endpoint it is given
  *   (`<chain>/v1/quote`) is sent as the proxy's, the hosted API's path under its /v1 base (`<chain>/quote`); 0x's and
  *   Across's modules call their own API paths under the slot (`/swap/permit2/{price,quote}`, `/v1/quotes`), sent as
  *   they come, with the placeholder key their modules insist on, which the proxy drops for cp0x's.
@@ -75,6 +76,25 @@ export const VERSION_HEADER = "x-cp0x-swap-web";
 const VENUE_FAILURES: ReadonlySet<number> = new Set([400, 403, 404, 405, 413, 414, 429]);
 /** Upstream answers that refuse cp0x — its key (revoked, mistyped, over the venue's per-key limit) or its server IP — rather than the request. */
 const REFUSES_CP0X: ReadonlySet<number> = new Set([401, 403, 429]);
+/**
+ * Upstream refusals that are about the request though their status reads like a refusal of cp0x: they stop nothing,
+ * and the venue's own answer goes back to its SDK. 0x answers HTTP 403 for a token, account or recipient it doesn't
+ * serve (protocol-swap2-0x 0.1.1 API_ERRORS, read as `unsupported_pair`; xStocks behind the proxy are judged by the
+ * region of cp0x's server), so only its 401, or a 403 naming none of these, refuses cp0x's key.
+ */
+const REQUEST_REFUSALS: Readonly<Partial<Record<ProxyVenue, {status: number; names: ReadonlySet<string>}>>> = {
+  zeroex: {
+    status: 403,
+    names: new Set([
+      "USER_NOT_AUTHORIZED",
+      "TAKER_NOT_AUTHORIZED_FOR_TRADE",
+      "RECIPIENT_NOT_AUTHORIZED_FOR_TRADE",
+      "BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE",
+      "SELL_TOKEN_NOT_AUTHORIZED_FOR_TRADE",
+      "XSTOCKS_NOT_AUTHORIZED",
+    ]),
+  },
+};
 /** A 429 with one of these lasts until 00:00 UTC (the proxy's daily allowance, its own or this IP's share). */
 const DAILY_LIMIT = /^(daily budget spent|ip daily limit)$/;
 /** Any other 429 stops the slot for its Retry-After, within these bounds (ms); 60 s when it names none. */
@@ -204,6 +224,20 @@ const fromProxy = (res: Response): boolean => res.headers.get(ANSWER_HEADER) !==
 /** A venue call's answer that means the slot failed: the proxy's own failure, or the upstream refusing cp0x. */
 const venueSlotFailed = (res: Response): boolean => (fromProxy(res) ? VENUE_FAILURES.has(res.status) || res.status >= 500 : REFUSES_CP0X.has(res.status));
 
+/** An upstream answer the venue gives about this request only (REQUEST_REFUSALS): `{name}` in its JSON body. */
+async function refusesRequest(venue: ProxyVenue, res: Response): Promise<boolean> {
+  const r = REQUEST_REFUSALS[venue];
+  if (!r || fromProxy(res) || res.status !== r.status) return false;
+  const body: unknown = await res
+    .clone()
+    .json()
+    .catch(() => null);
+  return isObj(body) && typeof body.name === "string" && r.names.has(body.name);
+}
+
+/** venueSlotFailed, except a venue's refusal of this request alone (REQUEST_REFUSALS). */
+const venueCallFailed = async (venue: ProxyVenue, res: Response): Promise<boolean> => venueSlotFailed(res) && !(await refusesRequest(venue, res));
+
 /** The same for RPC and THORNode, except the proxy's 400 / 413: they refuse one call (a method it doesn't forward, an oversized batch), not the slot. */
 const clientSlotFailed = (res: Response): boolean => venueSlotFailed(res) && !(fromProxy(res) && (res.status === 400 || res.status === 413));
 
@@ -322,7 +356,7 @@ export function createProxyFetch(d: ProxyFetchDeps): typeof fetch {
         if (!req.replayable || !mayRetryDirect(key, req.init)) throw e;
         return toVenue(direct, req.init);
       }
-      if (!venueSlotFailed(res)) return res;
+      if (!(await venueCallFailed(target.venue, res))) return res;
       d.stop(key, await unusedUntil(res, d.now()));
       if (!req.replayable) return res;
       // A keyed-only call whose slot already had its keyless retry: nothing keyless, and not the proxy's answer either
@@ -342,7 +376,7 @@ export function createProxyFetch(d: ProxyFetchDeps): typeof fetch {
       if (!req.init.signal?.aborted) d.stop(key, Infinity);
       throw e;
     }
-    if (target.kind === "venue" ? venueSlotFailed(res) : clientSlotFailed(res)) d.stop(key, await unusedUntil(res, d.now()));
+    if (target.kind === "venue" ? await venueCallFailed(target.venue, res) : clientSlotFailed(res)) d.stop(key, await unusedUntil(res, d.now()));
     return res;
   };
 }

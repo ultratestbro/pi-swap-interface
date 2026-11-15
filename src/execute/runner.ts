@@ -9,11 +9,12 @@
  * maybe-sent broadcast becomes a tracked record that is never retried.
  */
 import type {Hex} from "viem";
-import type {SwapRecord} from "../contracts/activity";
+import type {ExecStage, SwapRecord} from "../contracts/activity";
 import type {SwapToken} from "../contracts/domain";
 import type {EvmSourceSigner, ExecutionPhase, ExecutionPhaseDetail, StartSwapInput, TronSourceSigner} from "../contracts/execution";
 import {newRecord, replaceSwap, saveSwap, setRunning, updateSwap, getSwaps, findSwap} from "../activity";
 import {chainByCaip2Web, tronPost} from "../catalog";
+import {PERMIT2_VENUES} from "../swap/providerMeta";
 import {executeSwap, type ExecuteDeps} from "./execute";
 import {maybeSent, swapErrorText, swapFailureExpected} from "./errors";
 import {decodeSwapId, encodeSwapId} from "./ids";
@@ -48,9 +49,16 @@ export function startSwap(input: StartSwapInput, deps: ExecuteDeps = {}): Promis
     mode: "wallet" as const,
   };
   let started = false;
+  // A Permit2 venue's token sale (0x, D38; the gate takes a permit from nothing else) signs its one-time Permit2
+  // transfer before any approval: the engine's first `signing`, and the first after a re-quote (a new quote, a new
+  // permit), is that permit — off-chain, nothing sent yet — and every later one the swap's own.
+  const permit = PERMIT2_VENUES.has(reviewed.provider) && reviewed.fromContract !== null;
+  let last: ExecStage | undefined;
 
   return new Promise<string>((resolve, reject) => {
-    const step = (stage: ExecutionPhase, detail?: ExecutionPhaseDetail) => {
+    const step = (phase: ExecutionPhase, detail?: ExecutionPhaseDetail) => {
+      const stage: ExecStage = permit && phase === "signing" && (last === undefined || last === "requoting") ? "permit" : phase;
+      last = stage;
       const total = stage === "approving" ? detail?.total : undefined;
       // The engine names the wallet's hash the moment it broadcasts. Kept at once: a tab that dies while the engine
       // still notifies the venue leaves a record with its source transaction, never "nothing was swapped".
@@ -64,6 +72,7 @@ export function startSwap(input: StartSwapInput, deps: ExecuteDeps = {}): Promis
           status: "submitting",
           stage,
           approvals: total ?? (reviewed.approvalSpender ? 1 : 0),
+          ...(permit ? {permit: true} : {}),
           localId,
           heartbeatAt: now,
           ...hash,
