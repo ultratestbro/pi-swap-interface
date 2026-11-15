@@ -16,11 +16,13 @@
  *   without one, 5 min at most); otherwise for this page. Every other upstream answer passes through untouched,
  *   never retried. RPC and THORNode clients fall back on their own (each moves to its next URL on a non-2xx or a
  *   network error); a failure there only stops the slot being used, the same way.
- * - A proxy-only venue (Fynd: no CORS on its API, cp0x's key) never goes direct: an unused slot fails at once WITHOUT
- *   a request, like an RPC slot, and a failure at the proxy or an upstream 401/403/429 only stops the slot (the
- *   answer goes back to the SDK as it came). providers.ts asks Fynd only while its slot is live (`standardFynd`).
- *   Its SDK's path under the per-chain endpoint it is given (`<chain>/v1/quote`) is sent as the proxy's, the hosted
- *   API's path under its /v1 base (`<chain>/quote`).
+ * - A proxy-only venue (Fynd: no CORS on its API, cp0x's key; 0x and Across: a key no page may hold, D38) never goes
+ *   direct: an unused slot fails at once WITHOUT a request, like an RPC slot, and a failure at the proxy or an upstream
+ *   401/403/429 only stops the slot (the answer goes back to the SDK as it came). providers.ts asks each only while
+ *   its slot is live (`standardProxyOnly`). Fynd's SDK path under the per-chain endpoint it is given
+ *   (`<chain>/v1/quote`) is sent as the proxy's, the hosted API's path under its /v1 base (`<chain>/quote`); 0x's and
+ *   Across's modules call their own API paths under the slot (`/swap/permit2/{price,quote}`, `/v1/quotes`), sent as
+ *   they come, with the placeholder key their modules insist on, which the proxy drops for cp0x's.
  * - A venue whose SDK calls more than the proxy forwards (Symbiosis: the proxy's exact paths, PROXIED_PATHS) sends any
  *   other call straight to its public base, like an unused slot, and it stops nothing.
  * - A venue can have its own sender for the calls that go straight to its public base (`direct`): Symbiosis' is
@@ -32,9 +34,10 @@
  *   keyless call in the page's life: the slot it stopped keeps later previews from asking it (`proxyVenueLive`), and a
  *   later failure at the proxy, once a stop for a Retry-After or until 00:00 UTC has run out, retries nothing.
  *
- * Why a fetch wrapper: the LI.FI, NEAR Intents, Jupiter and Fynd SDKs take only a base URL (no fetchImpl), and so do
+ * Why a fetch wrapper: the LI.FI, NEAR Intents, Jupiter, Fynd and 0x SDKs take only a base URL (no fetchImpl), and so do
  * THORChain's node lists and the RPC clients (viem, @solana/kit, the SDKs' own loops). Relay and Symbiosis (behind
- * its pacer) do take a fetchImpl and get this same function (providers.ts). The wrapper is installed once at boot in
+ * its pacer) do take a fetchImpl and get this same function (providers.ts); Across takes one too, and gets the RPC
+ * failover that calls the global (so wrapped) fetch. The wrapper is installed once at boot in
  * Standard mode only, matches a request by the exact proxy prefix (`<base>/venue/<name>` followed by "/", "?" or the
  * end, `<base>/rpc/<chain>`) and hands every other request to the original fetch with the same arguments, byte for
  * byte.
@@ -286,7 +289,7 @@ export function createProxyFetch(d: ProxyFetchDeps): typeof fetch {
     const target = proxyTarget(url, d.plan.base);
     if (!target) return d.fetch(input, init);
     // A venue without a slot on this page (a viewer's own base, LI.FI against a plain-http API): not ours to route.
-    // null is a proxy-only venue's slot (Fynd): routed below, never direct.
+    // null is a proxy-only venue's slot (Fynd, 0x, Across): routed below, never direct.
     const publicBase = target.kind === "venue" ? d.plan.venues[target.venue] : undefined;
     if (target.kind === "venue" && publicBase !== null && !publicBase) return d.fetch(input, init);
     // Every call that goes straight to the venue's public base, through its own sender if it has one (Symbiosis' pacer).
@@ -329,7 +332,7 @@ export function createProxyFetch(d: ProxyFetchDeps): typeof fetch {
     }
 
     // RPC and THORNode: the client tries its next URL itself, so an unused slot sends nothing at all. A proxy-only
-    // venue (Fynd) the same way: there is nowhere else to send it.
+    // venue (Fynd, 0x, Across) the same way: there is nowhere else to send it.
     if (!d.live(key)) throw new TypeError(UNUSED_SLOT);
     const sent = target.kind === "venue" ? proxyVenueUrl(req.url, d.plan.base, target) : req.url;
     let res: Response;
@@ -503,22 +506,29 @@ export interface ProxyOnlySlot {
   live(): boolean;
 }
 
+/** The venues only cp0x's proxy reaches (connection.ts PROXY_ONLY), as providers.ts builds them. */
+export type ProxyOnlyVenue = "fynd" | "zeroex" | "across";
+
 /**
- * Fynd's slot on this page (Standard only, and only when the page builds Fynd), else undefined: Fynd is then not
- * built at all. Live only while health says "keyed" and no failure stopped it, so a page without cp0x's Fynd key
- * never asks it (no refusal row either).
+ * A proxy-only venue's slot on this page (Standard only, and only when the page builds that venue), else undefined:
+ * the venue is then not built at all. Live only while health says "keyed" and no failure stopped it, so a page
+ * without cp0x's key for it never asks it (no refusal row either).
  */
-export function standardFynd(): ProxyOnlySlot | undefined {
+export function standardProxyOnly(venue: ProxyOnlyVenue): ProxyOnlySlot | undefined {
   const plan = pageConnection().plan;
   const rt = runtime;
-  if (!rt || plan?.venues.fynd !== null) return undefined;
-  return {base: `${plan.base}/venue/fynd`, live: () => rt.venueLive("fynd")};
+  if (!rt || !plan || plan.venues[venue] !== null) return undefined;
+  return {base: `${plan.base}/venue/${venue}`, live: () => rt.venueLive(venue)};
 }
+
+/** Fynd's slot (standardProxyOnly). */
+export const standardFynd = (): ProxyOnlySlot | undefined => standardProxyOnly("fynd");
 
 /**
  * cp0x's proxy carries this venue's calls with cp0x's key right now: a Standard page, health "keyed" and the slot not
  * stopped after a failure or a daily limit. False in Public and Custom, on a build without the API, before health
- * answers and after it failed. Preview rounds read it per round (D7): LI.FI and Fynd are asked only while it holds.
+ * answers and after it failed. Preview rounds read it per round (D7): LI.FI, Fynd, 0x and Across are asked only while
+ * it holds.
  */
 export function proxyVenueLive(venue: string): boolean {
   return !!runtime && (PROXY_VENUES as readonly string[]).includes(venue) && runtime.venueLive(venue as ProxyVenue);

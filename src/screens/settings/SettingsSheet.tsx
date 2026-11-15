@@ -233,7 +233,7 @@ function SettingsForm({onClose}: {onClose(): void}) {
   // Off on this page although this browser didn't turn it off: the site's operator did, and a viewer can't undo that.
   const previewOperatorOff = !effective.preview.enabled && readUserSettings()?.preview?.enabled !== false;
   const standardOnly = new Set<ProviderName>(STANDARD_ONLY_PROVIDERS);
-  // A build without a cp0x API has no Standard mode: its Standard-only venues (Fynd) can never be asked here.
+  // A build without a cp0x API has no Standard mode: its Standard-only venues (Fynd, 0x, Across) can never be asked here.
   const hasStandard = connectionModes(pageConnection().api).includes("standard");
   const unreachable = (p: ProviderName) => standardOnly.has(p) && !hasStandard;
 

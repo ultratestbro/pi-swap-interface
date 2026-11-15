@@ -22,7 +22,7 @@ import type {WebRoute} from "../../contracts/routes";
 import type {WalletFamily, WalletsApi} from "../../contracts/wallets";
 import {savedOverrides, usePorts} from "../../config";
 import {chainBySlugWeb, destTokenId} from "../../catalog";
-import {FYND_LICENSE_URL, balanceProblem, fyndRouterNotice, isStale, routeFloor} from "../../swap";
+import {FYND_LICENSE_URL, PERMIT2_VENUES, balanceProblem, fyndRouterNotice, isStale, routeFloor} from "../../swap";
 import {swapErrorText, swapFeeCap, uncappedFeeText} from "../../execute";
 import {statusView, swapSteps, wasInterrupted} from "../../activity";
 import {Button, Icon, ReviewSkeleton, Sheet, SheetHeader, SwapSteps, Text, TokenIcon, TxReviewCard, formatCountdown, showToast} from "../../ui";
@@ -49,6 +49,17 @@ type Phase =
 
 /** How long the review waits on the wallet before it offers a way out ("Cancel" / "Continue in background"). */
 export const BACKGROUND_AFTER_MS = 20_000;
+
+/**
+ * What the wallet will ask between the network switch and the swap's own signature: an exact approval, or — for a
+ * Permit2 venue (0x, D38) — a one-time Permit2 signature for exactly the amount first, then Permit2's approval unless
+ * it may already spend it (the engine leaves a standing Permit2 allowance that covers the input as it is).
+ */
+export function walletSteps(route: Pick<WebRoute, "provider" | "approvalSpender"> | null | undefined, amount: string): string {
+  if (!route?.approvalSpender) return "";
+  if (PERMIT2_VENUES.has(route.provider)) return `, then to sign a one-time Permit2 transfer of exactly ${amount}, then to approve Permit2 for it unless it already may`;
+  return `, then to approve exactly ${amount}`;
+}
 
 /**
  * Where the review goes once the record it follows moves (ui-port.md §5.8): the status once the swap itself is out —
@@ -434,7 +445,7 @@ function ReviewBody({draft, from, native, slippage, route, gone, failed, problem
         />
         {executing ? (
           <Text as="p" variant="meta" color="var(--muted)" className={s.fine} role="status">
-            {`Check your wallet: it may ask to switch to ${from.chainName} first${route?.approvalSpender ? `, then to approve exactly ${amountText(req.amountIn, from.decimals, from.symbol)}` : ""}, then to sign the swap.`}
+            {`Check your wallet: it may ask to switch to ${from.chainName} first${walletSteps(route, amountText(req.amountIn, from.decimals, from.symbol))}, then to sign the swap.`}
           </Text>
         ) : null}
         {executing && leave === "cancel" ? <Button block kind="ghost" height={40} title="Cancel" onClick={onLeave} data-testid="swap-review-cancel" /> : null}

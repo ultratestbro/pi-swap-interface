@@ -45,7 +45,7 @@ describe("parseRuntimeConfig", () => {
   it("drops unknown keys and unsafe values with a warning, keeping the defaults", () => {
     const {config, warnings} = parseRuntimeConfig({
       bogus: 1,
-      providers: {zeroex: true},
+      providers: {paraswap: true},
       api: {lifi: "http://li.quest/v1", omnistonWs: "https://omni.example", thorNodes: ["https://a.example", "https://a.example/x"]},
       solanaRpc: [],
     });

@@ -50,6 +50,12 @@ Symbiosis' touch icons. Third-party trademarks used nominatively to name each ve
 `curve.png`, `curve@2x.png` — Curve's mark from `tokens/CRV.svg` (web3icons, MIT, above), rendered here (2026-11-12)
 the way that script renders Fynd's: the mark at 72 % of the tile, centred on the cp0x tile colour `#25222B`.
 
+`zeroex.png`, `zeroex@2x.png` (0x) and `across.png`, `across@2x.png` (Across) — 0x's mark and Across Protocol's mark as
+web3icons draws them for their tokens (`dist/svgs/tokens/branded/ZRX.svg` and `ACX.svg` of `@web3icons/core` 4.0.59,
+MIT, above), rendered here (2026-11-15) the way Curve's is: the mark at 72 % of the tile, centred on `#25222B`, 32 /
+64 px. 0x's and Across's trademarks, used nominatively to name each venue; no endorsement is implied, and they are not
+relicensed here.
+
 ## `walletconnect.svg` — WalletConnect's icon
 
 `Icon/Blue (Default)/Icon.svg` from WalletConnect's brand toolkit, https://github.com/WalletConnect/walletconnect-assets

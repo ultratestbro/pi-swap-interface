@@ -56,7 +56,7 @@ export function removeCustomRpc(c: CustomEndpoints, network: CustomNetwork, url:
 /** "LI.FI", "LI.FI and Relay", "LI.FI, Relay and Jupiter". */
 const andList = (names: readonly string[]): string => (names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
-/** Venues sent straight to the venue after a cp0x error; a proxy-only one (Fynd) is paused instead. */
+/** Venues sent straight to the venue after a cp0x error; a proxy-only one (Fynd, 0x, Across) is paused instead. */
 const sentDirect = (st: ConnectionStatus): readonly ProxyVenue[] => st.fellBack.filter((v) => !PROXY_ONLY.has(v));
 
 /** What the line says about the venues when none goes through cp0x right now, or null when the fallback clause says it. */

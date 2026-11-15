@@ -101,3 +101,38 @@ describe("preview liveness per page (proxyVenueLive, proxySettled)", () => {
     expect(sent).toEqual([]);
   });
 });
+
+// 0x and Across (D38): the same proxy-only slots, decided the same way by the page's mode and health.
+describe("the page's 0x and Across slots (standardProxyOnly) and buildProviders' default extras", () => {
+  const sameBase = [{chain: "eip155:8453", token: "ETH"}, {chain: "eip155:8453", token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"}] as const;
+  const baseToArb = [{chain: "eip155:8453", token: "USDC"}, {chain: "eip155:42161", token: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"}] as const;
+
+  it("Standard: a slot each at the proxy, live only for the one health keys; both built after Fynd", async () => {
+    vi.resetModules();
+    const health = {...HEALTH, venues: {...HEALTH.venues, zeroex: "keyed", across: "anonymous"}};
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(health), {status: 200})) as unknown as typeof fetch;
+    const cfg = await import("../../../src/config");
+    const {buildProviders} = await import("../../../src/swap/providers");
+    const {config, plan} = cfg.standardSlots(cfg.DEFAULT_RUNTIME_CONFIG, API);
+    cfg.setRuntimeConfig(config, undefined, {mode: "standard", api: API, plan, keys: {}});
+    cfg.startConnection();
+    await vi.waitFor(() => expect(cfg.connectionStatus().health).toBe("ok"));
+    expect(cfg.standardProxyOnly("zeroex")?.base).toBe(`${API}/api/v2/swap-web/venue/zeroex`);
+    expect(cfg.standardProxyOnly("across")?.base).toBe(`${API}/api/v2/swap-web/venue/across`);
+    expect([cfg.standardProxyOnly("zeroex")?.live(), cfg.standardProxyOnly("across")?.live()]).toEqual([true, false]);
+    expect([cfg.proxyVenueLive("zeroex"), cfg.proxyVenueLive("across")]).toEqual([true, false]);
+    const providers = buildProviders();
+    expect(providers.map((p) => p.name).slice(-3)).toEqual(["fynd", "zeroex", "across"]);
+    expect(providers.find((p) => p.name === "zeroex")?.supportsRoute(...sameBase)).toBe(true);
+    expect(providers.find((p) => p.name === "across")?.supportsRoute(...baseToArb)).toBe(false);
+  });
+
+  it.each(["public", "custom"] as const)("%s: no slots, neither built, no cp0x request", async (mode) => {
+    const {cfg, sent, build} = await boot(mode);
+    expect([cfg.standardProxyOnly("zeroex"), cfg.standardProxyOnly("across")]).toEqual([undefined, undefined]);
+    const names = build().map((p) => p.name);
+    expect(names).not.toContain("zeroex");
+    expect(names).not.toContain("across");
+    expect(sent).toEqual([]);
+  });
+});

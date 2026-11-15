@@ -16,7 +16,7 @@ export const swapPort: SwapPort = {
 };
 
 // ── provider registry ──
-export {DEFAULT_ON_PROVIDERS, STANDARD_ONLY_PROVIDERS, buildProviders, closeProviders, evmRpcByCaip2} from "./providers";
+export {DEFAULT_ON_PROVIDERS, PROXY_KEY_PLACEHOLDER, STANDARD_ONLY_PROVIDERS, buildProviders, closeProviders, evmRpcByCaip2, zeroExSettlers} from "./providers";
 export {createProviderStores, STORAGE_BLOCKED, type ProviderStores} from "./stores";
 export {coolDownOnRateLimit, delegate, isLive, isWrapPair, narrowRoute, paced, whileLive, withQuoteGap} from "./providerWrappers";
 
@@ -36,7 +36,7 @@ export {
 } from "./engine";
 
 // ── names / venue facts ──
-export {PROVIDER_NAMES, TWO_PHASE, orderSpender, providerName, venueScope, type ScopeSide} from "./providerMeta";
+export {PERMIT2_VENUES, PROVIDER_NAMES, TWO_PHASE, orderSpender, providerName, venueScope, type ScopeSide} from "./providerMeta";
 export {FYND_LICENSE_URL, VENUE_TRUST, fyndRouterNotice, venueTrust, venueTrustText} from "./venues";
 
 // ── route list ──

@@ -215,6 +215,43 @@ const SAMPLES: readonly [raw: string, category: RefusalCategory, short: string, 
   // a preview round while cp0x's proxy doesn't carry Fynd (its gate keeps it from being asked at all then; this is the
   // round that started as its slot stopped)
   ["fynd: asked only for your live quote: previews ask it only while cp0x's proxy carries it with cp0x's key", "deferred", "Connect a wallet to get this quote"],
+  // 0x, through cp0x's proxy (protocol-swap2-0x 0.1.1 provider.ts getQuote, settler.ts; D38)
+  ["zeroex: API unreachable (TypeError)", "unreachable", "Couldn't reach it — tap refresh"],
+  ["zeroex: API key rejected (HTTP 401)", "unavailable", "Unavailable right now — try later"],
+  ["zeroex: API answered HTTP 404", "unavailable", "Unavailable right now — try later"],
+  ["zeroex: API answered HTTP 502", "unavailable", "Unavailable right now — try later"],
+  ["zeroex: rate limited (HTTP 429)", "busy", "Busy right now — try again soon"],
+  ["zeroex: no liquidity for this pair and amount", "unavailable", "Not enough liquidity right now"],
+  ["zeroex: 0x has too little liquidity for this pair and amount (INSUFFICIENT_ASSET_LIQUIDITY)", "amount", "Too large for its pools — try less"],
+  ["zeroex: 0x does not support one of these tokens (TOKEN_NOT_SUPPORTED)", "pair", "Doesn't list one of these tokens"],
+  ["zeroex: wrapping and unwrapping are not 0x swaps", "pair", "A wrap, not a swap"],
+  ["zeroex: the token being bought taxes transfers — the amount received cannot be guaranteed", "pair", "Doesn't take a token that taxes transfers"],
+  ["zeroex: the quoted minimum 14000000 is below the requested slippage (50 bps of 14164402)", "safety", "Guarantees less than your slippage allows"],
+  ["zeroex: floor breach (min=14093580 < floor=14100000)", "safety", "Guarantees less than your slippage allows"],
+  ["zeroex: quoted 7000000000000000, not the requested 8000000000000000", "safety", "Didn't match what was asked"],
+  ["zeroex: malformed API response (liquidity)", "unavailable", "Its answer was incomplete — tap refresh"],
+  ["zeroex: recipient must be an EVM address", "setup", "Doesn't accept this recipient address"],
+  [
+    "zeroex: the 0x registry on chain 8453 names Settler deployment 25 (0x1111111111111111111111111111111111111111), newer than the newest this module accepts there (24) — update @anywalletkit/protocol-swap2-0x, or raise the chain's pins",
+    "safety",
+    "Uses a 0x contract we haven't checked yet",
+  ],
+  ["zeroex: no RPC answered on chain 8453 — the 0x Settler cannot be resolved", "unreachable", "No RPC answered — tap refresh"],
+  ["zeroex: no RPC is configured for chain 8453 — the 0x Settler cannot be resolved", "setup", "Needs an RPC for this network"],
+  ["zeroex: the swap pays 0x1111111111111111111111111111111111111111, not the recipient of this swap", "safety", "Can't confirm it pays you"],
+  // Across, priced through cp0x's proxy (protocol-swap2-across 0.1.0: "across: <what> [<code>]"; D38)
+  ["across: Across API V5 did not answer (TypeError) [api-answer]", "unreachable", "Couldn't reach it — tap refresh"],
+  ["across: Across API V5 answered HTTP 401 unauthenticated [api-error]", "unavailable", "Unavailable right now — try later"],
+  ["across: Across API V5 answered HTTP 503 system.unavailable [api-error]", "unavailable", "Unavailable right now — try later"],
+  ["across: Across API V5 answered HTTP 429 [api-error]", "busy", "Busy right now — try again soon"],
+  ["across: Across API V5 answered HTTP 400 policy.amount_out_of_range (the amount must be at least 2500000 base units) [api-error]", "amount", "Minimum 2.5 USDC", USDC],
+  ["across: Across's relayers take at least 500156 base units on this route [relayer-price]", "amount", "Minimum 0.5002 USDC", USDC],
+  ["across: Across's relayers take at most 685850520819 base units on this route [relayer-price]", "amount", "Maximum 685800 USDC", USDC],
+  ["across: Across's relayer fee quote says the amount is too low relative to fees [relayer-price]", "amount", "Too small — try a larger amount"],
+  ["across: the deposit leaves 3000000 of 25000000 as fees, over the 1000 bps cap [tx-fee]", "amount", "Fees would take over 10% — try more"],
+  ["across: the deposit leaves relayers 100 of 25000000, under the 100-per-million floor for USDC from Base — relayers do not fill it, and the funds wait for a refund [tx-fee]", "safety", "Priced below what its relayers take"],
+  ["across: the deposit leaves relayers no fee — nobody fills it, and the funds wait for a refund [tx-fee]", "safety", "Priced below what its relayers take"],
+  ["across: the deposit pays 24000000, under the caller's floor 24900000 [tx-output-amount]", "safety", "Guarantees less than your slippage allows"],
   // a venue's status prefix, or a throw, in front of words no rule knows: never the code, never base units
   ["chainflip: quote 404: ", "other", NO_QUOTE],
   ["chainflip: quote 403: Forbidden", "other", NO_QUOTE],
@@ -309,6 +346,23 @@ describe("classifyRefusal: the venue's reason (swap2-core 0.12.0)", () => {
     expect(classifyRefusal("lifi", "Rate limit exceeded, retry in 2 hours", undefined, "no_route").reason).toBe("Request limit hit — back in about 2 hours");
     expect(classifyRefusal("x", "unusual 0xabcdef12 thing").reason).toBe(NO_QUOTE);
     expect(classifyRefusal("x", "unusual 0xabcdef12 thing", undefined, "not_a_reason" as never).reason).toBe(NO_QUOTE);
+  });
+
+  it("0x's and Across's texts no rule reads take the reason their modules give them", () => {
+    const rows = parseRejections([
+      {message: "zeroex: the API asks for an allowance to something other than canonical Permit2", reason: "vault_mismatch"},
+      {message: "zeroex: the quoted minimum is not between zero and the quoted output", reason: "price_check_failed"},
+      {message: "zeroex: the 0x Settler registry on chain 8453 reports no taker Settler in force (paused or removed)", reason: "chain_halted"},
+      {message: "across: Across's relayer fee quote says this route is not enabled for relayers [relayer-price]", reason: "unsupported_pair"},
+      {message: "across: the deposit's depositor 0x1111111111111111111111111111111111111111 is not the signing account [tx-depositor]", reason: "recipient_mismatch"},
+    ]);
+    expect(rows.map((r) => [r.provider, r.reason, r.category])).toEqual([
+      ["zeroex", "Uses a contract we haven't verified", "safety"],
+      ["zeroex", "Didn't match what was asked", "safety"],
+      ["zeroex", "Paused on this network for now", "unavailable"],
+      ["across", "Doesn't support this pair", "pair"],
+      ["across", "Can't confirm it pays you", "safety"],
+    ]);
   });
 
   it("parseRejections reads the router's classified refusals as it reads their texts", () => {

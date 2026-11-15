@@ -15,7 +15,9 @@
     "symbiosis": true,
     "jupiter": true,
     "omniston": true,
-    "fynd": true
+    "fynd": true,
+    "zeroex": true,
+    "across": true
   },
   "evmRpc": {
     "1": ["https://ethereum-rpc.publicnode.com", "https://eth.drpc.org"],

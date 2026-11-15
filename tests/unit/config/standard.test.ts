@@ -62,7 +62,7 @@ afterEach(() => {
 describe("the health answer", () => {
   it("reads venues, RPC chains and the THORNode flag; anything else is not an answer", () => {
     expect(parseHealth({venues: {lifi: "keyed", relay: "nope"}, rpc: {configured: true, chains: ["1", "solana", "../x", 5]}, thornode: true})).toEqual({
-      venues: {lifi: "keyed", relay: "anonymous", near_intents: "anonymous", jupiter: "anonymous", symbiosis: "anonymous", fynd: "anonymous"},
+      venues: {lifi: "keyed", relay: "anonymous", near_intents: "anonymous", jupiter: "anonymous", symbiosis: "anonymous", fynd: "anonymous", zeroex: "anonymous", across: "anonymous"},
       rpc: {configured: true, chains: ["1", "solana"]},
       thornode: true,
     });
@@ -524,6 +524,40 @@ describe("the routing fetch", () => {
     await expect(h.f(FYND_SDK, FYND_INIT)).rejects.toThrow("Failed to fetch");
     expect(h.calls.map((c) => c.url)).toEqual([FYND_PROXY]);
     expect(h.stopped.get("venue:fynd")).toBe(Infinity);
+  });
+
+  it("0x and Across while keyed (D38): their module's own paths go to the proxy as sent, placeholder key and all; the version on the preflighted call", async () => {
+    const keyed: SwapWebHealth = {...HEALTH, venues: {...HEALTH.venues, zeroex: "keyed", across: "keyed"}};
+    const h = harness(keyed, () => answer(200, {liquidityAvailable: false}, "upstream"));
+    const price = `${BASE}/venue/zeroex/swap/permit2/price?chainId=8453&sellToken=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&buyToken=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913&sellAmount=1&slippageBps=50`;
+    const zx = await h.f(price, {method: "GET", redirect: "error", headers: {accept: "application/json", "0x-api-key": "placeholder", "0x-version": "v2"}});
+    expect(zx.status).toBe(200);
+    const quotes = `${BASE}/venue/across/v1/quotes`;
+    await h.f(quotes, {method: "POST", redirect: "error", headers: {accept: "application/json", "content-type": "application/json", authorization: "Bearer placeholder"}, body: "{}"});
+    expect(h.calls.map((c) => c.url)).toEqual([price, quotes]);
+    expect(proxyTarget(price, BASE)).toEqual({kind: "venue", venue: "zeroex", rest: price.slice(`${BASE}/venue/zeroex`.length)});
+    const zxHeaders = new Headers(h.calls[0]!.init?.headers);
+    expect([zxHeaders.get("0x-api-key"), zxHeaders.get("0x-version"), zxHeaders.get("x-cp0x-swap-web")]).toEqual(["placeholder", "v2", "0.1.0"]);
+    const acHeaders = new Headers(h.calls[1]!.init?.headers);
+    expect([acHeaders.get("authorization"), acHeaders.get("x-cp0x-swap-web")]).toEqual(["Bearer placeholder", "0.1.0"]);
+    expect(h.calls[1]!.init?.body).toBe("{}");
+    expect(h.stopped.size).toBe(0);
+  });
+
+  it("0x and Across without a key at cp0x (or a failed health check): fail at once WITHOUT a request; after a refusal of cp0x's key, never direct", async () => {
+    const urls = [`${BASE}/venue/zeroex/swap/permit2/quote?chainId=1`, `${BASE}/venue/across/v1/quotes`];
+    for (const health of [HEALTH, null]) {
+      const h = harness(health);
+      for (const u of urls) await expect(h.f(u, {method: "GET"})).rejects.toThrow(UNUSED_SLOT);
+      expect(h.calls).toHaveLength(0);
+    }
+    const keyed: SwapWebHealth = {...HEALTH, venues: {...HEALTH.venues, zeroex: "keyed", across: "keyed"}};
+    const h = harness(keyed, () => answer(401, {}, "upstream"));
+    for (const u of urls) expect((await h.f(u, {method: "GET"})).status).toBe(401);
+    expect([h.stopped.get("venue:zeroex"), h.stopped.get("venue:across")]).toEqual([Infinity, Infinity]);
+    for (const u of urls) await expect(h.f(u, {method: "GET"})).rejects.toThrow(UNUSED_SLOT);
+    expect(h.calls.map((c) => c.url)).toEqual(urls);
+    expect(h.calls.some((c) => /0x\.org|across\.to/.test(c.url))).toBe(false);
   });
 
   it("Symbiosis while keyed: its quote and limits go through the proxy as the SDK sent them, its own answers untouched; no key here", async () => {

@@ -36,7 +36,8 @@ and `batch.sh`.
    `uniswap`, `curve`, `balancer`, `wrap`, `usdt0`, `cctp`, `thorchain`, `chainflip`, `near_intents`, `lifi`,
    `relay`, `symbiosis`, `jupiter`, `omniston`. `symbiosis`, `balancer` and `omniston` were a "stage 2" that
    defaulted off until 2026-11-12 (owner: on, as cp0x's server runs them). **`fynd` only in Standard mode** (2026-11-12): through cp0x's proxy, which holds the key, and only while
-   health keys it (§4.14).
+   health keys it (§4.14). **`zeroex` and `across` the same way** (2026-11-15, ARCHITECTURE D38): their local
+   providers run here with every check, a placeholder key, and cp0x's proxy slot as `baseUrl` (§4.18, §4.19).
 4. **Zero fees.** Every fee option is left unset (§4). This matches the server, where fees come only from
    `swapFee()`, default 0 (`SRV:254-267`).
 5. **No polyfill for the MVP.** No MVP package or dependency touches `Buffer`, `process` (beyond
@@ -104,6 +105,8 @@ and `batch.sh`.
   "@anywalletkit/protocol-swap2-symbiosis": "0.1.4",   // default on since 2026-11-12
   "@anywalletkit/protocol-swap2-balancer": "0.3.9",    // default on since 2026-11-12
   "@anywalletkit/protocol-swap2-omniston": "0.5.9",    // default on since 2026-11-12 (lazy chunk); rev2 TON minter since 0.5.5
+  "@anywalletkit/protocol-swap2-0x": "0.1.1",          // added 2026-11-15, Standard only (§4.18)
+  "@anywalletkit/protocol-swap2-across": "0.1.0",      // added 2026-11-15, Standard only (§4.19)
   "buffer": "6.0.3",                                   // only for the Omniston chunk's global polyfill
   "viem": "2.57.10"                                    // the version cp0x-elysium resolves; dedupe with wagmi
 }
@@ -125,6 +128,8 @@ as side-effectful. Subpaths used:
 | `uniswap` | `import {uniswapProvider, type UniswapProviderConfig} from "@anywalletkit/protocol-swap2-uniswap/provider"` | root: `UNISWAP_V3` |
 | `curve` | `import {curveProvider, type CurveProviderConfig} from "@anywalletkit/protocol-swap2-curve/provider"` | root: `curvePins`, `CURVE_DEPLOYMENTS`, `CURVE_POOLS` |
 | `fynd` | `import {fyndProvider, type FyndProviderConfig} from "@anywalletkit/protocol-swap2-fynd/provider"` | `/router`: `FYND_CHAINS`, `fyndPins` |
+| `zeroex` | `import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider"` | `/chains`: `ZEROEX_CHAINS`, `ZEROEX_PERMIT2`, `zeroExChain(Id)`; `/settler`: `SettlerResolver`, `ZEROEX_MAX_PERMIT_SECONDS` |
+| `across` | `import {acrossProvider} from "@anywalletkit/protocol-swap2-across/provider"` | `/config`: `ACROSS_CHAINS`, `ACROSS_NATIVE`, `acrossRouteOf`; `/pricing`: `acrossRouteUnpriced`; `/verify`: `acrossPins` |
 | `wrap` | `import {wrapProvider, WRAPPED_NATIVE, type WrapProviderConfig} from "@anywalletkit/protocol-swap2-wrap/provider"` | |
 | `jupiter` | `import {jupiterProvider, type JupiterProviderConfig} from "@anywalletkit/protocol-swap2-jupiter/provider"` | |
 | `symbiosis` | `import {symbiosisProvider, type SymbiosisProviderConfig} from "@anywalletkit/protocol-swap2-symbiosis/provider"` | `/config`: `symbiosisChain` |
@@ -133,11 +138,11 @@ as side-effectful. Subpaths used:
 | types | `import type {CrossChainProvider, Asset, Quote, QuoteParams, UnsignedTx} from "@anywalletkit/protocol-swap2-core/types"` | |
 | router | `import {CrossChainRouter} from "@anywalletkit/protocol-swap2-router/router"` | |
 
-The `CrossChainProvider` interface is at `AWK/protocol-swap2-core/dist/types.d.ts:230-309`. `engine.md` §4.1 has
+The `CrossChainProvider` interface is at `AWK/protocol-swap2-core/dist/types.d.ts:259-347`. `engine.md` §4.1 has
 the trimmed copy.
 
 Never import `@anywalletkit/protocol-swap2-core/server` (it uses HMAC sealing and is backend-only) or
-`/remote`.
+`/remote` (nor 0x's or Across's `/remote` stubs: this page runs their local providers through cp0x's proxy, D38).
 
 ---
 
@@ -240,10 +245,10 @@ viewer's own keys (`VenueKeys`, this browser's storage) go straight into their v
 export type ProviderName =
   | "near_intents" | "lifi" | "thorchain" | "cctp" | "usdt0" | "chainflip" | "relay"
   | "uniswap" | "curve" | "wrap" | "jupiter" | "fynd"
-  | "symbiosis" | "balancer" | "omniston";
+  | "symbiosis" | "balancer" | "omniston" | "zeroex" | "across";
 
 export interface RuntimeConfig {
-  /** Construct the provider at all. Every one default true (fynd: Standard mode only). */
+  /** Construct the provider at all. Every one default true (fynd, zeroex, across: Standard mode only). */
   providers: Readonly<Record<ProviderName, boolean>>;
   /** EVM JSON-RPC by chain id, tried in order (keyless public endpoints; CORS-checked). */
   evmRpc: Readonly<Record<number, readonly string[]>>;
@@ -1204,22 +1209,25 @@ a sender. Each dry quote is kept in the quote store with the addresses it was gi
 | uniswap | same | EVM (16) | SwapRouter02 | – | RPC ✓ | RPC batches |
 | curve | same | EVM (8) | Router NG | – | RPC ✓ | RPC batches ≤ 10 |
 | fynd† | same | EVM (7) | TychoRouterV3 | – | ✗ (proxy only) | cp0x's key |
+| zeroex† | same | EVM (7), Permit2 | **none (price)** → Permit2 (`orderSpender`) | – | proxy only (key) | cp0x's key |
+| across† | cross (same asset) | EVM (17 pinned) | SpokePool | – | proxy only (V5 key); `/suggested-fees` ✓ `*` | cp0x's key |
 | wrap | same | EVM (28) | none | – | RPC ✓ | – |
 | jupiter | same | Solana (serialized) | n/a | – | ✓ | **0.5 RPS** |
 | symbiosis* | cross | EVM (7) | gateway | – | ✓ | **1 req/s** |
 | balancer* | same | EVM (9) | Vault | – | ✓ | – |
 | omniston* | EVM↔EVM (EVM→TON blocked) | EVM (typed order) | **none** → order protocol | **quote + secret** | ✓ (WS) | tonapi ~1 RPS |
 
-\* default on since 2026-11-12 (a "stage 2" behind flags before). † Standard mode only (§4.14).
+\* default on since 2026-11-12 (a "stage 2" behind flags before). † Standard mode only (§4.14, §4.18, §4.19).
 
 ### 4.16 Preview addressing per venue (web, 2026-11-12; ARCHITECTURE D7)
 
 A preview round prices before the user's addresses exist. The router gets the real addresses or a blank
 `destAddress` and NO `refundAddress` key; per venue, the engine's delegate either skips the venue (a refusal, nothing
 sent) or fills a blank destination with the destination family's sample. Each row was read in the installed dists.
-LI.FI and Fynd are asked only while cp0x's proxy carries them with cp0x's key (2026-11-13, `KEYED_PREVIEW_VENUES`,
-decided per round); otherwise LI.FI waits for the live quote ("Quoted after you connect", category `deferred`) and
-Fynd, asked by no round while its slot is off (§4.14), is absent from the list.
+LI.FI, Fynd, 0x and Across are asked only while cp0x's proxy carries them with cp0x's key (2026-11-13, 0x and Across
+2026-11-15; `KEYED_PREVIEW_VENUES`, decided per round); otherwise LI.FI waits for the live quote ("Quoted after you
+connect", category `deferred`) and Fynd, 0x and Across, asked by no round while their slot is off (§4.14, §4.18,
+§4.19), are absent from the list.
 
 | venue | blank `destAddress` in a dry quote | preview |
 |---|---|---|
@@ -1238,6 +1246,8 @@ Fynd, asked by no round while its slot is off (§4.14), is absent from the list.
 | fynd | refuses "recipient must be an EVM address" (`chunk-6AQCGGUZ.js:168`); sender = EVM refund, else the recipient (`:170`); native input simulated with a balance state override (`:230-232`) | only through cp0x's keyed proxy (§4.14); fill: EVM sample (recipient and sender) |
 | symbiosis | dry: fills its own placeholders for both sides (`chunk-K3EPNDVO.js:257-261`): the EVM sample, `EQCD39…qB2N` (TON), `TVjpch…Ftnb` (Tron, `:33-35/213`); never needs a sender | blank; all three scrubbed; its one pacer keeps 1 req/s through a burst |
 | omniston | the RFQ carries no address (`chunk-DMO24BFW.js:2096-2101`); addresses checked only when `dry === false` (`:2072-2080`, `:2093-2095`) | blank |
+| zeroex | a dry quote's `taker` is the refund, else the recipient, only when one is an EVM address, else none: `/swap/permit2/price` without a taker (protocol-swap2-0x 0.1.1 `provider.ts` getQuote, `dist/chunk-AOJSV3QG.js:211-214`) | blank; only through cp0x's keyed proxy (§4.18) |
+| across | depositor = `sender`, else the refund, else its placeholder; recipient = `destAddress`, else its placeholder (`ACROSS_PLACEHOLDER` = the EVM sample, `verify.ts` `acrossRequestOf`); a quote priced for it is never built or signed (`provider.ts` `requestOf`) | blank; only through cp0x's keyed proxy (§4.19); the placeholder scrubbed as the EVM sample |
 
 Samples (`PREVIEW_PLACEHOLDER`, copied from near-intents `chunk-4DBCMQCI.js:46-60`; each passes the catalog's
 `isAddressFor`): EVM `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`, Bitcoin `bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq`,
@@ -1249,7 +1259,7 @@ venue from previews — re-read this table on every AWK bump.
 
 ### 4.17 Curve, `curve` (2026-11-12)
 
-`AWK/protocol-swap2-curve@0.1.3/dist/provider.d.ts`: `{rpcUrls: Record<number, readonly string[]>, defaultSlippageBps?,
+`AWK/protocol-swap2-curve@0.1.6/dist/provider.d.ts`: `{rpcUrls: Record<number, readonly string[]>, defaultSlippageBps?,
 quoteTtlMs?, onWarning?}`.
 
 - **Browser options**: `{rpcUrls: cfg.evmRpc}`, like Uniswap: keyless, no API, the same table in every mode (Custom:
@@ -1268,6 +1278,86 @@ quoteTtlMs?, onWarning?}`.
   calls, 0.4 s); Base 100 USDC → 99.98 USDbC (4pool, 0.4 s); Base 0.1 ETH → 0.0874 cbETH (wrap → cbETH/WETH, 0.2 s).
 
 ---
+
+### 4.18 0x, `zeroex`: Standard only (2026-11-15; ARCHITECTURE D38)
+
+`AWK/protocol-swap2-0x@0.1.1/dist/provider.d.ts`: `zeroExProvider({enabled?, apiKey?, baseUrl?, chains?, rpcUrls?,
+defaultSlippageBps?, quoteTtlMs?, timeoutMs?, excludedSources?, settlerMaxAgeMs?, settlerResolver?})`, which returns
+the provider plus `ownGasEstimate: true` and the `settlerResolver` it reads the registry through.
+
+- **Why only Standard.** 0x Swap API v2 wants `0x-api-key` on every request; the key is cp0x's (`ZEROEX_API_KEY` on
+  the server) and can't be in a page. So 0x is built only on a Standard page and asked only while `/health` says
+  `venues.zeroex === "keyed"` (`whileLive`, as Fynd); never in Public or Custom (no 0x key field there).
+- **Browser options**: `{apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: <API>/api/v2/swap-web/venue/zeroex, rpcUrls:
+  cfg.evmRpc}`; every other option at the module's default (slippage 50 bps when none is asked, quotes 45 s, 10 s per
+  request, no excluded sources, the registry read reused 5 min). The LOCAL provider runs here, not
+  `zeroExRemoteProvider`: there is no swap2 backend, and the local one keeps every check on this device. It sends the
+  placeholder only to `baseUrl`, as `0x-api-key` with `0x-version: v2`, `redirect: "error"`, and refuses an answer
+  that came through a redirect or from another origin; the proxy swaps the placeholder for cp0x's key.
+- **Paths it calls** (all under the slot, through the global fetch, so Standard's routing): `GET /swap/permit2/price`
+  for a dry quote (every round, previews included) and `GET /swap/permit2/quote` for the live one (the engine at
+  Confirm), with `chainId, sellToken, buyToken, sellAmount, slippageBps`, then `taker` when an address is known
+  (dry: the refund or the recipient; live: the refund, else the recipient), `recipient` on a live quote when it is not
+  the taker, `excludedSources` only when configured (never here). Nothing else of 0x's API. Registry reads
+  (`ownerOf(2)`, `prev(2)`, `eth_getCode`) and receipts go over `rpcUrls` (Standard: the proxy RPC first; its loop
+  moves to the next URL on a failure or an unused slot).
+- **Routes**: same network, exact input, on Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche and BNB Chain;
+  native ↔ wrapped native is refused up front ("wrapping and unwrapping are not 0x swaps", worded as a wrap). Its
+  `supportsRoute` is chain-only, so on its chains every same-network pair is asked.
+- **What a quote is.** Dry (`/price`): amounts and fees only, no transaction (`SIGNED_ONLY` in webRoute.ts: a Settler
+  call the wallet signs, never a deposit address), and no spender named, so `orderSpender("zeroex", chain)` names
+  canonical Permit2 for a token sale (the only allowance 0x ever gets). Live (`/quote`): the Settler is read from the
+  registry first over the page's RPCs and held to CREATE3 + the pinned window + code; the transaction is decoded
+  (`Settler.execute`: this swap's recipient, buy token, minimum; the first action spends exactly the permit, or is
+  `NATIVE_CHECK` for a native sale); the Permit2 payload is rebuilt (exact input, that Settler, ≤ 10 min). Fees: 0x's
+  own fee (in the price), the network fee; an integrator fee nobody asked for refuses the quote.
+- **Execution.** A token sale (swap2-core 0.13.0 Permit2 transfer): the wallet signs the rebuilt
+  `PermitTransferFrom` first, then approves Permit2 for exactly the input unless it already may, then sends the
+  Settler call with the signature appended, estimated from the account (`ownGasEstimate`; the quoted gas limit is
+  never sent). A native sale signs nothing but the call. Right before the broadcast `preflightDeposit` reads the
+  registry again and refuses a Settler no longer in it. The gate (engine.md §7.3, ARCHITECTURE D38): call targets the
+  Settlers the provider's own resolver read (`zeroExSettlers`), spender Permit2 only, and exactly that permit
+  (`permit2Problem`) and the call carrying exactly the signature the wallet returned for it.
+- **Availability** as Fynd's: before health answers, while "anonymous", after a stop, 0x is not asked and lists no
+  row; `enabled()` stays the module's. A failure at the proxy or an upstream 401/403/429 stops the slot (D30's
+  durations), never retried direct; "API key rejected" / "API answered HTTP …" read "Unavailable right now — try later".
+
+### 4.19 Across, `across`: Standard only (2026-11-15; ARCHITECTURE D38)
+
+`AWK/protocol-swap2-across@0.1.0/dist/provider.d.ts`: `acrossProvider({enabled?, apiKey?, baseUrl?, suggestedFeesUrl?,
+rpcUrls?, maxFeeBps?, quoteTtlMs?, timeoutMs?, fetchImpl?})`.
+
+- **Why only Standard.** Across API V5 (`POST https://api.across.to/v1/quotes`) wants the V5 key as
+  `Authorization: Bearer`; it is cp0x's (`ACROSS_API_KEY`). Built only on a Standard page, asked only while
+  `/health` says `venues.across === "keyed"` (`whileLive`); never in Public or Custom.
+- **Browser options**: `{apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: <API>/api/v2/swap-web/venue/across, rpcUrls,
+  fetchImpl}`: `rpcUrls` is ONE URL per pinned Across chain (its type), the page's first runtime URL, and `fetchImpl`
+  is `rpcFailoverFetch` over each chain's whole list (as CCTP), which passes every other request — V5 and the relayer
+  fee — on to the global, Standard-routed fetch. The fee cap stays the module's 10 % (`maxFeeBps` 1000), quotes 60 s,
+  10 s per request. The LOCAL provider runs here: the deposit is encoded on this device from the pinned SpokePool and
+  the request, and verified at build time and again in `preflightDeposit`; V5 and the relayer fee only supply numbers.
+- **Paths it calls**: `POST /v1/quotes` under the slot (`accept`, `content-type: application/json`,
+  `authorization: Bearer <placeholder>`, `redirect: "error"`), body `{origin: {token: {chainId, address}, depositor,
+  amount}, destination: {token, recipient}, amountType: "exact_input", capabilities, authorizationPolicy, maxFee: {bps:
+  5000}}`; and, straight from the browser, Across's keyless relayer fee `GET https://app.across.to/api/suggested-fees
+  ?inputToken&outputToken&originChainId&destinationChainId&amount&recipient` (CORS `*`, checked 2026-11-15; no key, a
+  simple request). Without that answer the module prices only the corridors its pinned floor covers, which then need
+  `rpcUrls` for Ethereum and the source chain (the quote time from their latest blocks); other routes are refused.
+  Status reads go over `rpcUrls` too (the deposit's receipt on the source, `fillStatuses` on the destination).
+- **Routes**: EVM → EVM on its 17 pinned chains, exact input, the same asset on both sides — USDC, USDT / USDT0, ETH /
+  WETH, WBTC — native ETH only where the SpokePool wraps it, WETH never as a destination (it arrives as ETH), and
+  nothing into Ethereum yet. `supportsRoute` is the module's own `acrossServesRoute`, so a pair it doesn't serve is
+  never asked; "Not for this pair" names why from its `acrossRouteOf` / `acrossRouteUnpriced` (ui-port §5.5).
+- **What a quote is.** Dry and live alike carry the deposit call (`txRequest` to the SpokePool, `approvalAddress` the
+  same SpokePool for a token), its minimum equal to its output (a relayer pays exactly `outputAmount`): the app holds
+  the live one to the reviewed floor, a few bps under (`floorToleranceBps`), as the module asks. A dry quote's
+  depositor and recipient are the user's, else its placeholder, and such a quote is never built. The depositor of a
+  live one is the signing account (`QuoteParams.sender`, set by swap2-core 0.14.0's engine); a refund address that is
+  another account is refused, which never happens here (the refund address is the connected wallet).
+- **Execution and gate**: one `deposit` on the pinned SpokePool, after an exact approval of it for a token (none for
+  ETH, sent as value). The gate's rule is `acrossPins` (the SpokePool as call target and spender); it takes no
+  Permit2 transfer or typed order.
+- **Availability** as Fynd's and 0x's; its refusals that read better than their reason are worded (ui-port §4.2).
 
 ## 5. Persistent stores (`src/swap/stores.ts`)
 
@@ -1523,7 +1613,7 @@ export const DEFAULT_ON_PROVIDERS: readonly ProviderName[] = [
   "uniswap", "curve", "balancer", "wrap", "usdt0", "cctp", "thorchain", "chainflip", "near_intents", "lifi", "relay",
   "symbiosis", "jupiter", "omniston",
 ];
-export const STANDARD_ONLY_PROVIDERS: readonly ProviderName[] = ["fynd"];
+export const STANDARD_ONLY_PROVIDERS: readonly ProviderName[] = ["fynd", "zeroex", "across"];
 
 export const evmRpcByCaip2 = (rpc: RuntimeConfig["evmRpc"]): Record<string, string[]> =>
   Object.fromEntries(Object.entries(rpc).filter(([, u]) => u.length).map(([id, u]) => [`eip155:${id}`, [...u]]));
@@ -1593,6 +1683,17 @@ export function buildProviders(
   if (on.fynd && extras.fynd) {
     const selfHosted = Object.fromEntries(Object.entries(FYND_CHAINS).map(([id, c]) => [Number(id), `${extras.fynd.base}/${c.slug}`]));
     out.push(whileLive(fyndProvider({selfHosted, rpcUrls: evm}), extras.fynd.live));
+  }
+  // ── Standard only (2026-11-15, §4.18-4.19, D38): local providers, the proxy slot as baseUrl, a placeholder key ──
+  if (on.zeroex && extras.zeroex) {
+    const zeroex = zeroExProvider({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: extras.zeroex.base, rpcUrls: evm});
+    const live = whileLive(zeroex, extras.zeroex.live);
+    settlerResolvers.set(live, zeroex.settlerResolver); // execute's pins read the Settlers from it (zeroExSettlers)
+    out.push(live);
+  }
+  if (on.across && extras.across) {
+    const rpcUrls = firstRpc(evm, Object.keys(ACROSS_CHAINS));
+    out.push(whileLive(acrossProvider({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: extras.across.base, rpcUrls, fetchImpl: rpcFailoverFetch(failoverLists(evm, rpcUrls))}), extras.across.live));
   }
 
   return out;

@@ -117,7 +117,7 @@ export interface SwapModule {
   // ── provider registry (providers.md §6) ──
   /** Built by default in every mode, in ask order (D3). */
   DEFAULT_ON_PROVIDERS: readonly ProviderName[];
-  /** Built only in Standard mode, through cp0x's proxy (fynd). */
+  /** Built only in Standard mode, through cp0x's proxy (fynd, zeroex, across; D38). */
   STANDARD_ONLY_PROVIDERS: readonly ProviderName[];
   /** Every enabled provider, built once per page from runtime config. Never closed except on pagehide. */
   appProviders(): CrossChainProvider[];
@@ -138,7 +138,7 @@ export interface SwapModule {
   /** Delivery needs a claim on the destination chain: cctp. */
   TWO_PHASE: ReadonlySet<string>;
   VENUE_TRUST: Readonly<Record<string, VenueTrust>>;
-  /** The spender a dry quote leaves unnamed (chainflip → CF_VAULTS, omniston → order protocol), or null. */
+  /** The spender a dry quote leaves unnamed (chainflip → CF_VAULTS, omniston → order protocol, zeroex → Permit2), or null. */
   orderSpender(provider: string, chain: string): string | null;
   /** Why an enabled venue isn't asked for this pair, in one line ("Same-network swaps only"). */
   venueScope(

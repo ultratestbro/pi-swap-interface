@@ -4,6 +4,9 @@ import {afterEach, describe, expect, it, vi} from "vitest";
 import type {ConnectionSettings, RuntimeConfig} from "../../../src/contracts/config";
 import {
   CONNECTION_KEY,
+  PROXY_ONLY,
+  PROXY_VENUES,
+  VENUE_API_KEY,
   VENUE_KEYS_KEY,
   apiOrigin,
   connectionModes,
@@ -183,7 +186,7 @@ describe("Standard mode's page config (proxy slots)", () => {
     expect(config.api.jupiter).toBe(`${BASE}/venue/jupiter`);
     expect(config.api.symbiosis).toBe(`${BASE}/venue/symbiosis`);
     expect(plan.base).toBe(BASE);
-    // Fynd's slot has no public base (null): it is reachable only through the proxy, and never falls back.
+    // Fynd's, 0x's and Across's slots have no public base (null): reachable only through the proxy, never falling back.
     expect(plan.venues).toEqual({
       lifi: D.api.lifi,
       relay: D.api.relay,
@@ -191,6 +194,8 @@ describe("Standard mode's page config (proxy slots)", () => {
       jupiter: D.api.jupiter,
       symbiosis: "https://api.symbiosis.finance/crosschain",
       fynd: null,
+      zeroex: null,
+      across: null,
     });
     // Nothing else moves: Chainflip, CCTP, prices and the rest stay public.
     expect(config.api.chainflip).toBe(D.api.chainflip);
@@ -202,6 +207,17 @@ describe("Standard mode's page config (proxy slots)", () => {
     expect("fynd" in standardSlots({...D, providers: {...D.providers, fynd: false}}, API).plan.venues).toBe(false);
     // No runtime-config base and no viewer key exist for it: nothing in the config changes for Fynd.
     expect(Object.keys(standardSlots(D, API).config.api)).toEqual(Object.keys(D.api));
+  });
+
+  it("0x and Across get proxy-only slots the same way (D38): no public base, no config base, no viewer key; off, none", () => {
+    expect(PROXY_ONLY).toEqual(new Set(["fynd", "zeroex", "across"]));
+    expect(PROXY_VENUES.slice(-3)).toEqual(["fynd", "zeroex", "across"]);
+    const local = standardSlots(D, "http://127.0.0.1:3000").plan.venues;
+    expect([local.zeroex, local.across]).toEqual([null, null]);
+    const off = standardSlots({...D, providers: {...D.providers, zeroex: false, across: false}}, API).plan.venues;
+    expect(["zeroex" in off, "across" in off]).toEqual([false, false]);
+    expect(VENUE_API_KEY.zeroex).toBeUndefined();
+    expect(VENUE_API_KEY.across).toBeUndefined();
   });
 
   it("puts the proxy RPC FIRST in every list, the public URLs after it; an emptied list stays empty", () => {

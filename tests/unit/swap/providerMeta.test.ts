@@ -3,7 +3,8 @@ import {describe, expect, it} from "vitest";
 import {AUDITED_OMNISTON_EVM_ORDER_PROTOCOLS} from "@anywalletkit/protocol-swap2-omniston/validators";
 import {CF_VAULTS} from "@anywalletkit/protocol-swap2-chainflip/config";
 import {DEFAULT_ON_PROVIDERS, STANDARD_ONLY_PROVIDERS} from "../../../src/swap/providers";
-import {OMNISTON_ORDER_PROTOCOL, PROVIDER_NAMES, TWO_PHASE, orderSpender, providerName, venueScope} from "../../../src/swap/providerMeta";
+import {ZEROEX_CHAINS, ZEROEX_PERMIT2} from "@anywalletkit/protocol-swap2-0x/chains";
+import {OMNISTON_ORDER_PROTOCOL, PERMIT2_VENUES, PROVIDER_NAMES, TWO_PHASE, orderSpender, providerName, venueScope} from "../../../src/swap/providerMeta";
 import {VENUE_TRUST, venueTrustText} from "../../../src/swap/venues";
 
 describe("Omniston order protocols", () => {
@@ -25,6 +26,16 @@ describe("orderSpender", () => {
     expect(orderSpender("chainflip", "eip155:8453")).toBeNull();
     expect(orderSpender("lifi", "eip155:8453")).toBeNull();
   });
+  it("0x (D38): canonical Permit2 on each of its 7 chains (its price answer names no spender), never a 0x contract", () => {
+    expect(Object.keys(ZEROEX_CHAINS).map(Number).sort((a, b) => a - b)).toEqual([1, 10, 56, 137, 8453, 42161, 43114]);
+    for (const id of Object.keys(ZEROEX_CHAINS)) expect(orderSpender("zeroex", `eip155:${id}`)).toBe(ZEROEX_PERMIT2);
+    expect(ZEROEX_PERMIT2.toLowerCase()).toBe("0x000000000022d473030f116ddee9f6b43ac78ba3");
+    expect(orderSpender("zeroex", "eip155:100")).toBeNull();
+    expect(orderSpender("zeroex", "solana:mainnet")).toBeNull();
+    // Across's dry quote names its pinned SpokePool itself (txRequest.approvalAddress): nothing to name here.
+    expect(orderSpender("across", "eip155:8453")).toBeNull();
+    expect([...PERMIT2_VENUES]).toEqual(["zeroex"]);
+  });
 });
 
 describe("names and venue facts", () => {
@@ -34,6 +45,8 @@ describe("names and venue facts", () => {
     expect(providerName("curve")).toBe("Curve");
     expect(providerName("fynd")).toBe("Fynd");
     expect(providerName("lifi")).toBe("LI.FI");
+    expect(providerName("zeroex")).toBe("0x");
+    expect(providerName("across")).toBe("Across");
     expect(providerName("mystery")).toBe("mystery");
   });
   it("only CCTP needs a claim on arrival", () => {
@@ -45,6 +58,11 @@ describe("names and venue facts", () => {
     // Curve quotes and settles on the contracts; Fynd's route comes from its solver API.
     expect(VENUE_TRUST.curve).toBe("contracts");
     expect(VENUE_TRUST.fynd).toBe("provider-api");
+    // 0x and Across quote through their APIs (via cp0x's proxy); every answer is checked in the browser (D38).
+    expect(VENUE_TRUST.zeroex).toBe("provider-api");
+    expect(VENUE_TRUST.across).toBe("provider-api");
+    expect(venueTrustText("zeroex", "Base")).toBe("Quoted by 0x's API — checked in your browser before you sign");
+    expect(venueTrustText("across", "Base")).toBe("Quoted by Across's API — checked in your browser before you sign");
     expect(venueTrustText("uniswap", "Base")).toBe("Quoted and settled by contracts on Base — no company API");
     expect(venueTrustText("thorchain", "Base")).toBe("Quoted by a THORChain node");
     expect(venueTrustText("relay", "Base")).toBe("Quoted by Relay's API — checked in your browser before you sign");
@@ -104,6 +122,33 @@ describe("venueScope (the 'Not for this pair' lines)", () => {
     // USDT Ethereum → USDT Solana: THORChain has no USDT on Solana, but the line doesn't guess which token is missing.
     expect(venueScope("thorchain", usdtMain, usdtSol)).toBe("Doesn't cover this pair");
     expect(venueScope("chainflip", usdtMain, usdtSol)).toBe("Doesn't cover this pair");
+  });
+
+  it("0x: same network only, on its 7 chains (D38)", () => {
+    expect(venueScope("zeroex", usdcArb, usdcBase)).toBe("Same-network swaps only");
+    expect(venueScope("zeroex", usdtMain, usdtSol)).toBe("Same-network swaps only");
+    expect(venueScope("zeroex", side("eip155:100", "evm", "XDAI"), side("eip155:100", "evm", "USDC"))).toBe("Not on this network");
+    expect(venueScope("zeroex", sol, usdtSol)).toBe("Not on this network");
+    expect(venueScope("zeroex", usdcBase, side("eip155:8453", "evm", "ETH"))).toBe("Doesn't cover this pair");
+  });
+
+  it("Across: EVM → EVM, the same asset, its pinned chains and tokens, read from the module's own route check (D38)", () => {
+    const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+    const USDC_ARB = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
+    const WETH_ARB = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
+    const at = (caip2: string, symbol: string, contract: string | null) => ({caip2, family: "evm", symbol, contract});
+    expect(venueScope("across", usdtMain, usdtSol)).toBe("EVM networks only here");
+    expect(venueScope("across", sol, usdcBase)).toBe("EVM networks only here");
+    expect(venueScope("across", at("eip155:8453", "USDC", USDC_BASE), at("eip155:8453", "ETH", null))).toBe("Between networks only");
+    expect(venueScope("across", at("eip155:8453", "USDC", USDC_BASE), at("eip155:100", "USDC", "0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83"))).toBe("Not on one of these networks");
+    expect(venueScope("across", at("eip155:8453", "USDC", USDC_BASE), at("eip155:42161", "ETH", null))).toBe("Same token on both networks only");
+    expect(venueScope("across", at("eip155:8453", "ETH", null), at("eip155:42161", "WETH", WETH_ARB))).toBe("Delivers ETH, not WETH — pick ETH");
+    expect(venueScope("across", at("eip155:137", "POL", null), at("eip155:42161", "ETH", null))).toBe("Moves ETH as a native coin only");
+    expect(venueScope("across", at("eip155:8453", "DEGEN", "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed"), at("eip155:42161", "USDC", USDC_ARB))).toBe("Doesn't list one of these tokens");
+    expect(venueScope("across", at("eip155:8453", "USDC", USDC_BASE), at("eip155:1", "USDC", "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"))).toBe("Not into Ethereum yet");
+    // A route the module serves, or a side whose contract isn't known: the generic line.
+    expect(venueScope("across", at("eip155:8453", "USDC", USDC_BASE), at("eip155:42161", "USDC", USDC_ARB))).toBe("Doesn't cover this pair");
+    expect(venueScope("across", usdcBase, usdcArb)).toBe("Doesn't cover this pair");
   });
 
   it("Balancer, Symbiosis and Omniston (on by default since 2026-11-12)", () => {

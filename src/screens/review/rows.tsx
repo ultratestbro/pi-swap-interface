@@ -10,7 +10,7 @@ import type {SwapToken} from "../../contracts/domain";
 import type {QuoteRequest, WebRoute} from "../../contracts/routes";
 import type {ReviewRow} from "../../contracts/ui";
 import {formatUsd, shortAddress} from "../../catalog";
-import {FLOOR_TOLERANCE_BPS, TWO_PHASE, etaLabel, formatRate, impliedSlippagePct, providerName, rate, routeFloor, usdOf} from "../../swap";
+import {FLOOR_TOLERANCE_BPS, PERMIT2_VENUES, TWO_PHASE, etaLabel, formatRate, impliedSlippagePct, providerName, rate, routeFloor, usdOf} from "../../swap";
 import {ProviderLogo, VenueBadge, venueTrustText} from "../../ui";
 import {bpsLabel} from "../form/FormParts";
 import {amountText} from "../labels";
@@ -86,7 +86,14 @@ export function reviewRows({req, route, from, to, native, slippage}: ReviewRowsI
           {
             k: "Approval",
             v: route.approvalSpender ? `Exact ${amountText(req.amountIn, from.decimals, from.symbol)}` : "Not needed",
-            ...(route.approvalSpender ? {note: `spender ${shortAddress(route.approvalSpender, 8, 6)}`} : {}),
+            // 0x (D38): the allowance goes to Permit2 only, and a one-time signature for exactly this amount spends it.
+            ...(route.approvalSpender
+              ? {
+                  note: PERMIT2_VENUES.has(route.provider)
+                    ? `Permit2 ${shortAddress(route.approvalSpender, 8, 6)} + a one-time signature`
+                    : `spender ${shortAddress(route.approvalSpender, 8, 6)}`,
+                }
+              : {}),
             testId: "swap-review-approval",
           },
         ]),

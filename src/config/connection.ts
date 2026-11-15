@@ -1,10 +1,11 @@
 /**
  * The connection modes (ARCHITECTURE D30): how this page reaches the venues and RPCs.
  * - standard: only in a build made with VITE_CP0X_API (the hosted one), and its default there. LI.FI, Relay, NEAR
- *   Intents, Jupiter, Symbiosis and Fynd (while cp0x holds a key for them), the RPCs and THORChain's vault check go
- *   through cp0x's swap-web proxy, a transport that adds cp0x's keys; every answer is still verified here, in the
- *   browser.
- *   Fynd exists only here: its API takes no browser calls (no CORS headers), so it has no direct fallback.
+ *   Intents, Jupiter, Symbiosis, Fynd, 0x and Across (while cp0x holds a key for them), the RPCs and THORChain's vault
+ *   check go through cp0x's swap-web proxy, a transport that adds cp0x's keys; every answer is still verified here, in
+ *   the browser.
+ *   Fynd, 0x and Across exist only here: Fynd's API takes no browser calls (no CORS headers), and 0x's and Across's keys
+ *   can't ship in a page (D38), so none of them has a direct fallback.
  * - public: the keyless public endpoints, straight from this browser. Never a cp0x host.
  * - custom: public plus the viewer's own RPCs (tried first; the public ones stay as the fallback unless the viewer
  *   chose "only my RPCs") and venue keys. Never a cp0x host.
@@ -143,15 +144,17 @@ export function withoutCp0xApi(config: RuntimeConfig, fallback: RuntimeConfig, a
 }
 
 /** The proxy's venues, in the order Settings names them. */
-export const PROXY_VENUES: readonly ProxyVenue[] = ["lifi", "relay", "near_intents", "jupiter", "symbiosis", "fynd"];
+export const PROXY_VENUES: readonly ProxyVenue[] = ["lifi", "relay", "near_intents", "jupiter", "symbiosis", "fynd", "zeroex", "across"];
 
 /**
- * Venues reachable only through the proxy: Fynd's hosted API sends no CORS headers (checked 2026-11-12) and its key
- * is cp0x's, so it has no public base, no runtime-config base, no Custom key and no direct fallback.
+ * Venues reachable only through the proxy, so with no public base, no runtime-config base, no Custom key and no direct
+ * fallback: Fynd's hosted API sends no CORS headers (checked 2026-11-12) and its key is cp0x's; 0x (Swap API v2,
+ * `0x-api-key` on every request) and Across (API V5, `Authorization: Bearer`) want a key that can never ship in a page
+ * (D38) — their modules run here with a placeholder the proxy replaces.
  */
-export const PROXY_ONLY: ReadonlySet<ProxyVenue> = new Set(["fynd"]);
+export const PROXY_ONLY: ReadonlySet<ProxyVenue> = new Set(["fynd", "zeroex", "across"]);
 
-/** The runtime config's `api.*` key (and VenueKeys field) of each proxy venue that has one (not Fynd). */
+/** The runtime config's `api.*` key (and VenueKeys field) of each proxy venue that has one (not the PROXY_ONLY ones). */
 export const VENUE_API_KEY: Readonly<Partial<Record<ProxyVenue, keyof VenueKeys & keyof RuntimeConfig["api"]>>> = {
   lifi: "lifi",
   relay: "relay",
@@ -318,7 +321,7 @@ export interface StandardPlan {
   base: string;
   /**
    * Each venue whose provider got the proxy base → the public base its requests fall back to (same path, query,
-   * body); null for a proxy-only venue (Fynd), which never falls back.
+   * body); null for a proxy-only venue (Fynd, 0x, Across), which never falls back.
    */
   venues: Readonly<Partial<Record<ProxyVenue, string | null>>>;
   /** RPC networks whose list starts with the proxy: EVM chain ids as decimal strings, and "solana". */
@@ -333,8 +336,8 @@ export interface StandardPlan {
  * request which slots carry traffic (only what the health answer allows; an unused one costs no request).
  * - The five venues with a public base get the proxy base, except one the page doesn't build, one this browser's saved
  *   settings pointed elsewhere (the viewer's choice stands) and, against a plain-http local API, LI.FI (its SDK
- *   refuses an http apiUrl; the escape hatch stays off). Fynd gets its slot whenever the page builds it: it has no
- *   other way in (providers.ts gives its SDK the proxy as its only endpoint).
+ *   refuses an http apiUrl; the escape hatch stays off). Fynd, 0x and Across get their slot whenever the page builds
+ *   them: they have no other way in (providers.ts gives each SDK the proxy as its only endpoint).
  * - Every non-empty EVM list and the Solana list start with the proxy, the public URLs after it (an operator's
  *   emptied list stays empty: no reads on that chain).
  * - THORChain: the proxy's THORNode pass-through goes FIRST in the confirm list; `thorNodes`, the QUOTE nodes, stay
@@ -351,7 +354,7 @@ export function standardSlots(config: RuntimeConfig, api: string, operator: Runt
     if (!config.providers[v]) continue;
     const key = VENUE_API_KEY[v];
     if (!key) {
-      // Proxy-only (Fynd): no base of its own, nothing to fall back to.
+      // Proxy-only (Fynd, 0x, Across): no base of its own, nothing to fall back to.
       venues[v] = null;
       continue;
     }

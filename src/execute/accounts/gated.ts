@@ -8,6 +8,9 @@
  * Only the members the engine is known to call survive (engine.md §5.2): an adapter growing an extra write method
  * cannot leak past the gate by accident.
  *
+ * A Permit2 signature transfer (0x, D38): the signature the wallet returns for the armed permit is handed back to the
+ * gate (`recordSignature`), and the armed swap call matches only with exactly those bytes appended.
+ *
  * A TON contract call (D35) reaches `sendTransaction` with the engine's cell body — the object execute.ts's
  * decodeTonBody returned (tonGate.ts captureTonBody), which structuredClone can't copy. On a TON gate it becomes the
  * BoC that object carries (`bodyBoc`) before the copy: the exact bytes the gate armed, and the only form the TON
@@ -106,6 +109,8 @@ export function gateAccount<T extends object>(inner: T, gate: SwapGate, window?:
       try {
         const res = (await (fn as (...a: unknown[]) => Promise<{hash?: unknown}>).apply(inner, [raw, ...rest])) ?? {};
         if (grant && res.hash) grant();
+        // signTypedData answers with the signature itself: the gate keeps it if this was its armed Permit2 permit.
+        if (method === "signTypedData") gate.recordSignature(res);
         return res;
       } catch (e) {
         // An approval that may have landed (no definitive answer) can be revoked; a refused one leaves nothing to revoke.

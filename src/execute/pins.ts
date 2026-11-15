@@ -5,6 +5,12 @@
  * a venue's API cannot name its own contract. They must agree with the provider options swap builds (LI.FI's Flare
  * Diamond is in `lifiPins`; a test checks it).
  *
+ * 0x (D38): its call target is whatever 0x's on-chain registry names as the Settler in force (or the one it replaced),
+ * read over the page's RPCs by the very resolver the 0x provider quoted through — never the API's word — and its only
+ * spender is canonical Permit2; its rule also takes a Permit2 signature transfer, held by the gate to exactly this
+ * swap (gate.ts permit2Problem; deadline at most the package's ZEROEX_MAX_PERMIT_SECONDS). Across: its pinned
+ * SpokePools, as call target and spender (`acrossPins`).
+ *
  * NEAR Intents only ever pays a per-quote deposit address (nothing to pin: the "deposit" rule); Jupiter is a Solana
  * transaction the SDK account guards itself; Omniston's only spenders are its audited order protocols (swap's
  * `orderSpender`, so this file never imports the Omniston package — it stays out of the main bundle).
@@ -26,7 +32,10 @@ import {thorchainPins} from "@anywalletkit/protocol-swap2-thorchain/provider";
 import {uniswapPins} from "@anywalletkit/protocol-swap2-uniswap";
 import {usdt0Pins} from "@anywalletkit/protocol-swap2-usdt0/config";
 import {wrapPins} from "@anywalletkit/protocol-swap2-wrap/provider";
-import {orderSpender} from "../swap";
+import {ZEROEX_CHAINS, ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
+import {ZEROEX_MAX_PERMIT_SECONDS} from "@anywalletkit/protocol-swap2-0x/settler";
+import {acrossPins} from "@anywalletkit/protocol-swap2-across/verify";
+import {appProviders, orderSpender, zeroExSettlers} from "../swap";
 import type {TronRule, VenueRule} from "./gate";
 
 type Pins = Pick<RemotePins, "callTargets" | "spenders">;
@@ -48,6 +57,15 @@ const omnistonPins: Pins = {
   },
 };
 
+/**
+ * 0x: the Settlers the page's 0x provider last read from the registry (its resolver's fresh set, the one its live quote
+ * was checked against; [] before one — then nothing is called), and canonical Permit2 as the one spender.
+ */
+const zeroExPins: Pins = {
+  callTargets: (c) => zeroExSettlers(appProviders(), c),
+  spenders: (c) => (zeroExChain(ZEROEX_CHAINS, zeroExChainId(c)) ? [ZEROEX_PERMIT2] : []),
+};
+
 /** Venue → its EVM rule. A venue missing here gets no EVM calldata or order signature at all (checkPlanBrowser). */
 export const VENUE_RULES: Readonly<Record<string, VenueRule>> = {
   lifi: pinned(lifiPins),
@@ -65,6 +83,10 @@ export const VENUE_RULES: Readonly<Record<string, VenueRule>> = {
   omniston: pinned(omnistonPins),
   // TychoRouterV3 per chain: every Fynd route settles through it (Fynd License).
   fynd: pinned(fyndPins),
+  // The registry's Settler and Permit2 (above); a one-time Permit2 transfer for exactly the input, ≤ 10 min (D38).
+  zeroex: {kind: "pins", pins: zeroExPins, permit2: {maxSeconds: ZEROEX_MAX_PERMIT_SECONDS}},
+  // The pinned SpokePool per chain: the deposit's call target and its one spender.
+  across: pinned(acrossPins),
   near_intents: {kind: "deposit"},
 };
 

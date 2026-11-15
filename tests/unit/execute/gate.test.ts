@@ -198,7 +198,7 @@ describe("LOCAL pins agree with the providers swap builds", () => {
     return r.pins;
   };
   it("every default and Standard-only venue has a rule; jupiter (Solana only) needs none", () => {
-    for (const p of ["uniswap", "curve", "wrap", "usdt0", "cctp", "thorchain", "chainflip", "near_intents", "lifi", "relay", "fynd", "symbiosis", "balancer", "omniston"])
+    for (const p of ["uniswap", "curve", "wrap", "usdt0", "cctp", "thorchain", "chainflip", "near_intents", "lifi", "relay", "fynd", "symbiosis", "balancer", "omniston", "zeroex", "across"])
       expect(VENUE_RULES[p], p).toBeDefined();
     expect(VENUE_RULES.jupiter).toBeUndefined();
   });

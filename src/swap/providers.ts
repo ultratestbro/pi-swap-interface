@@ -10,8 +10,10 @@
  *   request and never closed; the providers close on pagehide only;
  * - every venue on by default (D3; symbiosis, balancer and omniston since 2026-11-12, as on cp0x's server), each
  *   behind its runtime flag, which an operator or a viewer can switch off;
- * - fynd only in Standard mode, through cp0x's proxy and only while health keys it (its API takes no browser
- *   calls and its key is cp0x's); never in Public or Custom.
+ * - fynd, zeroex (0x) and across only in Standard mode, through cp0x's proxy and only while health keys each (Fynd's
+ *   API takes no browser calls and its key is cp0x's; 0x's and Across's keys can never ship in a page, D38: their
+ *   modules run here, every check on this device, with a placeholder key the proxy replaces); never in Public or
+ *   Custom.
  * Allowlists (LI.FI targets, THORChain routers, Omniston contracts) are code
  * here or in the SDK, never config.
  */
@@ -32,8 +34,13 @@ import {thorchainProvider} from "@anywalletkit/protocol-swap2-thorchain/provider
 import {uniswapProvider} from "@anywalletkit/protocol-swap2-uniswap/provider";
 import {usdt0Provider} from "@anywalletkit/protocol-swap2-usdt0/provider";
 import {wrapProvider} from "@anywalletkit/protocol-swap2-wrap/provider";
+import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider";
+import type {SettlerResolver} from "@anywalletkit/protocol-swap2-0x/settler";
+import {zeroExChain, zeroExChainId, ZEROEX_CHAINS} from "@anywalletkit/protocol-swap2-0x/chains";
+import {acrossProvider} from "@anywalletkit/protocol-swap2-across/provider";
+import {ACROSS_CHAINS} from "@anywalletkit/protocol-swap2-across/config";
 import type {ProviderName, RuntimeConfig, VenueKeys} from "../contracts/config";
-import {getRuntimeConfig, standardFetch, standardFynd, venueKeys, type ProxyOnlySlot} from "../config";
+import {getRuntimeConfig, standardFetch, standardProxyOnly, venueKeys, type ProxyOnlySlot} from "../config";
 import {lazyOmniston} from "./omnistonLazy";
 import {coolDownOnRateLimit, isWrapPair, narrowRoute, paced, payoutToSigner, whileLive, withQuoteGap} from "./providerWrappers";
 import {rpcFailoverFetch} from "./rpcFailover";
@@ -63,8 +70,33 @@ export const DEFAULT_ON_PROVIDERS: readonly ProviderName[] = [
   "omniston",
 ];
 
-/** Built only in Standard mode, through cp0x's proxy (default on there; D3, D30), after the others. */
-export const STANDARD_ONLY_PROVIDERS: readonly ProviderName[] = ["fynd"];
+/** Built only in Standard mode, through cp0x's proxy (default on there; D3, D30, D38), after the others. */
+export const STANDARD_ONLY_PROVIDERS: readonly ProviderName[] = ["fynd", "zeroex", "across"];
+
+/**
+ * The API key 0x's and Across's modules are built with on this page (D38): a fixed, public placeholder — never a key.
+ * Each module refuses to quote without one and sends it only to its `baseUrl` (0x as `0x-api-key`, Across as
+ * `Authorization: Bearer`), here cp0x's proxy slot, which drops it and adds cp0x's own. It reaches neither venue.
+ */
+export const PROXY_KEY_PLACEHOLDER = "cp0x-swap-web-proxy-adds-the-key";
+
+/** The Settler resolver each built 0x provider reads the on-chain registry through (execute's pins answer from it). */
+const settlerResolvers = new WeakMap<CrossChainProvider, SettlerResolver>();
+
+/**
+ * The 0x Settlers the page's 0x provider last read from the registry for `chain` (its resolver's fresh set: the one
+ * in force, then the one it replaced), [] before a live quote read them or on a chain 0x doesn't serve here. Never the
+ * API's word, and never touches the network (execute/pins.ts, the in-page gate's call targets).
+ */
+export function zeroExSettlers(providers: readonly CrossChainProvider[], chain: string): readonly string[] {
+  const id = zeroExChainId(chain);
+  if (!zeroExChain(ZEROEX_CHAINS, id)) return [];
+  for (const p of providers) {
+    const r = p.name === "zeroex" ? settlerResolvers.get(p) : undefined;
+    if (r) return r.known(id);
+  }
+  return [];
+}
 
 /** The runtime RPC table keyed by CAIP-2 (usdt0, Omniston's validators take that shape). */
 export const evmRpcByCaip2 = (rpc: RuntimeConfig["evmRpc"]): Record<string, string[]> =>
@@ -89,19 +121,27 @@ const failoverLists = (rpc: RuntimeConfig["evmRpc"], first: Record<string, strin
 
 /**
  * What the page adds besides the config: the viewer's keys (Custom), Standard's routing fetch (for Relay's and
- * Symbiosis' fetchImpl) and Standard's Fynd slot (without it, Fynd is not built).
+ * Symbiosis' fetchImpl) and Standard's proxy-only slots (Fynd, 0x, Across: without its slot a venue is not built).
  */
 export interface ProviderExtras {
   keys?: VenueKeys;
   fetchImpl?: typeof fetch;
   fynd?: ProxyOnlySlot;
+  zeroex?: ProxyOnlySlot;
+  across?: ProxyOnlySlot;
 }
 
 /** The page's provider set. Call once (engine.ts caches it): a second set would lose Relay's issued-quote memory. */
 export function buildProviders(
   config: RuntimeConfig = getRuntimeConfig(),
   stores: ProviderStores = createProviderStores(),
-  extras: ProviderExtras = {keys: venueKeys(), fetchImpl: standardFetch(), fynd: standardFynd()},
+  extras: ProviderExtras = {
+    keys: venueKeys(),
+    fetchImpl: standardFetch(),
+    fynd: standardProxyOnly("fynd"),
+    zeroex: standardProxyOnly("zeroex"),
+    across: standardProxyOnly("across"),
+  },
 ): CrossChainProvider[] {
   const on = config.providers;
   const evm = config.evmRpc;
@@ -198,6 +238,36 @@ export function buildProviders(
     const selfHosted = Object.fromEntries(Object.entries(FYND_CHAINS).map(([id, c]) => [Number(id), `${slot.base}/${c.slug}`]));
     // rpcUrls: its pre-broadcast simulation and receipts (Standard's lists start with the proxy RPC).
     out.push(whileLive(fyndProvider({selfHosted, rpcUrls: evm}), slot.live));
+  }
+  if (on.zeroex && extras.zeroex) {
+    // 0x Swap API v2, Permit2 flow, same network on its 7 chains (D38). The module's LOCAL provider runs here, so every
+    // check runs on this device: the Settler read from 0x's on-chain registry over the page's RPCs (CREATE3 + pinned
+    // window + code), the transaction decoded and held to the request, the Permit2 payload rebuilt. Its `baseUrl` is
+    // cp0x's slot, which forwards `/swap/permit2/{price,quote}` to api.0x.org with cp0x's key in place of the
+    // placeholder; it refuses an answer that came through a redirect or from another origin. Asked only while the slot
+    // is live; never direct (no key here).
+    const slot = extras.zeroex;
+    const zeroex = zeroExProvider({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: slot.base, rpcUrls: evm});
+    const live = whileLive(zeroex, slot.live);
+    settlerResolvers.set(live, zeroex.settlerResolver);
+    out.push(live);
+  }
+  if (on.across && extras.across) {
+    // Across, EVM → EVM, the same asset, a direct SpokePool deposit (D38). The LOCAL provider encodes the deposit from
+    // the pinned SpokePool and the request and verifies it here; API V5 (`POST /v1/quotes`) only prices it, through
+    // cp0x's slot with cp0x's key in place of the placeholder. Across's keyless relayer fee
+    // (app.across.to/api/suggested-fees, CORS *) stays straight from this browser, as the module defaults. Its RPCs (the
+    // status read, the quote time when that fee quote doesn't answer) take ONE URL per chain, so, as for CCTP, the
+    // first runtime URL with the rest of the chain's list behind it (rpcFailoverFetch, which also passes V5 and the fee
+    // quote on to the global, Standard-routed fetch).
+    const slot = extras.across;
+    const rpcUrls = firstRpc(evm, Object.keys(ACROSS_CHAINS));
+    out.push(
+      whileLive(
+        acrossProvider({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: slot.base, rpcUrls, fetchImpl: rpcFailoverFetch(failoverLists(evm, rpcUrls))}),
+        slot.live,
+      ),
+    );
   }
 
   return out;

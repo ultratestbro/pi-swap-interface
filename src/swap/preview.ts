@@ -31,15 +31,20 @@
  * :285, :494, :556; never filled here: the TON sample is the zero account it refuses); symbiosis fills its own on a
  * dry quote, the sender too, so it never needs a real one (chunk-K3EPNDVO.js:257-261; VENUE_SAMPLES); omniston's RFQ
  * carries no address, and it checks the addresses only for a live quote (chunk-DMO24BFW.js:2072-2101; its IndexedDB
- * quote store then holds blank ones); wrap and jupiter quote a blank or lone address.
+ * quote store then holds blank ones); wrap and jupiter quote a blank or lone address; zeroex (0x) asks its price
+ * endpoint with no `taker` when it has none (protocol-swap2-0x 0.1.1 provider.ts getQuote: a dry quote's taker is the
+ * refund or recipient only when one is an address), and across prices a dry quote for its own placeholder depositor
+ * and recipient (`ACROSS_PLACEHOLDER`, the EVM sample) and never builds or signs it (protocol-swap2-across 0.1.0
+ * verify.ts acrossRequestOf, provider.ts requestOf).
  * The refund address is the user's real one or absent (never "": NEAR reads `refundAddress ?? its placeholder`).
  * Symbiosis' pacer (providers.ts) is the page's one, shared with live rounds: a preview burst queues in it and never
  * goes past its 1 request/s; a superseded round's queued call sends nothing (its signal is aborted).
- * LI.FI and Fynd are asked in a preview only while cp0x's proxy carries them with cp0x's key (KEYED_PREVIEW_VENUES:
+ * LI.FI, Fynd, 0x and Across are asked in a preview only while cp0x's proxy carries them with cp0x's key (KEYED_PREVIEW_VENUES:
  * a Standard page, health "keyed", the slot not stopped), decided per round: there cp0x's daily budgets cap the
- * spend, not LI.FI's keyless ~75 /quote per 2 h per IP or one visitor's share of Fynd's key. Anywhere else LI.FI waits
- * for the live quote ("Connect a wallet to get this quote", a `deferred` row); Fynd, asked only while its slot is
- * live (providers.ts whileLive), is then asked by no round, live ones included, and absent from the list.
+ * spend, not LI.FI's keyless ~75 /quote per 2 h per IP or one visitor's share of Fynd's, 0x's or Across's key.
+ * Anywhere else LI.FI waits for the live quote ("Connect a wallet to get this quote", a `deferred` row); Fynd, 0x and
+ * Across, asked only while their slot is live (providers.ts whileLive), are then asked by no round, live ones
+ * included, and absent from the list.
  */
 import type {QuoteParams} from "@anywalletkit/protocol-swap2-core/types";
 import type {Family} from "../contracts/domain";
@@ -122,16 +127,19 @@ export const PREVIEW_VENUES: ReadonlySet<string> = new Set([
   "jupiter",
   "omniston",
   "fynd",
+  "zeroex",
+  "across",
 ]);
 
 /**
  * Venues a preview round asks only while cp0x's proxy carries them with cp0x's key (read per round: a Standard page,
  * health "keyed", the slot not stopped). LI.FI's keyless /quote allows about 75 per 2 h per IP, too few to spend on
- * visitors who haven't connected; Fynd has no keyless way in at all. Through the proxy cp0x's daily budgets cap the
- * spend (LI.FI 5000, Fynd 3000 shared with the cp0x wallet) and D29's bucket paces each tab. Such a call never falls
- * back to a keyless one beyond the routing's one retry after a failure at the proxy, once per page (config keyedOnly).
+ * visitors who haven't connected; Fynd, 0x and Across have no keyless way in at all (D38). Through the proxy cp0x's
+ * daily budgets cap the spend (LI.FI 5000, Fynd 3000 shared with the cp0x wallet; 0x's and Across's are the proxy's)
+ * and D29's bucket paces each tab. Such a call never falls back to a keyless one beyond the routing's one retry after
+ * a failure at the proxy, once per page (config keyedOnly); a proxy-only venue never falls back at all.
  */
-export const KEYED_PREVIEW_VENUES: ReadonlySet<string> = new Set(["lifi", "fynd"]);
+export const KEYED_PREVIEW_VENUES: ReadonlySet<string> = new Set(["lifi", "fynd", "zeroex", "across"]);
 
 /** Venues whose dry quote needs a destination it doesn't fill: a blank one gets the destination family's sample. */
 export const FILLS_DESTINATION: ReadonlySet<string> = new Set(["uniswap", "curve", "balancer", "thorchain", "chainflip", "near_intents", "fynd"]);

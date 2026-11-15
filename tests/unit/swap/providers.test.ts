@@ -16,6 +16,9 @@ import {thorchainProvider} from "@anywalletkit/protocol-swap2-thorchain/provider
 import {uniswapProvider} from "@anywalletkit/protocol-swap2-uniswap/provider";
 import {usdt0Provider} from "@anywalletkit/protocol-swap2-usdt0/provider";
 import {wrapProvider} from "@anywalletkit/protocol-swap2-wrap/provider";
+import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider";
+import {acrossProvider} from "@anywalletkit/protocol-swap2-across/provider";
+import {ACROSS_CHAINS} from "@anywalletkit/protocol-swap2-across/config";
 import {encodeFunctionData, zeroAddress} from "viem";
 import {customOverlay, standardSlots} from "../../../src/config/connection";
 import {DEFAULT_RUNTIME_CONFIG, PROVIDER_KEYS} from "../../../src/config/defaults";
@@ -23,7 +26,7 @@ import {createProxyFetch, healthRoutes} from "../../../src/config/standard";
 import type {ProviderName, RuntimeConfig} from "../../../src/contracts/config";
 import {createQuoteEngine, eligibleProviders, enabledVenues} from "../../../src/swap/engine";
 import {createVenueBackoff} from "../../../src/swap/limiter";
-import {DEFAULT_ON_PROVIDERS, STANDARD_ONLY_PROVIDERS, buildProviders, closeProviders, evmRpcByCaip2} from "../../../src/swap/providers";
+import {DEFAULT_ON_PROVIDERS, PROXY_KEY_PLACEHOLDER, STANDARD_ONLY_PROVIDERS, buildProviders, closeProviders, evmRpcByCaip2, zeroExSettlers} from "../../../src/swap/providers";
 import {classifyRefusal} from "../../../src/swap/refusals";
 import type {ProviderStores} from "../../../src/swap/stores";
 import {request} from "./fixtures";
@@ -80,6 +83,14 @@ vi.mock("@anywalletkit/protocol-swap2-uniswap/provider", async (orig) => {
 vi.mock("@anywalletkit/protocol-swap2-usdt0/provider", async (orig) => {
   const m = await orig<typeof import("@anywalletkit/protocol-swap2-usdt0/provider")>();
   return {...m, usdt0Provider: vi.fn(m.usdt0Provider)};
+});
+vi.mock("@anywalletkit/protocol-swap2-0x/provider", async (orig) => {
+  const m = await orig<typeof import("@anywalletkit/protocol-swap2-0x/provider")>();
+  return {...m, zeroExProvider: vi.fn(m.zeroExProvider)};
+});
+vi.mock("@anywalletkit/protocol-swap2-across/provider", async (orig) => {
+  const m = await orig<typeof import("@anywalletkit/protocol-swap2-across/provider")>();
+  return {...m, acrossProvider: vi.fn(m.acrossProvider)};
 });
 vi.mock("@anywalletkit/protocol-swap2-wrap/provider", async (orig) => {
   const m = await orig<typeof import("@anywalletkit/protocol-swap2-wrap/provider")>();
@@ -476,7 +487,7 @@ describe("Fynd: Standard only, through cp0x's proxy, while health keys it", () =
   const slot = (live: () => boolean) => ({base: FYND_BASE, live});
 
   it("is never built without Standard's slot: Public, Custom (even with keys), or a page without a cp0x API", () => {
-    expect(STANDARD_ONLY_PROVIDERS).toEqual(["fynd"]);
+    expect(STANDARD_ONLY_PROVIDERS).toEqual(["fynd", "zeroex", "across"]);
     for (const extras of [{}, {keys: {lifi: "test-lifi", relay: "test-relay"}}, {fetchImpl: vi.fn() as unknown as typeof fetch}]) {
       expect(buildProviders(DEFAULT_RUNTIME_CONFIG, stores(true), extras).map((p) => p.name)).not.toContain("fynd");
     }
@@ -594,6 +605,252 @@ describe("Fynd: Standard only, through cp0x's proxy, while health keys it", () =
       // …and from then on it isn't asked at all; enabled() stays true, so a swap already approved still broadcasts.
       expect(fynd.supportsRoute({chain: "eip155:1", token: "USDC"}, {chain: "eip155:1", token: USDT_ETH})).toBe(false);
       expect(fynd.enabled()).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+const ZEROEX_BASE = `${BASE}/venue/zeroex`;
+const ACROSS_BASE = `${BASE}/venue/across`;
+const USDC_BASE_ADDR = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const USDC_ARB_ADDR = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
+
+/** The Standard routing over `base` (the original fetch), with health keying `keyed`; stops recorded in `stopped`. */
+function standardRouting(keyed: readonly string[], base: typeof fetch, stopped: Map<string, number>) {
+  const plan = standardSlots(DEFAULT_RUNTIME_CONFIG, API).plan;
+  const routes = healthRoutes({venues: Object.fromEntries(keyed.map((v) => [v, "keyed"])), rpc: {configured: false, chains: []}, thornode: false}, plan);
+  return createProxyFetch({
+    plan,
+    settled: async () => {},
+    live: (key) => !stopped.has(key) && routes.venues.has(key.slice(6) as never),
+    stop: (key, until) => void stopped.set(key, until),
+    fetch: base,
+    now: () => Date.UTC(2026, 10, 15, 12),
+    version: null,
+  });
+}
+
+describe("0x and Across: Standard only, through cp0x's proxy, while health keys each (D38)", () => {
+  const slot = (b: string, live: () => boolean) => ({base: b, live});
+
+  it("are never built without their Standard slot (Public, Custom with keys, no cp0x API), and a flag still switches each off", () => {
+    for (const extras of [{}, {keys: {lifi: "test-lifi", relay: "test-relay"}}, {fetchImpl: vi.fn() as unknown as typeof fetch}, {fynd: slot(FYND_BASE, () => true)}]) {
+      const names = buildProviders(DEFAULT_RUNTIME_CONFIG, stores(true), extras).map((p) => p.name);
+      expect(names).not.toContain("zeroex");
+      expect(names).not.toContain("across");
+    }
+    expect(zeroExProvider).not.toHaveBeenCalled();
+    expect(acrossProvider).not.toHaveBeenCalled();
+    const off = buildProviders(withFlags({zeroex: false, across: false}), stores(true), {zeroex: slot(ZEROEX_BASE, () => true), across: slot(ACROSS_BASE, () => true)});
+    expect(off.map((p) => p.name)).not.toContain("zeroex");
+    expect(off.map((p) => p.name)).not.toContain("across");
+    expect(zeroExProvider).not.toHaveBeenCalled();
+    expect(acrossProvider).not.toHaveBeenCalled();
+  });
+
+  it("in Standard: the local providers with the proxy slot as baseUrl and only a placeholder key; the page's RPCs", () => {
+    const config = standardSlots(DEFAULT_RUNTIME_CONFIG, API).config;
+    const names = buildProviders(config, stores(true), {fynd: slot(FYND_BASE, () => true), zeroex: slot(ZEROEX_BASE, () => true), across: slot(ACROSS_BASE, () => true)}).map((p) => p.name);
+    expect(names.slice(-3)).toEqual(["fynd", "zeroex", "across"]);
+    const zx = lastConfig(zeroExProvider);
+    expect(Object.keys(zx).sort()).toEqual(["apiKey", "baseUrl", "rpcUrls"]);
+    expect(zx).toMatchObject({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: ZEROEX_BASE});
+    expect(zx.rpcUrls).toBe(config.evmRpc);
+    const ac = lastConfig(acrossProvider);
+    expect(Object.keys(ac).sort()).toEqual(["apiKey", "baseUrl", "fetchImpl", "rpcUrls"]);
+    expect(ac).toMatchObject({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: ACROSS_BASE});
+    // ONE RPC per Across chain (its type), the page's first; the rest behind it through fetchImpl (rpcFailoverFetch).
+    const rpc = ac.rpcUrls as Record<string, string>;
+    expect(rpc["eip155:8453"]).toBe(config.evmRpc[8453]![0]);
+    expect(rpc["eip155:8453"]).toBe(`${BASE}/rpc/8453`);
+    for (const c of Object.keys(rpc)) expect(Object.keys(ACROSS_CHAINS)).toContain(c);
+    // No fee option, no suggestedFeesUrl override (its keyless relayer-fee quote stays direct), no real key anywhere.
+    expect(JSON.stringify({zx: {...zx, rpcUrls: undefined}, ac: {...ac, rpcUrls: undefined, fetchImpl: undefined}})).not.toMatch(/fee|integrator|suggestedFeesUrl|0x\.org|across\.to/i);
+    expect(PROXY_KEY_PLACEHOLDER).toMatch(/^[\x21-\x7e]+$/);
+  });
+
+  it("route only while their slot is live; enabled() stays the SDK's; 0x keeps ownGasEstimate through the wrapper", () => {
+    let zxLive = false;
+    let acLive = false;
+    const providers = buildProviders(DEFAULT_RUNTIME_CONFIG, stores(true), {zeroex: slot(ZEROEX_BASE, () => zxLive), across: slot(ACROSS_BASE, () => acLive)});
+    const zeroex = providers.find((p) => p.name === "zeroex")!;
+    const across = providers.find((p) => p.name === "across")!;
+    const sameBase = [{chain: "eip155:8453", token: "ETH"}, {chain: "eip155:8453", token: USDC_BASE_ADDR}] as const;
+    const baseToArb = [{chain: "eip155:8453", token: "USDC"}, {chain: "eip155:42161", token: USDC_ARB_ADDR}] as const;
+    expect(zeroex.supportsRoute(...sameBase)).toBe(false);
+    expect(across.supportsRoute(...baseToArb)).toBe(false);
+    expect(enabledVenues(providers)).not.toContain("zeroex");
+    expect(enabledVenues(providers)).not.toContain("across");
+    expect([zeroex.enabled(), across.enabled()]).toEqual([true, true]);
+    zxLive = true;
+    acLive = true;
+    expect(zeroex.supportsSameChain).toBe(true);
+    expect(zeroex.supportsRoute(...sameBase)).toBe(true);
+    expect(zeroex.supportsRoute(sameBase[0], {chain: "eip155:42161", token: USDC_ARB_ADDR})).toBe(false);
+    // 0x is not on Gnosis, Across never on one network nor into Ethereum (not priced yet), and only the same asset.
+    expect(zeroex.supportsRoute({chain: "eip155:100", token: "XDAI"}, {chain: "eip155:100", token: "0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83"})).toBe(false);
+    expect(across.supportsRoute(...baseToArb)).toBe(true);
+    expect(across.supportsRoute({chain: "eip155:8453", token: "USDC"}, {chain: "eip155:1", token: USDC_ETH})).toBe(false);
+    expect(across.supportsRoute({chain: "eip155:8453", token: "USDC"}, {chain: "eip155:8453", token: USDC_BASE_ADDR})).toBe(false);
+    expect(across.supportsRoute({chain: "eip155:8453", token: "ETH"}, {chain: "eip155:42161", token: USDC_ARB_ADDR})).toBe(false);
+    expect(enabledVenues(providers)).toEqual(expect.arrayContaining(["zeroex", "across"]));
+    expect(zeroex.ownGasEstimate).toBe(true);
+  });
+
+  it("zeroExSettlers answers from the very resolver the 0x provider reads the registry through, never the network", () => {
+    const providers = buildProviders(DEFAULT_RUNTIME_CONFIG, stores(true), {zeroex: slot(ZEROEX_BASE, () => true)});
+    const built = vi.mocked(zeroExProvider).mock.results.at(-1)!.value as ReturnType<typeof zeroExProvider>;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      expect(zeroExSettlers(providers, "eip155:8453")).toEqual([]);
+      const known = vi.spyOn(built.settlerResolver, "known").mockReturnValue(["0x103502909141F7025a94b7b99A276dCD128e21a8"]);
+      expect(zeroExSettlers(providers, "eip155:8453")).toEqual(["0x103502909141F7025a94b7b99A276dCD128e21a8"]);
+      expect(known).toHaveBeenCalledWith(8453);
+      expect(zeroExSettlers(providers, "eip155:100")).toEqual([]);
+      expect(zeroExSettlers(providers, "solana:mainnet")).toEqual([]);
+      expect(zeroExSettlers(buildProviders(DEFAULT_RUNTIME_CONFIG, stores(true), {}), "eip155:8453")).toEqual([]);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("a 0x price goes to the proxy slot with the placeholder key, never to api.0x.org; a refusal of cp0x's key stops the slot", async () => {
+    const stopped = new Map<string, number>();
+    const price = {
+      allowanceTarget: "0x000000000022d473030f116ddee9f6b43ac78ba3",
+      blockNumber: "57501646",
+      buyAmount: "14164402",
+      buyToken: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      fees: {integratorFee: null, integratorFees: null, zeroExFee: {amount: "21279", token: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", type: "volume"}, gasFee: null},
+      issues: {allowance: null, balance: null, simulationIncomplete: false, invalidSourcesPassed: []},
+      liquidityAvailable: true,
+      minBuyAmount: "14093580",
+      mode: "exact-in",
+      route: {fills: [{from: "0x4200000000000000000000000000000000000006", to: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", source: "Uniswap_V3", proportionBps: "10000"}], tokens: []},
+      sellAmount: "8000000000000000",
+      sellToken: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      tokenMetadata: {buyToken: {buyTaxBps: "0", sellTaxBps: "0", transferTaxBps: "0"}, sellToken: {buyTaxBps: "0", sellTaxBps: "0", transferTaxBps: "0"}},
+      totalNetworkFee: "7094174664170",
+      zid: "0xae307fd609a6170caec9eda4",
+      gas: "250311",
+      gasPrice: "27908743",
+    };
+    let upstream = 200;
+    const sent: {url: string; init?: RequestInit}[] = [];
+    const base = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push({url: String(input), init});
+      const body = upstream === 200 ? price : {name: "UNAUTHORIZED", message: "bad key"};
+      return new Response(JSON.stringify(body), {status: upstream, headers: {"content-type": "application/json", "x-swap-web-answer": "upstream"}});
+    });
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(standardRouting(["zeroex"], base as unknown as typeof fetch, stopped));
+    try {
+      const zeroex = buildProviders(DEFAULT_RUNTIME_CONFIG, stores(true), {zeroex: slot(ZEROEX_BASE, () => !stopped.has("venue:zeroex"))}).find((p) => p.name === "zeroex")!;
+      const refusals: string[] = [];
+      const params = {
+        sourceChain: "eip155:8453",
+        sourceToken: "ETH",
+        destChain: "eip155:8453",
+        destToken: USDC_BASE_ADDR,
+        amountIn: "8000000000000000",
+        slippageBps: 50,
+        destAddress: ME,
+        refundAddress: ME,
+        dry: true,
+        onRefusal: (r: string) => void refusals.push(r),
+      };
+      const quote = await zeroex.getQuote(params);
+      expect(refusals).toEqual([]);
+      // A price (dry) answer: amounts and fees, no transaction (executionOf reads it as signed: SIGNED_ONLY).
+      expect(quote).toMatchObject({provider: "zeroex", sourceAmount: "8000000000000000", destAmount: "14164402", minDestAmount: "14093580"});
+      expect(quote?.txRequest).toBeUndefined();
+      expect(sent).toHaveLength(1);
+      const url = new URL(sent[0]!.url);
+      expect(`${url.origin}${url.pathname}`).toBe(`${ZEROEX_BASE}/swap/permit2/price`);
+      expect([...url.searchParams.keys()]).toEqual(["chainId", "sellToken", "buyToken", "sellAmount", "slippageBps", "taker"]);
+      expect(url.searchParams.get("chainId")).toBe("8453");
+      const headers = new Headers(sent[0]!.init?.headers);
+      expect(headers.get("0x-api-key")).toBe(PROXY_KEY_PLACEHOLDER);
+      expect(headers.get("0x-version")).toBe("v2");
+      expect(sent[0]!.init?.method).toBe("GET");
+      expect(sent[0]!.init?.redirect).toBe("error");
+
+      // Upstream 401 (cp0x's key refused): the slot stops, the SDK refuses, nothing goes to api.0x.org.
+      upstream = 401;
+      expect(await zeroex.getQuote(params)).toBeNull();
+      expect(refusals).toEqual(["zeroex: API key rejected (HTTP 401)"]);
+      expect(stopped.get("venue:zeroex")).toBe(Infinity);
+      expect(sent.every((r) => r.url.startsWith(ZEROEX_BASE))).toBe(true);
+      expect(classifyRefusal("zeroex", refusals[0]!).reason).toBe("Unavailable right now — try later");
+      expect(zeroex.supportsRoute({chain: "eip155:8453", token: "ETH"}, {chain: "eip155:8453", token: USDC_BASE_ADDR})).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("an Across price: V5 through the proxy slot with the placeholder Bearer, its keyless relayer fee straight from app.across.to", async () => {
+    const stopped = new Map<string, number>();
+    const now = Math.floor(Date.now() / 1000);
+    const token = (chainId: number, address: string) => ({chainId, address, decimals: 6, priceUsd: 0.9997});
+    const v5 = {
+      expectedFillTimeMs: 3000,
+      origin: {token: token(8453, USDC_BASE_ADDR.toLowerCase()), amount: "25000000", amountUsd: "24.99"},
+      destination: {token: token(42161, USDC_ARB_ADDR.toLowerCase()), amount: "24965431"},
+      fee: {totalFee: {amount: "34569", token: token(42161, USDC_ARB_ADDR.toLowerCase())}, appFee: {amount: "0"}},
+      gasEstimates: [],
+    };
+    const fees = {
+      inputToken: {address: USDC_BASE_ADDR, chainId: 8453},
+      outputToken: {address: USDC_ARB_ADDR, chainId: 42161},
+      spokePoolAddress: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64",
+      destinationSpokePoolAddress: "0xe35e9842fceaCA96570B734083f4a58e8F7C5f2A",
+      totalRelayFee: {pct: "352160000000000", total: "8804"},
+      outputAmount: "24991196",
+      isAmountTooLow: false,
+      limits: {minDeposit: "500156", maxDeposit: "685850520819"},
+      timestamp: String(now - 200),
+      estimatedFillTimeSec: 2,
+    };
+    const sent: {url: string; init?: RequestInit}[] = [];
+    const base = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      sent.push({url, init});
+      const body = url.startsWith("https://app.across.to/api/suggested-fees") ? fees : v5;
+      return new Response(JSON.stringify(body), {status: 200, headers: {"content-type": "application/json", "x-swap-web-answer": "upstream"}});
+    });
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(standardRouting(["across"], base as unknown as typeof fetch, stopped));
+    try {
+      const across = buildProviders(DEFAULT_RUNTIME_CONFIG, stores(true), {across: slot(ACROSS_BASE, () => true)}).find((p) => p.name === "across")!;
+      const refusals: string[] = [];
+      const quote = await across.getQuote({
+        sourceChain: "eip155:8453",
+        sourceToken: "USDC",
+        destChain: "eip155:42161",
+        destToken: USDC_ARB_ADDR,
+        amountIn: "25000000",
+        slippageBps: 50,
+        destAddress: ME,
+        refundAddress: ME,
+        dry: true,
+        onRefusal: (r: string) => void refusals.push(r),
+      });
+      expect(refusals).toEqual([]);
+      expect(quote).toMatchObject({provider: "across", sourceAmount: "25000000", destAmount: "24965431", minDestAmount: "24965431"});
+      // Encoded here from the pinned SpokePool: the approval and the call name it, whatever the API said.
+      expect(quote?.txRequest).toMatchObject({to: expect.stringMatching(/^0x09aea4b2242abc8bb4bb78d537a67a245a7bec64$/i), approvalAddress: expect.stringMatching(/^0x09aea4b2242abc8bb4bb78d537a67a245a7bec64$/i)});
+      const v5Call = sent.find((r) => r.url.startsWith(ACROSS_BASE))!;
+      expect(v5Call.url).toBe(`${ACROSS_BASE}/v1/quotes`);
+      expect(v5Call.init?.method).toBe("POST");
+      const headers = new Headers(v5Call.init?.headers);
+      expect(headers.get("authorization")).toBe(`Bearer ${PROXY_KEY_PLACEHOLDER}`);
+      expect(headers.get("content-type")).toBe("application/json");
+      const feeCall = sent.find((r) => r.url.startsWith("https://app.across.to/"))!;
+      expect(new URL(feeCall.url).pathname).toBe("/api/suggested-fees");
+      // The fee quote is keyless and direct: no placeholder, no Authorization, never through cp0x.
+      expect(new Headers(feeCall.init?.headers).get("authorization")).toBeNull();
+      expect(sent.map((r) => new URL(r.url).host).sort()).toEqual(["app.across.to", new URL(API).host]);
+      expect(sent.some((r) => r.url.includes("api.across.to"))).toBe(false);
     } finally {
       spy.mockRestore();
     }

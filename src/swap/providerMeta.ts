@@ -4,10 +4,13 @@
  * quote leaves unnamed. Routing itself is the real providers' supportsRoute —
  * the mobile capability tables are not ported.
  */
+import {ACROSS_NATIVE, acrossRouteOf} from "@anywalletkit/protocol-swap2-across/config";
+import {acrossRouteUnpriced} from "@anywalletkit/protocol-swap2-across/pricing";
 import {CF_VAULTS} from "@anywalletkit/protocol-swap2-chainflip/config";
+import {ZEROEX_CHAINS, ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
 import {chainByCaip2Web} from "../catalog";
 
-/** Mobile lib/swap/providers.ts PROVIDER_NAMES, plus Curve. */
+/** Mobile lib/swap/providers.ts PROVIDER_NAMES, plus Curve, 0x and Across. */
 export const PROVIDER_NAMES: Readonly<Record<string, string>> = {
   near_intents: "NEAR Intents",
   lifi: "LI.FI",
@@ -24,6 +27,8 @@ export const PROVIDER_NAMES: Readonly<Record<string, string>> = {
   balancer: "Balancer",
   fynd: "Fynd",
   jupiter: "Jupiter",
+  zeroex: "0x",
+  across: "Across",
 };
 
 /** A venue's display name; unknown names pass through. */
@@ -53,18 +58,31 @@ export const OMNISTON_ORDER_PROTOCOL: Readonly<Record<string, string>> = {
   "eip155:999": "0xD84778bbeEC5D2a8d17c6424249C438EC0b1ABE3",
 };
 
+/** 0x serves this EVM network (its chain table: Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, BNB Chain). */
+const zeroExServes = (chain: string): boolean => !!zeroExChain(ZEROEX_CHAINS, zeroExChainId(chain));
+
 /**
  * The spender an ERC-20 source on `chain` must be approved for when the dry
  * quote names none, or null. Omniston: its gasless order is built after the
  * quote. Chainflip: a dry quote carries no txRequest, so the vault it will call
- * (CF_VAULTS) is named here. Every other EVM venue names
- * txRequest.approvalAddress in its dry quote.
+ * (CF_VAULTS) is named here. 0x: a price (dry) answer carries no transaction;
+ * its token sales approve canonical Permit2 only, never a 0x contract (the
+ * Settler pulls the input through a one-time Permit2 signature, D38). Every
+ * other EVM venue names txRequest.approvalAddress in its dry quote.
  */
 export function orderSpender(provider: string, chain: string): string | null {
   if (provider === "omniston") return OMNISTON_ORDER_PROTOCOL[chain] ?? null;
   if (provider === "chainflip" && chain.startsWith("eip155:")) return CF_VAULTS[chain] ?? null;
+  if (provider === "zeroex" && zeroExServes(chain)) return ZEROEX_PERMIT2;
   return null;
 }
+
+/**
+ * Venues whose token sale is paid by a one-time Permit2 signature transfer (swap2-core 0.13.0): the wallet signs a
+ * PermitTransferFrom for exactly the input first, then (unless a standing Permit2 allowance covers it) approves
+ * Permit2, then sends the swap carrying the signature. The review says so (D38).
+ */
+export const PERMIT2_VENUES: ReadonlySet<string> = new Set(["zeroex"]);
 
 /** One side of a pair as venueScope reads it (a SwapToken fits). */
 export interface ScopeSide {
@@ -76,7 +94,7 @@ export interface ScopeSide {
 }
 
 /** Venues that also swap within one network (their own supportsSameChain); the router asks no other venue then. */
-const SAME_CHAIN_VENUES: ReadonlySet<string> = new Set(["lifi", "uniswap", "curve", "wrap", "balancer", "fynd", "jupiter", "omniston"]);
+const SAME_CHAIN_VENUES: ReadonlySet<string> = new Set(["lifi", "uniswap", "curve", "wrap", "balancer", "fynd", "jupiter", "omniston", "zeroex"]);
 
 const isSymbol = (x: ScopeSide, ...names: string[]) => names.includes(x.symbol.toUpperCase());
 
@@ -114,6 +132,34 @@ function bridgeScope(provider: "cctp" | "usdt0", coin: string, symbols: readonly
 }
 
 /**
+ * Across's scope for a pair it wasn't asked for, by the first reason that holds, read from its own route check
+ * (protocol-swap2-across `acrossRouteOf`, `acrossRouteUnpriced`): EVM only; between networks only; its 17 pinned
+ * networks; the same asset on both sides (USDC, USDT / USDT0, ETH / WETH, WBTC); ETH as a native coin only where the
+ * SpokePool wraps it; WETH arrives as ETH; nothing into Ethereum yet.
+ */
+function acrossScope(from: ScopeSide, to: ScopeSide): string {
+  if (from.family !== "evm" || to.family !== "evm") return "EVM networks only here";
+  if (from.caip2 === to.caip2) return "Between networks only";
+  if (from.contract === undefined || to.contract === undefined) return "Doesn't cover this pair";
+  const route = acrossRouteOf(from.caip2, from.contract ?? ACROSS_NATIVE, to.caip2, to.contract ?? ACROSS_NATIVE);
+  if ("code" in route) {
+    switch (route.code) {
+      case "chain-unsupported":
+        return "Not on one of these networks";
+      case "native-unsupported":
+        return "Moves ETH as a native coin only";
+      case "wrapped-native-destination":
+        return "Delivers ETH, not WETH — pick ETH";
+      case "pair-unsupported":
+        return "Same token on both networks only";
+      case "token-unsupported":
+        return "Doesn't list one of these tokens";
+    }
+  }
+  return acrossRouteUnpriced(route) ? "Not into Ethereum yet" : "Doesn't cover this pair";
+}
+
+/**
  * Why an enabled venue wasn't asked for this pair, in one honest line (the route list's "Not for this pair" group).
  * The decision itself is each provider's supportsRoute (D17); these lines only name the venue's scope, and stay
  * generic ("Doesn't cover this pair") where the answer is in a venue's token list — THORChain has no USDT on Solana,
@@ -128,6 +174,12 @@ export function venueScope(provider: string, from: ScopeSide, to: ScopeSide): st
     case "balancer":
     case "fynd":
       return sameNet ? "Not on this network" : "Same-network swaps only";
+    case "zeroex":
+      // Same network only, on its 7 chains (Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, BNB Chain).
+      if (!sameNet) return "Same-network swaps only";
+      return zeroExServes(from.caip2) ? "Doesn't cover this pair" : "Not on this network";
+    case "across":
+      return acrossScope(from, to);
     case "wrap":
       return "Wraps only, like ETH ⇄ WETH";
     case "jupiter":

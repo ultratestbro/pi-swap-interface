@@ -13,12 +13,18 @@
  *      reaches the wallet. A write nothing armed disarms the rest.
  *   3. The only standing permission is revoking an allowance THIS execution
  *      granted (approve(spender, 0)), the engine's cleanup after a failure.
+ *   4. A Permit2 signature transfer (0x, D38) arms exactly two more: the
+ *      signature of the plan's own rebuilt PermitTransferFrom (domain, types,
+ *      message, all of it), and the swap call carrying exactly the signature
+ *      the wallet returned for it (`data ++ uint256(len) ++ sig`) — nothing
+ *      else typed is signed, and the call matches no other appended bytes.
  *
  * Pure (viem's ABI codec, and the catalog's address checks for TON) — unit-tested in tests/unit/execute/gate.test.ts.
  */
 import {decodeFunctionData, encodeFunctionData, erc20Abi} from "viem";
 import type {Swap2ExecutionPlan} from "@anywalletkit/protocol-swap2-core/swap2/base";
 import type {RemotePins} from "@anywalletkit/protocol-swap2-core/types";
+import {PERMIT2_ADDRESS, PERMIT2_TRANSFER_TYPES, appendPermit2Signature} from "@anywalletkit/protocol-swap2-core/util";
 import type {ChainFamily} from "../contracts/domain";
 import type {ReviewedSwap} from "../contracts/execution";
 import {checkTonPlan, type TonBodyCheck} from "./tonPlan";
@@ -28,14 +34,20 @@ export type MemoEncoding = "utf8" | "hex";
 
 /** One write the reviewed plan makes, in the shape the engine hands the account. */
 export type ArmedWrite =
-  /** sendTransaction: an EVM call / deposit, a native deposit elsewhere. `body` = TON text comment, `bodyBoc` = TON cell body, `memo` = Tron / NEAR memo. */
-  | {kind: "call"; to: string; data?: string; value: bigint; body?: string; bodyBoc?: string; memo?: string; memoEncoding?: MemoEncoding}
+  /**
+   * sendTransaction: an EVM call / deposit, a native deposit elsewhere. `body` = TON text comment, `bodyBoc` = TON cell
+   * body, `memo` = Tron / NEAR memo. `permit2Signed`: `data` is the swap's calldata BEFORE its Permit2 signature; the
+   * call matches only with exactly the signature this execution's armed permit got from the wallet appended (D38).
+   */
+  | {kind: "call"; to: string; data?: string; value: bigint; body?: string; bodyBoc?: string; memo?: string; memoEncoding?: MemoEncoding; permit2Signed?: true}
   /** transfer: a token deposit (SPL, jetton, TRC-20, NEP-141). */
   | {kind: "transfer"; token: string; recipient: string; amount: bigint; memo?: string; memoEncoding?: MemoEncoding}
   /** sendSerialized: a provider-built Solana transaction (the account's own guard simulates it). */
   | {kind: "serialized"; tx: string}
   /** signTypedData: a gasless order; the message as stable JSON. */
-  | {kind: "typed"; message: string};
+  | {kind: "typed"; message: string}
+  /** signTypedData: a Permit2 PermitTransferFrom (swap2-core 0.13.0, D38); the WHOLE payload (domain, types, primaryType, message) as stable JSON. */
+  | {kind: "permit2"; typedData: string};
 
 /** The engine account methods that write, as the gate names them. */
 export type WriteMethod = "sendTransaction" | "transfer" | "sendSerialized" | "signTypedData";
@@ -101,16 +113,32 @@ export function stableJson(v: unknown): string {
   return JSON.stringify(v) ?? "null";
 }
 
-/** Does the engine's write (`method`, first argument `raw`) equal the armed one? Exported for the tests. */
-export function matches(w: ArmedWrite, method: string, raw: unknown): boolean {
+/** `data ++ uint256(len) ++ signature`, or undefined when either isn't usable (the engine's own appendPermit2Signature). */
+function signedCalldata(data: string | undefined, signature: string | undefined): string | undefined {
+  if (data === undefined || signature === undefined) return undefined;
+  try {
+    return appendPermit2Signature(data, signature);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Does the engine's write (`method`, first argument `raw`) equal the armed one? `permitSignature`: what the wallet
+ * returned for this execution's armed Permit2 permit, the only bytes a `permit2Signed` call may carry after its data.
+ * Exported for the tests.
+ */
+export function matches(w: ArmedWrite, method: string, raw: unknown, permitSignature?: string): boolean {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   switch (w.kind) {
     case "call": {
       if (method !== "sendTransaction") return false;
       const data = str(r.data);
+      const want = w.permit2Signed ? signedCalldata(w.data, permitSignature) : w.data;
+      if (w.permit2Signed && want === undefined) return false;
       return (
         same(str(r.to), w.to) &&
-        (data === undefined ? w.data === undefined : w.data !== undefined && data.toLowerCase() === w.data.toLowerCase()) &&
+        (data === undefined ? want === undefined : want !== undefined && data.toLowerCase() === want.toLowerCase()) &&
         toBig(r.value) === w.value &&
         // A TON text comment and a cell body are not interchangeable; neither is a memo that wasn't reviewed.
         (typeof r.body === "string" || r.body === undefined ? str(r.body) === w.body : false) &&
@@ -133,6 +161,8 @@ export function matches(w: ArmedWrite, method: string, raw: unknown): boolean {
       return method === "sendSerialized" && raw === w.tx;
     case "typed":
       return method === "signTypedData" && stableJson(r.message) === w.message;
+    case "permit2":
+      return method === "signTypedData" && stableJson(raw) === w.typedData;
   }
 }
 
@@ -173,6 +203,16 @@ export function planWrites(
   switch (s.kind) {
     case "call":
       if (s.cellBody && !tonBodyBoc) throw new SwapReviewMismatch("the TON deposit body is missing");
+      // A Permit2 transfer (D38): its permit, exactly as the plan carries it, before the call that spends it.
+      if (s.permit2Transfer !== undefined) {
+        let td: unknown;
+        try {
+          td = JSON.parse(s.permit2Transfer);
+        } catch {
+          throw new SwapReviewMismatch("the Permit2 transfer to sign is malformed");
+        }
+        writes.push({kind: "permit2", typedData: stableJson(td)});
+      }
       writes.push({
         kind: "call",
         to: s.to,
@@ -180,6 +220,7 @@ export function planWrites(
         value: s.value,
         ...(s.cellBody ? {bodyBoc: tonBodyBoc!} : s.memo !== undefined ? (ton ? {body: s.memo} : {memo: s.memo}) : {}),
         ...(s.memoEncoding !== undefined ? {memoEncoding: s.memoEncoding} : {}),
+        ...(s.permit2Transfer !== undefined ? {permit2Signed: true as const} : {}),
       });
       break;
     case "token-transfer":
@@ -255,11 +296,67 @@ export function checkPlan(plan: Swap2ExecutionPlan, r: ReviewedSwap): string | n
 /**
  * How a venue's EVM source may look, beyond checkPlan (engine.md §7.3, defence in depth):
  * - `pins`: the contracts its calldata may call and the spenders it may approve, from the provider package itself;
- *   such a venue always sends calldata, so a bare transfer is refused too;
+ *   such a venue always sends calldata, so a bare transfer is refused too. `permit2`: it may ask for a Permit2
+ *   signature transfer (0x, D38) — held by permit2Problem to Permit2's own PermitTransferFrom for exactly this swap,
+ *   its deadline no further than `maxSeconds` away (the package's own bound); a venue without it never gets one;
  * - `deposit`: it only pays a deposit address (NEAR Intents) — a bare value send or the engine's exact ERC-20
  *   `transfer(depositAddress, amountIn)`, never an approval or other calldata.
  */
-export type VenueRule = {kind: "pins"; pins: Pick<RemotePins, "callTargets" | "spenders">} | {kind: "deposit"};
+export type VenueRule = {kind: "pins"; pins: Pick<RemotePins, "callTargets" | "spenders">; permit2?: {maxSeconds: number}} | {kind: "deposit"};
+
+const plainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+const exactKeys = (o: Record<string, unknown>, keys: readonly string[]): boolean => {
+  const have = Object.keys(o);
+  return have.length === keys.length && keys.every((k) => Object.prototype.hasOwnProperty.call(o, k));
+};
+const UINT256_MAX = (1n << 256n) - 1n;
+const decimalUint = (v: unknown): bigint | null => (typeof v === "string" && /^(?:0|[1-9]\d{0,77})$/.test(v) && BigInt(v) <= UINT256_MAX ? BigInt(v) : null);
+
+/**
+ * Why a plan's Permit2 signature transfer (swap2-core 0.13.0: `source.permit2Transfer`, 0x's Settler, D38) is not
+ * exactly the one this reviewed swap may sign, or null. On top of the engine's own reader (`readPermit2Transfer`), the
+ * gate holds it to: a venue whose rule takes one; a token sale of the reviewed token (never a native one), no native
+ * value with it, calldata to spend it, approvals to canonical Permit2 only; and the payload itself to exactly
+ * `{domain, types, primaryType, message}` with the Permit2 domain on the source chain (name "Permit2", that chain id,
+ * the canonical contract), Permit2's PermitTransferFrom / TokenPermissions types and nothing else (no EIP712Domain,
+ * no witness), the reviewed token and EXACTLY the reviewed input as `permitted`, the call's own target — a pinned
+ * Settler (checkPlanBrowser) — as the spender, a uint256 nonce, and a deadline in the future and at most the venue's
+ * `maxSeconds` away. No other typed data is ever armed for a Permit2 venue.
+ */
+export function permit2Problem(plan: Swap2ExecutionPlan, r: ReviewedSwap, venue: VenueRule | undefined, nowMs = Date.now()): string | null {
+  const s = plan.source;
+  if (s.kind !== "call" || s.permit2Transfer === undefined) return null;
+  if (venue?.kind !== "pins" || !venue.permit2) return `a Permit2 signature from a venue the app doesn't take one from (${plan.provider})`;
+  if (!r.fromContract) return "a Permit2 signature on a native-coin sale";
+  if (s.value !== 0n) return "native coin sent along with a Permit2 transfer";
+  if (s.data === undefined) return "a Permit2 signature without the swap that spends it";
+  for (const a of plan.approvals) if (!same(a.spender, PERMIT2_ADDRESS)) return "an approval to something other than Permit2";
+  const id = evmChainId(plan.fromChain);
+  let td: unknown;
+  try {
+    td = JSON.parse(s.permit2Transfer);
+  } catch {
+    return "the Permit2 transfer to sign is malformed";
+  }
+  if (!plainObject(td) || !exactKeys(td, ["domain", "types", "primaryType", "message"])) return "the Permit2 transfer to sign is malformed";
+  const {domain, types, primaryType, message} = td;
+  if (!plainObject(domain) || !exactKeys(domain, ["name", "chainId", "verifyingContract"]) || domain.name !== "Permit2") return "a signature for another contract than Permit2";
+  if (domain.chainId !== id) return "a Permit2 signature for another network";
+  if (typeof domain.verifyingContract !== "string" || !same(domain.verifyingContract, PERMIT2_ADDRESS)) return "a signature for another contract than Permit2";
+  if (primaryType !== "PermitTransferFrom" || stableJson(types) !== stableJson(PERMIT2_TRANSFER_TYPES)) return "a Permit2 signature of another kind than a one-time transfer";
+  if (!plainObject(message) || !exactKeys(message, ["permitted", "spender", "nonce", "deadline"])) return "a Permit2 signature of another kind than a one-time transfer";
+  const permitted = message.permitted;
+  if (!plainObject(permitted) || !exactKeys(permitted, ["token", "amount"])) return "a Permit2 signature of another kind than a one-time transfer";
+  if (typeof permitted.token !== "string" || !same(permitted.token, r.fromContract)) return "a Permit2 signature for another token";
+  if (decimalUint(permitted.amount) !== r.amountIn) return "a Permit2 signature for another amount";
+  if (typeof message.spender !== "string" || !same(message.spender, s.to)) return "a Permit2 signature for a spender you didn't review";
+  if (decimalUint(message.nonce) === null) return "the Permit2 transfer to sign is malformed";
+  const deadline = decimalUint(message.deadline);
+  const now = BigInt(Math.floor(nowMs / 1000));
+  if (deadline === null || deadline <= now) return "a Permit2 signature that has already expired";
+  if (deadline > now + BigInt(venue.permit2.maxSeconds)) return "a Permit2 signature that stays valid too long";
+  return null;
+}
 
 /**
  * How a venue's Tron source may look (a TronLink payment): a TRX send or a TRC-20 transfer, never calldata, to
@@ -347,6 +444,9 @@ export function checkPlanBrowser(plan: Swap2ExecutionPlan, r: ReviewedSwap, venu
     if (s.memo !== undefined || s.cellBody) return "a payload this network doesn't carry";
   }
   const inList = (list: readonly string[], a: string) => list.some((x) => same(x, a));
+  // A Permit2 signature transfer (D38) only from a venue whose rule takes one, held to exactly this swap.
+  const permit = permit2Problem(plan, r, venue);
+  if (permit) return permit;
   if (venue?.kind === "pins") {
     for (const a of plan.approvals)
       if (a.amount !== 0n && !inList(venue.pins.spenders(plan.fromChain), a.spender)) return "an approval for a contract the app doesn't trust";
@@ -354,6 +454,8 @@ export function checkPlanBrowser(plan: Swap2ExecutionPlan, r: ReviewedSwap, venu
       if (s.data === undefined) return "a plain transfer this venue never makes";
       if (!inList(venue.pins.callTargets(plan.fromChain), s.to)) return "a call to a contract the app doesn't trust";
     }
+    // A Permit2 venue signs nothing typed but its permit (checked above): no gasless order.
+    if (venue.permit2 && s.kind === "typed-order") return "an order signature this venue never asks for";
     return null;
   }
   if (venue?.kind === "deposit") {
@@ -392,19 +494,30 @@ interface Armed {
 
 /**
  * This execution's gate on `chain`. `arm` from reviewExecution (or the claim preview); every write consumes one
- * armed entry; `recordGrant` after an approve(>0) may have landed, so its revoke (approve 0) becomes allowed.
+ * armed entry; `recordGrant` after an approve(>0) may have landed, so its revoke (approve 0) becomes allowed;
+ * `recordSignature` after the wallet signed the armed Permit2 permit: the only bytes the armed swap call may then carry
+ * after its data (D38).
  */
 export function createSwapGate(chain: string) {
   let armed: Armed | null = null;
   const grants = new Set<string>();
+  /** The armed Permit2 permit was consumed and its signature not recorded yet. */
+  let awaitingSignature = false;
+  /** What the wallet returned for this arm's Permit2 permit. */
+  let permitSignature: string | undefined;
   const key = (token: string, spender: string) => `${token.toLowerCase()}|${spender.toLowerCase()}`;
   return {
     chain,
     arm(writes: readonly ArmedWrite[], revokes: readonly {token: string; spender: string}[] = [], now = Date.now()): void {
       armed = {writes: writes.map((w) => ({w, used: false})), revokes: [...revokes], until: now + ARM_TTL_MS};
+      // A re-armed plan (the engine's re-quote pass) carries a new permit: the old signature spends nothing here.
+      awaitingSignature = false;
+      permitSignature = undefined;
     },
     disarm(): void {
       armed = null;
+      awaitingSignature = false;
+      permitSignature = undefined;
     },
     /** Port of mobile consumeSwapWrite without the kit `revoke` intent. */
     consume(intent: WriteIntent, now = Date.now()): boolean {
@@ -421,14 +534,24 @@ export function createSwapGate(chain: string) {
         for (const e of a.writes) e.used = true;
         return false;
       }
-      const hit = a.writes.find((e) => !e.used && matches(e.w, intent.method, intent.raw));
+      const hit = a.writes.find((e) => !e.used && matches(e.w, intent.method, intent.raw, permitSignature));
       if (!hit) {
         // One stray write disarms the rest (revokes stay possible).
         for (const e of a.writes) e.used = true;
         return false;
       }
       hit.used = true;
+      if (hit.w.kind === "permit2") awaitingSignature = true;
       return true;
+    },
+    /**
+     * The wallet's answer to a signTypedData the gate let through: kept only when that write was this arm's Permit2
+     * permit (once), as the signature its armed swap call must carry. Anything else is ignored.
+     */
+    recordSignature(signature: unknown): void {
+      if (!awaitingSignature) return;
+      awaitingSignature = false;
+      if (typeof signature === "string") permitSignature = signature;
     },
     /** An approve(token → spender, > 0) went to the wallet and may have landed: its revoke is now allowed. */
     recordGrant(token: string, spender: string): void {

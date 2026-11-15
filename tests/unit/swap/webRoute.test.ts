@@ -58,6 +58,11 @@ describe("toWebRoute", () => {
     // LI.FI 0.8.0 and USDT0 0.5.0 previews come back price-only (no txRequest): still a wallet signature, never a deposit.
     expect(executionOf({provider: "lifi"})).toBe("calldata");
     expect(executionOf({provider: "usdt0"})).toBe("calldata");
+    // 0x's dry quote is its price answer, no transaction (D38): a Settler call the wallet signs, never a deposit.
+    expect(executionOf({provider: "zeroex"})).toBe("calldata");
+    expect(toWebRoute(q("zeroex", "1")).execution).toBe("calldata");
+    // Across' dry quote carries its deposit call already.
+    expect(toWebRoute(q("across", "1", {txRequest: {to: "0x09aea4b2242abc8bb4bb78d537a67a245a7bec64", approvalAddress: "0x09aea4b2242abc8bb4bb78d537a67a245a7bec64"}})).execution).toBe("calldata");
   });
   it("names an Omniston swap's route steps (D35 part C), for the route list to refuse by; nothing for anything else", () => {
     const steps = (routeSteps: unknown, settlement = "swap") => toWebRoute(q("omniston", "1", {providerData: {settlement, ...(routeSteps === undefined ? {} : {routeSteps: String(routeSteps)})}}));
@@ -116,6 +121,12 @@ describe("approval spender the dry quote leaves unnamed", () => {
   it("Chainflip: the vault for an ERC-20 source on Ethereum / Arbitrum", () => {
     expect(toRouteView(q("chainflip", "1"), {chain: "eip155:42161", isToken: true}).approvalSpender).toBe(ARB_VAULT);
     expect(toRouteView(q("chainflip", "1"), {chain: "eip155:1", isToken: true}).approvalSpender).toBe("0xF5e10380213880111522dd0efD3dbb45b9f62Bcc");
+  });
+  it("0x: canonical Permit2 for a token sale, nothing for a native one (D38)", () => {
+    const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+    expect(toRouteView(q("zeroex", "1"), {chain: "eip155:8453", isToken: true}).approvalSpender).toBe(PERMIT2);
+    expect(toRouteView(q("zeroex", "1"), {chain: "eip155:8453", isToken: false}).approvalSpender).toBeNull();
+    expect(toRouteView(q("zeroex", "1"), {chain: "eip155:100", isToken: true}).approvalSpender).toBeNull();
   });
   it("no spender for a native source or a non-EVM chain", () => {
     expect(toRouteView(q("chainflip", "1"), {chain: "eip155:42161", isToken: false}).approvalSpender).toBeNull();

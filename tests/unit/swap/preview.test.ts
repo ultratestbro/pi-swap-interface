@@ -127,8 +127,16 @@ describe("preview params (D7: placeholders only inside the engine's preview roun
     expect(previewSkip("newvenue", previewReq(), () => true)).toBe("newvenue: asked only for your live quote, not for previews");
   });
 
-  it("LI.FI and Fynd only while cp0x's proxy carries them, read on each call; signer-only venues sit out 'another address'", () => {
-    expect([...KEYED_PREVIEW_VENUES].sort()).toEqual(["fynd", "lifi"]);
+  it("LI.FI, Fynd, 0x and Across only while cp0x's proxy carries them, read on each call; signer-only venues sit out 'another address'", () => {
+    expect([...KEYED_PREVIEW_VENUES].sort()).toEqual(["across", "fynd", "lifi", "zeroex"]);
+    // 0x and Across (D38): previewed like Fynd, through their own slot only; each fills its own blank addresses.
+    for (const p of ["zeroex", "across"]) {
+      expect(PREVIEW_VENUES.has(p), p).toBe(true);
+      expect(FILLS_DESTINATION.has(p), p).toBe(false);
+      expect(previewSkip(p, previewReq()), p).toBe(`${p}: ${KEYED_ONLY_REFUSAL}`);
+      expect(previewSkip(p, previewReq(), (v) => v === p), p).toBeNull();
+      expect(previewAddressing(p, previewReq()), p).toEqual({});
+    }
     // No proxy (Public, Custom, a build without the API, health anonymous or unreachable, a stopped slot): left for
     // the live quote.
     expect(previewSkip("lifi", previewReq())).toBe(`lifi: ${KEYED_ONLY_REFUSAL}`);

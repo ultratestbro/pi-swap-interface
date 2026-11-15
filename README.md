@@ -97,6 +97,8 @@ The venues are independent services with their own rules, and cp0x cannot change
 | Jupiter | Solana swaps | Jupiter API | API | on |
 | Omniston (STON.fi) | HTLC orders between EVM chains and TON, including from a TON wallet's USDT to EVM chains; TON ↔ USDT swaps on TON through pinned STON.fi and DeDust contracts | Omniston WebSocket (needs site storage) | API | on |
 | Fynd (Propeller Heads) | same-chain swaps over Tycho-indexed pools, settled through the Tycho router | Fynd API, through cp0x's proxy | API | Standard mode only |
+| 0x | same-chain swaps on Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche and BNB Chain, settled through 0x's Settler (Permit2) | 0x Swap API v2, through cp0x's proxy; the Settler read from 0x's on-chain registry over your RPC | API | Standard mode only |
+| Across | the same token between EVM chains (USDC, USDT, ETH, WBTC), a deposit to Across's SpokePool built in your browser | Across API, through cp0x's proxy; Across's relayer fee quote directly | API | Standard mode only |
 
 Badges: **ON-CHAIN** means the quote and settlement come from contracts, with no company API in the path.
 **NODE** means a THORChain node quotes it. **API** means a venue's API quotes it, and your browser checks the
@@ -106,7 +108,13 @@ off in the runtime config, and a viewer for their own browser in Settings (a ven
 off). Fynd runs only in the hosted build's Standard mode, while cp0x holds a key for it: its API
 answers no browser directly (no CORS) and needs a key, so cp0x's proxy carries the request and adds the key. Its
 routes settle only through the Tycho router, as the Fynd License requires, and the review of a Fynd route says so
-(the licence asks for that notice); the app charges no fee on them.
+(the licence asks for that notice); the app charges no fee on them. 0x and Across run the same way, only in Standard
+mode while cp0x holds their keys: both APIs want a key on every request, and a key can't ship in a web page. Their
+providers still run in your browser with every check: the 0x provider reads the Settler from 0x's on-chain registry,
+decodes the transaction and rebuilds the Permit2 signature it asks for (one signature for exactly your amount, to that
+Settler, valid for minutes; the approval goes to Permit2, never to a 0x contract), and the Across provider builds the
+SpokePool deposit itself from your request, so the API only supplies numbers. The page sends cp0x's proxy a fixed
+placeholder where the key goes; the proxy puts cp0x's own key in its place.
 
 ## Run it
 
@@ -194,7 +202,7 @@ applies after a reload.
 
 | mode | where requests go | contacts cp0x |
 |---|---|---|
-| **Standard** (hosted build only, its default) | LI.FI, Relay, NEAR Intents, Jupiter, Symbiosis and Fynd while cp0x holds a key for them, the RPCs cp0x serves, and THORChain's vault check go through cp0x's swap-web proxy, which adds cp0x's keys. Everything else goes direct, the NEAR RPC included. Fynd exists only here. Each swap you send is counted once — the venue and the two networks only, no address or amount. | yes, as a transport, plus the swap count |
+| **Standard** (hosted build only, its default) | LI.FI, Relay, NEAR Intents, Jupiter, Symbiosis, Fynd, 0x and Across while cp0x holds a key for them, the RPCs cp0x serves, and THORChain's vault check go through cp0x's swap-web proxy, which adds cp0x's keys. Everything else goes direct, the NEAR RPC included, and so does Across's relayer fee quote (`app.across.to`, keyless). Fynd, 0x and Across exist only here. Each swap you send is counted once — the venue and the two networks only, no address or amount. | yes, as a transport, plus the swap count |
 | **Public** | Keyless public endpoints, straight from your browser. | never |
 | **Custom** | Public, plus your own RPCs per EVM network and for Solana (tried first; the public ones stay as the fallback, unless you turn on "Use only my RPCs") and your own LI.FI, Relay, NEAR Intents (1Click JWT), Jupiter and Symbiosis (partner) keys. NEAR keeps the operator's `nearRpc`. | never |
 
@@ -260,7 +268,7 @@ key in it.** An RPC key is only acceptable if its provider restricts it to your 
 | key | default | what it does |
 |---|---|---|
 | `demo` | `false` | Fixtures only: no wallets, no network. |
-| `providers.<name>` | `true` | Build that venue at all (`false` switches it off). Names: `uniswap curve balancer wrap usdt0 cctp thorchain chainflip near_intents lifi relay symbiosis jupiter omniston fynd` (`fynd` is built only in Standard mode). |
+| `providers.<name>` | `true` | Build that venue at all (`false` switches it off). Names: `uniswap curve balancer wrap usdt0 cctp thorchain chainflip near_intents lifi relay symbiosis jupiter omniston fynd zeroex across` (`fynd`, `zeroex` and `across` are built only in Standard mode). |
 | `evmRpc.<chainId>` | public RPCs per chain | JSON-RPC URLs tried in order. Used for balances, simulation, provider reads and the wallet's chain definitions. |
 | `solanaRpc` | publicnode, solanavibestation | Solana RPCs tried in order. `api.mainnet-beta.solana.com` is left out because it refuses browser origins. |
 | `nearRpc` | FastNear | NEAR RPCs tried in order, asked directly in every mode, only once a NEAR wallet is connected. `[]` = no NEAR reads: balances stay unknown and a NEAR wallet's deposits are refused before signing. |
@@ -318,7 +326,10 @@ Example: your own Ethereum and Base nodes, Symbiosis on, WalletConnect on.
   recipient, refund address, minimum received, approval spender) is frozen. The engine's execution plan is checked
   against it before anything is armed. Each wallet write must then match one armed write exactly, or it is refused
   before your wallet sees it. One stray write disarms the rest. A token approval is for the exact amount, and it is
-  revoked only if this run granted it. Smart-contract accounts are refused in this version. On Solana, the SDK
+  revoked only if this run granted it. The one typed signature a swap may ask for besides a gasless order is 0x's
+  Permit2 transfer: the page signs it only as Permit2's own one-time transfer, on this network, of exactly the
+  reviewed token and amount, to the 0x Settler the transaction calls, valid for at most 10 minutes, and the swap that
+  follows must carry exactly the signature your wallet returned. Smart-contract accounts are refused in this version. On Solana, the SDK
   checks the serialized transaction, simulates it and caps the fee before the wallet signs, and a signature over
   changed bytes fails. On Tron, the page builds the TRX or USDT transfer itself from the checked write, checks the
   bytes once more (deposit address or the venue's pinned vault, the catalog's token contract, the amount, the memo),

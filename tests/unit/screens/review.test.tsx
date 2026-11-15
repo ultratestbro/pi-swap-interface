@@ -14,7 +14,7 @@ import type {AppPorts} from "../../../src/contracts/ports";
 import type {WebRoute} from "../../../src/contracts/routes";
 import {INTERRUPTED_TEXT, newRecord} from "../../../src/activity";
 import {DEMO_EVM_ADDRESS, demoPorts, demoSnapshot, demoSwapTokens} from "../../../src/mocks";
-import {BACKGROUND_AFTER_MS, ReviewSheet, afterConfirm} from "../../../src/screens/review/ReviewSheet";
+import {BACKGROUND_AFTER_MS, ReviewSheet, afterConfirm, walletSteps} from "../../../src/screens/review/ReviewSheet";
 import {reviewRows} from "../../../src/screens/review/rows";
 import {Toaster, TxReviewCard} from "../../../src/ui";
 
@@ -136,6 +136,18 @@ describe("the review's rows (D34)", () => {
     expect(row(rows, "Fees")).toMatchObject({v: "In the price", note: "+ gas ≤ $0.03 in ETH"});
     expect(row(rows, "Approval")).toMatchObject({v: "Exact 250.00 USDC", note: "spender 0x28b5a0…68cf5d", testId: "swap-review-approval"});
     expect(row(rows, "From / To")).toMatchObject({v: "0x709979…dc79C8", note: "yours on both chains", testId: "swap-review-to"});
+  });
+
+  it("0x (D38): the approval goes to Permit2, with a one-time signature, and the wallet copy names both steps in order", () => {
+    const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+    const rows = rowsOf({}, {provider: "zeroex", approvalSpender: PERMIT2});
+    expect(row(rows, "Approval")).toMatchObject({v: "Exact 250.00 USDC", note: "Permit2 0x000000…C78BA3 + a one-time signature"});
+    expect(walletSteps({provider: "zeroex", approvalSpender: PERMIT2}, "250.00 USDC")).toBe(
+      ", then to sign a one-time Permit2 transfer of exactly 250.00 USDC, then to approve Permit2 for it unless it already may",
+    );
+    expect(walletSteps({provider: "cctp", approvalSpender: "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d"}, "250.00 USDC")).toBe(", then to approve exactly 250.00 USDC");
+    // A native sale signs nothing but the swap.
+    expect(walletSteps({provider: "zeroex", approvalSpender: null}, "0.1 ETH")).toBe("");
   });
 
   it("another address: From and To apart, To in amber; a bridge fee and a gas-less fee line keep their facts", () => {

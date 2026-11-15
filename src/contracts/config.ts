@@ -7,7 +7,7 @@
  * targets, THORChain routers, Omniston contracts) are code, never config.
  */
 
-/** Every swap2 provider the app can construct. All default on; fynd only in Standard mode (D3). */
+/** Every swap2 provider the app can construct. All default on; fynd, zeroex and across only in Standard mode (D3, D38). */
 export type ProviderName =
   | "uniswap"
   | "curve"
@@ -23,7 +23,9 @@ export type ProviderName =
   | "fynd"
   | "symbiosis"
   | "balancer"
-  | "omniston";
+  | "omniston"
+  | "zeroex"
+  | "across";
 
 export interface RuntimeConfig {
   /** Render fixtures only: no wallets, no network (also `?demo=1` in the hash query). */
@@ -99,10 +101,11 @@ export type RuntimeConfigInput = {
 export type ConnectionMode = "standard" | "public" | "custom";
 
 /**
- * The venues cp0x's swap-web proxy forwards, by the proxy's (and the health answer's) names. Fynd is reachable only
- * through it: its API sends no CORS headers and its key is cp0x's, so it has no public base and no direct fallback.
+ * The venues cp0x's swap-web proxy forwards, by the proxy's (and the health answer's) names. Fynd, 0x and Across are
+ * reachable only through it: Fynd's API sends no CORS headers, and all three need a key that is cp0x's (0x's
+ * `0x-api-key`, Across's V5 `Authorization: Bearer`; D38), so they have no public base and no direct fallback.
  */
-export type ProxyVenue = "lifi" | "relay" | "near_intents" | "jupiter" | "symbiosis" | "fynd";
+export type ProxyVenue = "lifi" | "relay" | "near_intents" | "jupiter" | "symbiosis" | "fynd" | "zeroex" | "across";
 
 /**
  * The viewer's own venue keys (Custom mode only), each sent only to its venue in a request header: LI.FI
@@ -147,7 +150,7 @@ export interface ConnectionStatus {
   viaProxy: readonly ProxyVenue[];
   /**
    * Venues taken off cp0x after a failure there (for a while, until 00:00 UTC, or for this page): sent straight to
-   * the venue meanwhile — except Fynd, which is then not asked at all.
+   * the venue meanwhile — except the proxy-only ones (Fynd, 0x, Across), which are then not asked at all.
    */
   fellBack: readonly ProxyVenue[];
   /** RPC networks (EVM chains, Solana) going through cp0x right now. */

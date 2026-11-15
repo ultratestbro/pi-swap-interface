@@ -40,7 +40,7 @@ Pin exact versions (this repo's `package.json`, re-synced on every AWK bump; las
 | `@anywalletkit/tx-preview-evm` | 0.5.1 | dependency of the engine (`decodeCall`) |
 | `@anywalletkit/wallet-evm` | 0.8.0 | `WalletAccountReadOnlyEvm` (reads, quotes, simulation) |
 | `@anywalletkit/wallet-solana` | 0.6.2 | `WalletAccountSolana`, `serializedGuardFromExecution` |
-| provider modules | lifi 0.8.3, relay 0.1.4, symbiosis 0.1.4, near-intents 0.3.7, chainflip 0.4.9, cctp 0.5.7, thorchain 0.4.3, usdt0 0.5.3, uniswap 0.4.7, curve 0.1.6, wrap 0.4.4, balancer 0.3.9, fynd 0.2.12 (Standard only), jupiter 0.3.10, omniston 0.5.9 | the providers spec covers these |
+| provider modules | lifi 0.8.3, relay 0.1.4, symbiosis 0.1.4, near-intents 0.3.7, chainflip 0.4.9, cctp 0.5.7, thorchain 0.4.3, usdt0 0.5.3, uniswap 0.4.7, curve 0.1.6, wrap 0.4.4, balancer 0.3.9, fynd 0.2.12, 0x 0.1.1 and across 0.1.0 (Standard only), jupiter 0.3.10, omniston 0.5.9 | the providers spec covers these |
 | `viem` | one version, `2.57.x` (the version mobile resolves) | swap2-core needs `^2.45.0`. Dedupe with wagmi (`pnpm.overrides`) |
 
 Exact imports. These are the subpath exports in each `package.json`:
@@ -473,9 +473,9 @@ type IntentState = "pending" | "action-required" | "refund-pending" | "partial" 
 interface IntentStatus { state: IntentState; depositReceived?: boolean; destTxHash?: string; claim?: {chain: string; ready: boolean} }
 ```
 
-`CrossChainProvider` is the full interface in `CORE/types.d.ts:199-310`. The engine uses `name`, `enabled`, `supportsRoute`, `getQuote`, `buildDeposit`, `preflightDeposit?`, `trackIntent`, `notifyDeposit?`, `registerSignedOrder?`, `buildClaim?`, `claimTargets?`, `supportsSameChain`, `supportsChain?` and `supportsChainPair?`. The remote flags apply to stubs only.
+`CrossChainProvider` is the full interface in `CORE/types.d.ts:259-347`. The engine uses `name`, `enabled`, `supportsRoute`, `getQuote`, `buildDeposit`, `preflightDeposit?`, `trackIntent`, `notifyDeposit?`, `registerSignedOrder?`, `buildClaim?`, `claimTargets?`, `supportsSameChain`, `supportsChain?` and `supportsChainPair?`. The remote flags apply to stubs only.
 
-### 4.2 `Swap2EngineConfig` (`CORE/swap2/base.d.ts:87-167`), with the browser decision for each option
+### 4.2 `Swap2EngineConfig` (`CORE/swap2/base.d.ts:88-168`), with the browser decision for each option
 
 | option | meaning (engine line) | browser value |
 |---|---|---|
@@ -493,7 +493,7 @@ interface IntentStatus { state: IntentState; depositReceived?: boolean; destTxHa
 | `RouterSwap2Config.router` | one-provider router | `appRouter().only(reviewed.provider)` |
 | `RouterSwap2Config.prefer` | `best`/`fastest` | unset (a single provider) |
 
-### 4.3 `Swap2ExecutionPlan` (what `reviewExecution` receives, `base.d.ts:180-232`)
+### 4.3 `Swap2ExecutionPlan` (what `reviewExecution` receives, `base.d.ts:181-239`)
 
 ```ts
 interface Swap2ExecutionPlan {
@@ -526,10 +526,12 @@ Which `source` kind each route produces (`ENGINE:995-1005`):
 | SPL / jetton / TRC-20 deposit | `token-transfer` |
 | Jupiter or a LI.FI Solana leg | `serialized` |
 | Omniston EVM-source order | `typed-order` |
+| 0x token sale (Permit2, D38) | `call` to the registry Settler with `data` (before its signature), `value 0`, and `permit2Transfer` — the rebuilt PermitTransferFrom; approvals only to canonical Permit2 |
+| 0x native sale, Across deposit | `call` with `data` (`value` = the input for a native coin) |
 
 The plan's identity for the re-quote comparison is `reviewedIdentity` (`ENGINE:273-276`): the whole plan minus `feeUsd`, `etaSeconds`, `validUntilMs`, `approvals`, `destAmount` and `requoted`.
 
-### 4.4 `SerializedExecutionExpectation` (handed to `sendSerializedTransaction`, `base.d.ts:239-270`, built at `ENGINE:1144-1150`)
+### 4.4 `SerializedExecutionExpectation` (handed to `sendSerializedTransaction`, `base.d.ts:246-277`, built at `ENGINE:1144-1150`)
 
 ```ts
 interface SerializedExecutionExpectation {
@@ -1069,7 +1071,9 @@ export function gateAccount<T extends object>(inner: T, gate: SwapGate, chain: s
 
 `LOCAL_PINS`, optional defence in depth: build it from the same package exports mobile imports in `M/swap/pins.ts:50-64`. Only `callTargets` and `spenders` are used:
 
-- `lifiPins` (`/lifi/provider`), `relayPins` (`/relay/verify`), `symbiosisPinsFor()` (`/symbiosis/verify`), `cctpPins`, `usdt0Pins` (`/usdt0/config`), `chainflipPins` (`/chainflip/config`), `uniswapPins`, `wrapPins`, `balancerPins`, `fyndPins` (`/fynd/router`), `thorchainPins()`.
+- `lifiPins` (`/lifi/provider`), `relayPins` (`/relay/verify`), `symbiosisPinsFor()` (`/symbiosis/verify`), `cctpPins`, `usdt0Pins` (`/usdt0/config`), `chainflipPins` (`/chainflip/config`), `uniswapPins`, `wrapPins`, `balancerPins`, `fyndPins` (`/fynd/router`), `thorchainPins()`, `acrossPins` (`/across/verify`: the pinned SpokePool).
+- 0x (web, 2026-11-15; ARCHITECTURE D38): no static table can hold its call target, which is whatever 0x's on-chain registry names as the Settler in force or the one it replaced. `callTargets` answers from the resolver the page's 0x provider read the registry through (`zeroExSettlers(appProviders(), chain)`: its last fresh read, the set its live quote was checked against; empty before one, so nothing is called), `spenders` is canonical Permit2 only, and the rule carries `permit2: {maxSeconds: ZEROEX_MAX_PERMIT_SECONDS}` (600).
+- **Permit2 transfers** (swap2-core 0.13.0; 0x only): `permit2Problem(plan, r, venue)` runs inside `checkPlanBrowser` on top of the engine's own `readPermit2Transfer`. A plan whose `source.permit2Transfer` is set passes only from a venue whose rule has `permit2`, for a token sale of the reviewed token with no native value, calldata to spend it, approvals to Permit2 only, and a payload of exactly `{domain, types, primaryType, message}`: domain `{name: "Permit2", chainId: <source chain>, verifyingContract: PERMIT2_ADDRESS}`, types exactly `PERMIT2_TRANSFER_TYPES` (no EIP712Domain, no witness), `PermitTransferFrom`, `permitted` = the reviewed token and exactly `amountIn`, `spender` = the call's own target (a pinned Settler), a uint256 nonce, a deadline in the future and ≤ `maxSeconds` away. `planWrites` then arms `{kind: "permit2", typedData: stableJson(payload)}` (consumed only by a `signTypedData` of that whole payload) and the call with `permit2Signed: true`: `matches` accepts it only as `appendPermit2Signature(data, sig)` for the `sig` the gated account handed back from that permit (`gate.recordSignature`, once per arm, cleared by every arm and disarm). No other typed data is armed for a Permit2 venue, and a gasless order from one is refused.
 - No pins: `near_intents` (deposit addresses) and `jupiter` (Solana).
 - The pins must agree with the provider config. Example: cp0x-api gives LI.FI a Flare Diamond override (`apps/api/src/lib/crossChain/index.ts:293-296`). If the browser does the same, add that address to the pin list, or exclude Flare.
 

@@ -417,7 +417,8 @@ Order: action → failed → pending → done; done items stay `DONE_VISIBLE_MS 
 ### 3.1 Provider logos — `apps/mobile/assets/images/providers/<provider>{,@2x,@3x}.png` (208 KB)
 
 14 venues: `near_intents lifi thorchain cctp usdt0 chainflip relay symbiosis omniston uniswap balancer wrap fynd
-jupiter`. 32 pt square → 32/64/96 px PNGs, opaque square tiles; the app clips the corners. Made by
+jupiter` (the web adds `curve`, and, 2026-11-15, `zeroex` and `across`: web3icons' ZRX and ACX marks at 72 % of a
+`#25222B` tile, 32 / 64 px, ARCHITECTURE D38 — 17 venues in all). 32 pt square → 32/64/96 px PNGs, opaque square tiles; the app clips the corners. Made by
 `apps/mobile/scripts/build-provider-logos.py` from the AWK landing's logo set (`~/awk-landing/public/logos`: the
 brands' own marks; cp0x-drawn tiles for Uniswap/Balancer/Wrap), Fynd's docs icon on a `#25222B` tile, Relay's and
 Symbiosis' apple-touch-icons. Copy to `public/logos/providers/` and render
@@ -595,13 +596,13 @@ Every mobile pattern keeps its meaning; the wording is shorter and drops the ven
 
 | category | section in the list | examples (short line) |
 |---|---|---|
-| `amount` | Needs a different amount | "Minimum 0.003099 ETH" (1Click "at least …", rounded UP to 4 significant digits), "Minimum $100 right now", "Minimum 0.02 BTC" (base units → `pay`), "Maximum 98.76 USDC" (rounded DOWN), "Fees would take 8.22% of this amount" (THORChain: never "try larger"), "Fees would take 3.5% — try more" (LI.FI fixed fees), "Too small — try a larger amount", "Round the amount to 8 decimals" |
+| `amount` | Needs a different amount | "Minimum 0.003099 ETH" (1Click "at least …", rounded UP to 4 significant digits), "Minimum $100 right now", "Minimum 0.02 BTC" (base units → `pay`), "Maximum 98.76 USDC" (rounded DOWN), "Fees would take 8.22% of this amount" (THORChain: never "try larger"), "Fees would take 3.5% — try more" (LI.FI fixed fees), "Too small — try a larger amount", "Round the amount to 8 decimals" — Across (D38): "Minimum 2.5 USDC" / "Maximum 685800 USDC" from its "at least / at most N base units", "Fees would take over 10% — try more" (its fee cap); 0x: "Too large for its pools — try less" |
 | `setup` | Needs a change on your side | "Pays only the wallet that signs", "Needs more than your 0.5% slippage", "Your max slippage is above its limit", "Doesn't accept this recipient address", "Needs site storage, blocked here", the QR refusals "Needs a wallet that signs on {Chain}" / "Needs a memo — not for QR payments" |
 | `unavailable` | Not available right now | "Its node is catching up — try again soon" (THORNode "stale state"; thorchain 0.4.0: no confirming node within 50 blocks), "Its nodes didn't answer — tap refresh" (incl. THORChain's `/thorchain/lastblock` unread), "Rotating its vault — tap refresh", "SOL trading is paused right now", "Unavailable right now — try later" (5xx), "Quote expired — tap refresh", "Not enough liquidity right now" |
 | `unreachable` | Not available right now | "Couldn't reach it — tap refresh" (fetch / CORS / RPC transport), "Didn't answer in time — tap refresh" (timeouts, aborts; THORChain's 8 s vault-check budget) |
 | `busy` | Not available right now | "Request limit hit — back in about 2 hours" (the wait the venue names, in its unit; never "a minute" for hours), else "Busy right now — try again soon" |
 | `pair` | Doesn't support this pair | "Doesn't support this pair", "Doesn't list one of these tokens", "No route for this pair or amount", "Doesn't take this token as a source" (Relay `[tx-target]` only) |
-| `safety` | Skipped for your safety | "Can't confirm it pays you" (LI.FI "pays …, not …", "recipient on a non-EVM destination", "does not bind" and, since 0.8.0, LI.FI Intents' "release the input without the delivery", Relay `[output-recipient]`, THORChain memo), "Its transaction didn't match the quote", "Uses a contract we haven't verified" (incl. Chainflip "encoder targets …, not the … Vault"), "Couldn't double-check its vault" (incl. thorchain 0.4.0 "not ActiveVault" and "mimir flags the inbound vault"), "Guarantees less than your slippage allows" (incl. Chainflip "floor … above the expected output …"), "Didn't match what was asked" (incl. the venues' build checks: Chainflip's vault call, THORChain's router call, Symbiosis' transaction, USDT0's LZ fee) |
+| `safety` | Skipped for your safety | "Can't confirm it pays you" (LI.FI "pays …, not …", "recipient on a non-EVM destination", "does not bind" and, since 0.8.0, LI.FI Intents' "release the input without the delivery", Relay `[output-recipient]`, THORChain memo), "Its transaction didn't match the quote", "Uses a contract we haven't verified" (incl. Chainflip "encoder targets …, not the … Vault"), "Couldn't double-check its vault" (incl. thorchain 0.4.0 "not ActiveVault" and "mimir flags the inbound vault"), "Guarantees less than your slippage allows" (incl. Chainflip "floor … above the expected output …"), "Didn't match what was asked" (incl. the venues' build checks: Chainflip's vault call, THORChain's router call, Symbiosis' transaction, USDT0's LZ fee) — 0x (D38): "Uses a 0x contract we haven't checked yet" (a Settler deployment past the package's pins), Across: "Priced below what its relayers take" (a fee under its per-asset floor) |
 | `other` | Not available right now | "No quote right now" (no reason given, or an unknown text the venue didn't classify; a short plain unknown phrase shows as is) |
 | `deferred` | none: its own quiet group, "Quoted after you connect ({n})" (2026-11-13) | no refusal — a preview left the venue for the live quote (D7: LI.FI while cp0x's proxy doesn't carry it; Fynd without its slot is asked by no round, so it is absent); the screen words the line for what is missing: "Connect a wallet to get this quote", "Paste the address to get this quote", "Enter the refund address to get this quote" |
 
@@ -1016,8 +1017,13 @@ the first reason that holds ("{Network} isn't supported here", with "yet" where 
 doesn't — CCTP Solana, USDT0 out of TON or Tron; USDT0 into TON or Tron "Into TON (Tron) from Ethereum or
 Arbitrum only" (usdt0 0.5.0's Legacy Mesh, asked from those two); "Between networks only"; "Moves USDC only" / "Moves USDT
 only"; "Not on one of these networks"), Jupiter "Swaps within Solana only", Relay "EVM networks only here", LI.FI
-"Doesn't cover these networks" where its chain table doesn't list a side (EVM → Solana is asked since lifi 0.8.0), a
-bridge on a same-network pair "Between networks only", else "Doesn't cover this pair" (THORChain, Chainflip, NEAR Intents: the answer is in their token lists).
+"Doesn't cover these networks" where its chain table doesn't list a side (EVM → Solana is asked since lifi 0.8.0), 0x
+(Standard only, D38) "Same-network swaps only" or "Not on this network" (its 7 chains), Across (Standard only) by its
+module's own route check (`acrossRouteOf`, `acrossRouteUnpriced`) — "EVM networks only here", "Between networks only",
+"Not on one of these networks", "Same token on both networks only", "Delivers ETH, not WETH — pick ETH", "Moves ETH as
+a native coin only", "Doesn't list one of these tokens", "Not into Ethereum yet" —, a bridge on a same-network pair
+"Between networks only", else "Doesn't cover this pair" (THORChain, Chainflip, NEAR Intents: the answer is in their
+token lists).
 
 RouteRow states (same frame as §2.2):
 - `route`: mobile row + **VenueBadge** after the Best/Fastest tags. QR-only payers: a route with
@@ -1091,7 +1097,9 @@ deposit-only. Held dot only for connected families.
    Slippage x%} + 0.5% margin · quoted {implied}%. The swap is refused if it would deliver less.` · Rate · Route (logo
    18, name, `VenueBadge`, then `· {eta}` and ` · claim on arrival` for CCTP cross-chain; the old "Quoted by" row's
    sentence, `venueTrustText`, is the row's tip and the badge's hover tooltip) · Fees `{$x | In the price} · + gas ≤ $y in {NATIVE}` (or `+ network fee
-   in {NATIVE}`) · Bridge fee `{amount} · on top of the amount` · Approval `Exact {amount} · spender {short 8,6}` / "Not
+   in {NATIVE}`) · Bridge fee `{amount} · on top of the amount` · Approval `Exact {amount} · spender {short 8,6}` (0x, D38:
+   `· Permit2 {short 8,6} + a one-time signature`, and the executing fine print names the Permit2 signature before
+   the approval, `walletSteps`) / "Not
    needed" · one "From / To" row `{short} · yours on both chains` (`· your address` on one chain) when the swap pays the
    address it is paid from, else From `· your {chain} address` and To `· your {chain} address` | amber `· not this
    wallet` / `· the address you entered` (QR: Refund to `· refunds go here`). The other-address box keeps the full

@@ -31,6 +31,10 @@ export const VENUE_TRUST: Readonly<Record<string, VenueTrust>> = {
   jupiter: "provider-api",
   // Fynd's hosted solver API (through cp0x's proxy); settles through the pinned Tycho router.
   fynd: "provider-api",
+  // 0x Swap API v2 through cp0x's proxy; the Settler from 0x's on-chain registry, calldata and Permit2 checked here.
+  zeroex: "provider-api",
+  // Across API V5 prices through cp0x's proxy; the SpokePool deposit is encoded and verified here.
+  across: "provider-api",
 };
 
 /** A venue's badge level; an unknown venue counts as its own API. */

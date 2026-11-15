@@ -143,8 +143,8 @@ function within(p: Promise<unknown>, ms: number): Promise<void> {
 export const LAZY_WAIT_MS = 2_000;
 
 /**
- * cp0x's proxy as a preview round reads it (D7, D30): LI.FI and Fynd (KEYED_PREVIEW_VENUES) are asked in a preview
- * only while it carries them with cp0x's key. The app's engine gets config's; without one (tests), never.
+ * cp0x's proxy as a preview round reads it (D7, D30): LI.FI, Fynd, 0x and Across (KEYED_PREVIEW_VENUES) are asked in a
+ * preview only while it carries them with cp0x's key. The app's engine gets config's; without one (tests), never.
  */
 export interface PreviewProxy {
   /** Resolves once the health check answered or gave up (at once on a page without Standard; 3 s at most). */
@@ -164,7 +164,7 @@ export interface QuoteEngineDeps {
   backoff?: VenueBackoff;
   /** What a round waits for (up to LAZY_WAIT_MS) before it picks the venues: providers still loading; null = none. */
   loading?: (providers: readonly CrossChainProvider[]) => Promise<unknown> | null;
-  /** cp0x's proxy for preview rounds: a preview round waits for its health answer and asks LI.FI and Fynd only through it. */
+  /** cp0x's proxy for preview rounds: a preview round waits for its health answer and asks LI.FI, Fynd, 0x and Across only through it. */
   proxy?: PreviewProxy;
 }
 
@@ -243,9 +243,9 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
     const params = r.mode === "live" ? quoteParams(r.req) : previewBaseParams(r.req);
     const providers = deps.providers();
     const loading = deps.loading?.(providers);
-    // A preview round asks LI.FI and Fynd only while cp0x's proxy carries them, read from the health answer: it waits
-    // for that answer first (3 s at most; at once once it is in, or off Standard). Live rounds don't: the routing
-    // waits per request, and Fynd's whileLive gate is read as each round starts.
+    // A preview round asks LI.FI, Fynd, 0x and Across only while cp0x's proxy carries them, read from the health
+    // answer: it waits for that answer first (3 s at most; at once once it is in, or off Standard). Live rounds don't:
+    // the routing waits per request, and the proxy-only venues' whileLive gate is read as each round starts.
     const health = r.mode === "preview" ? deps.proxy?.settled() : undefined;
     if (loading || health) {
       await untilAborted(Promise.all([loading ? within(loading, LAZY_WAIT_MS) : null, health]), round.signal);
@@ -291,7 +291,7 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
     // refused, threw or timed out. The router's own onUpdate fires only once something was accepted. The delegate
     // also skips a venue that is backing off or sits out previews (a refusal, nothing sent), watches for a rate
     // limit, and — in a preview round only — gives a venue that needs one the destination family's sample address.
-    // Whether cp0x's proxy carries LI.FI and Fynd is read here, per round and venue, never once per page.
+    // Whether cp0x's proxy carries LI.FI, Fynd, 0x and Across is read here, per round and venue, never once per page.
     let rounder: CrossChainRouter | null = null;
     const viaProxy = (name: string): boolean => deps.proxy?.live(name) ?? false;
     const limitedBy = (name: string) => (reason: string) => {

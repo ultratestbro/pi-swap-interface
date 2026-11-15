@@ -47,8 +47,9 @@ describe("logo files", () => {
     expect(exists(WALLETCONNECT_LOGO)).toBe(true);
   });
 
-  it("covers the 15 venues and every catalog network but morph", () => {
-    expect(PROVIDER_LOGOS.size).toBe(15);
+  it("covers the 17 venues and every catalog network but morph", () => {
+    expect(PROVIDER_LOGOS.size).toBe(17);
+    expect([...PROVIDER_LOGOS]).toEqual(expect.arrayContaining(["zeroex", "across"]));
     const missing = CHAINS.map((c) => c.slug).filter((slug) => !NETWORK_LOGOS.has(slug));
     expect(missing).toEqual(["morph"]);
   });

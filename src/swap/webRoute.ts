@@ -21,11 +21,13 @@ import {venueTrust} from "./venues";
  * check (D35; chunk-K3EPNDVO.js:388-397, depositAddress ""; with btcSource off
  * it never names one), and LI.FI (0.8.0) and USDT0
  * (0.5.0) return a price-only quote, without its transaction, when it was
- * priced for a placeholder recipient or refund (a preview). Never offered as a
- * deposit address, so a QR payer reads "Needs a wallet that signs" instead of
- * a dead end.
+ * priced for a placeholder recipient or refund (a preview), and 0x's dry
+ * quote is its `/swap/permit2/price` answer, which carries no transaction (a
+ * Settler call, built only for a live quote; D38). Never offered as a deposit
+ * address, so a QR payer reads "Needs a wallet that signs" instead of a dead
+ * end.
  */
-const SIGNED_ONLY: ReadonlySet<string> = new Set(["chainflip", "omniston", "symbiosis", "lifi", "usdt0"]);
+const SIGNED_ONLY: ReadonlySet<string> = new Set(["chainflip", "omniston", "symbiosis", "lifi", "usdt0", "zeroex"]);
 
 /** txRequest present (or a signed-only venue) → the wallet signs; else the payer sends to a deposit address. */
 export function executionOf(q: Pick<Quote, "provider" | "txRequest">): Execution {

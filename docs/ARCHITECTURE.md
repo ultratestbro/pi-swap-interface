@@ -191,7 +191,8 @@ default on there: `fynd` (2026-11-12; providers.md
 §4.14) — built only on a Standard page, asked only while health says `venues.fynd` is "keyed", through cp0x's proxy
 with cp0x's key; its API sends no CORS headers, so there is no direct fallback, and Public and Custom never build it
 (Settings' venue row says "Standard mode only" and why this page doesn't ask it). Asked for previews too since
-2026-11-13, through the same slot (D7: the EVM sample as its recipient and sender). The Fynd
+2026-11-13, through the same slot (D7: the EVM sample as its recipient and sender). Standard only too, the same way
+(2026-11-15, D38): `zeroex` (0x Swap API v2) and `across` (Across), after Fynd. The Fynd
 License: every route settles through the Tycho router, which the SDK and the gate enforce; §3.4 asks whoever hands a
 Fynd route to someone to settle for a prominent notice of those router and anti-circumvention terms, so the review
 of every Fynd route shows one with a link to the licence (`fyndRouterNotice`); a revenue share is owed only on fees
@@ -500,7 +501,7 @@ fee caps are advisory only (the wallet picks gas); `swapFeeCap` drives the revie
 native" block.
 
 **D13 — Logos and assets.** Static files only, no runtime hotlinks (CMC / CoinGecko / Trust Wallet / DeBank CDNs
-would see every visitor's IP and token interest). `public/logos/providers/<name>{,@2x,@3x}.png` (14 venues),
+would see every visitor's IP and token interest). `public/logos/providers/<name>{,@2x,@3x}.png` (17 venues),
 `public/logos/networks/<slug>.svg` (split from mobile `assets/logos.ts`), `public/logos/tokens/<SYM>.svg` and
 `public/logos/tokens/png/<stem>@{2,3}x.png` (mobile TOKEN_IMAGES map), optional build-time mirror
 `public/logos/catalog/<caip2_>/<contract|native>.png` + `index.json`. AssetIcon order: bundled PNG by symbol →
@@ -603,7 +604,7 @@ ui-port's `qrcode@1.5.4`); payload = the address (BIP-21 `bitcoin:` / `zcash:` U
 expired or memo quote. The refund address is the critical field: validated per family.
 
 **D21 — Venue trust badge.** `VENUE_TRUST` (ui-port §5.6): contracts → "ON-CHAIN" (uniswap, curve, wrap, balancer,
-usdt0, cctp), own-node → "NODE" (thorchain), provider-api → "API" (the rest, fynd included).
+usdt0, cctp), own-node → "NODE" (thorchain), provider-api → "API" (the rest, fynd, zeroex and across included).
 
 **D22 — Hash routing.** One screen: `#/?pay=<tokenKey>&receive=<tokenKey>&amount=<decimal>&swap=<id>&demo=1`.
 `src/config/hash.ts`: `parseHash`, `formatHash`, `setHashQuery` (replaceState by default), `useHashRoute`. Form
@@ -645,8 +646,9 @@ geo-blocking or screening; zero fee options everywhere.
   payments' reference block, broadcast and receipt, TonAPI once a TON wallet is connected (balances, the jetton wallet
   lookup) and (only when chosen) WalletConnect's relay or, once the viewer picks TON Connect, the TON Connect bridges
   of the self-hosted official list (its modal's universal QR listens on all of them until it closes, an accepted cost,
-  owner 2026-11-13) and the picked wallet's — never TON's remote wallets list, its icons or its analytics (D11). Standard: the same plus Fynd, except that the keyed venues (Fynd only ever),
-  the listed RPC networks and THORChain's vault check go to cp0x's proxy instead (D30). The NEAR RPC is asked only
+  owner 2026-11-13) and the picked wallet's — never TON's remote wallets list, its icons or its analytics (D11). Standard: the same plus Fynd, 0x and Across, except that the keyed venues (Fynd, 0x and Across only ever),
+  the listed RPC networks and THORChain's vault check go to cp0x's proxy instead (D30), and Across's keyless relayer-fee
+  quote (`app.across.to/api/suggested-fees`, no key) is asked directly whenever Across is (D38). The NEAR RPC is asked only
   once a NEAR wallet is connected, and always directly (the proxy has no NEAR route, and Custom no NEAR row: an
   operator's `nearRpc` is the only lever); finding NEAR wallets is a DOM event to the installed extensions, no
   request (D11).
@@ -825,7 +827,7 @@ with our RPCs and keys (like the cp0x wallet); PRO mode where you can set your o
   Standard does not exist (Settings offers Public and Custom), the bundle holds no cp0x host, and the app behaves as
   before (D24).
 - **Standard** (hosted build only). The proxy (cp0x-api `apps/api/docs/swap-web-proxy.md`) lives at
-  `<API>/api/v2/swap-web`: venue bases `/venue/{lifi|relay|near_intents|jupiter|symbiosis|fynd}`, RPC
+  `<API>/api/v2/swap-web`: venue bases `/venue/{lifi|relay|near_intents|jupiter|symbiosis|fynd|zeroex|across}`, RPC
   `/rpc/<chainId|solana>`, the THORNode confirm pass-through `/venue/thornode` (thorchain 0.4.0 reads `thorchain/
   {lastblock,inbound_addresses,vaults/asgard,mimir}` through it, D14), and `GET /health` → `{venues: {…:
   "keyed"|"anonymous"}, rpc: {configured, chains}, thornode}`. Providers, RPC clients and chain lists are built once
@@ -835,7 +837,8 @@ with our RPCs and keys (like the cp0x wallet); PRO mode where you can set your o
   build, not LI.FI against a plain-http API, whose SDK refuses http); every non-empty EVM list and the Solana list
   start with the proxy RPC, the public URLs after it (NEAR's never does: the proxy has no NEAR route); THORChain's
   confirm list starts with the proxy THORNode while `thorNodes`, the quote nodes, stay direct and unchanged (Liquify
-  first). Fynd's slot (`plan.venues.fynd = null`: no public base) exists whenever the page builds Fynd.
+  first). Fynd's slot (`plan.venues.fynd = null`: no public base) exists whenever the page builds Fynd; 0x's and
+  Across's the same way (D38).
   `src/config/standard.ts` then decides per request, from the health answer, which slots carry traffic:
   - health: one `GET /health` at boot, in the background, 3 s timeout (`HEALTH_TIMEOUT_MS`). A request bound for the
     proxy waits for it, never longer; a failed or late answer leaves the page Public for its lifetime and Settings
@@ -1450,6 +1453,76 @@ showed a minimum near 12.00; the minimum sat ~1% under the quote even at a custo
   notice step aside, so the steps and Confirm fit under the headline.
 The rate itself (ours 0.0002 wstETH under the aggregator's best on that trade) is the venues': 1inch, KyberSwap and
 Velora aren't venues here, and the aggregator's numbers are before the positive slippage it keeps.
+**D38 — 0x and Across, keyed by the proxy (owner, 2026-11-15).** Any Wallet Kit released two venues whose APIs want a
+key on every request: `@anywalletkit/protocol-swap2-0x` 0.1.1 (0x Swap API v2, Permit2 flow; exact-input swaps on one
+network: Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, BNB Chain) and `@anywalletkit/protocol-swap2-across`
+0.1.0 (Across: EVM → EVM, the same asset on both sides — USDC, USDT / USDT0, ETH / WETH, WBTC — on its 17 pinned
+chains, a plain `deposit` on the source SpokePool; nothing into Ethereum yet). A key can never ship in a page (D24),
+so — like Fynd, and like keyed LI.FI — they exist only in Standard mode and only while the proxy's health says them
+"keyed"; Public and Custom never build them, and there is no Custom key for them.
+- **The checks run here.** The page runs each module's LOCAL provider (`zeroExProvider`, `acrossProvider`), not the
+  remote stubs, so everything the modules check happens on this device: 0x's Settler read from 0x's on-chain registry
+  over the page's own RPCs (`ownerOf(2)` / `prev(2)`), held to the CREATE3 address the registry deploys to, the
+  package's pinned deployment window and code at the address; the transaction decoded (`Settler.execute`: recipient,
+  buy token, minimum, the first action spending exactly the permit); the Permit2 payload rebuilt from local constants.
+  Across's deposit is encoded here from the pinned SpokePool and the request, every argument held to it (depositor =
+  the signing account, `QuoteParams.sender`; recipient, tokens, amounts, chain, empty message, deadlines, a per-asset
+  fee floor and a 10 % cap) at build time and again before signing. The APIs supply numbers only.
+- **The key is a placeholder.** Each module refuses to quote without a key and sends it only to its `baseUrl` (0x as
+  `0x-api-key` with `0x-version: v2`, refusing an answer that came through a redirect or from another origin; Across's
+  V5 as `Authorization: Bearer`). Here `baseUrl` is the proxy slot — `<API>/api/v2/swap-web/venue/zeroex`, `…/across`
+  — and the key is a fixed public string (`PROXY_KEY_PLACEHOLDER`, providers.ts), which the proxy drops for cp0x's own
+  (`ZEROEX_API_KEY`, `ACROSS_API_KEY`). The modules append their own paths: 0x `GET /swap/permit2/price` (a dry quote)
+  and `GET /swap/permit2/quote` (the live one) with `chainId, sellToken, buyToken, sellAmount, slippageBps` and
+  `taker` / `recipient` when there are addresses; Across `POST /v1/quotes` (JSON). Neither module works under React
+  Native with a key, by design; in a browser it is the page's own fetch, routed by the Standard wrapper.
+- **Slots and health** follow Fynd exactly (D30): `ProxyVenue` + `"zeroex" | "across"`, both `PROXY_ONLY` (no public
+  base, no config base, `plan.venues.<v> = null`), `standardProxyOnly(venue)` (standardFynd is its Fynd case), the
+  providers built behind `whileLive(slot.live)` (a page whose health doesn't key one never asks it, and lists no row
+  for it), an unused slot failing without a request, a failure at the proxy or an upstream 401/403/429 stopping the
+  slot with no direct retry. Previews ask them through their slot too (`KEYED_PREVIEW_VENUES`, `PREVIEW_VENUES`): each
+  fills its own blank addresses (0x asks its price without a `taker`; Across prices for its own placeholder and never
+  builds that quote). Across's keyless relayer-fee quote (`https://app.across.to/api/suggested-fees`, CORS `*`,
+  checked 2026-11-15) stays straight from the browser, as the module defaults: no key, and the module holds V5's price
+  to it. Across's RPCs take one URL per chain, so it gets the first runtime URL with the rest behind it
+  (`rpcFailoverFetch`, as CCTP); 0x's take the whole runtime list.
+- **The gate (D10) takes exactly 0x's permit.** A 0x token sale is paid by a one-time Permit2 signature transfer
+  (swap2-core 0.13.0): the engine signs the rebuilt `PermitTransferFrom` first, then approves canonical Permit2 for
+  exactly the input unless a standing Permit2 allowance covers it, then sends the Settler call with the signature
+  appended. `VENUE_RULES.zeroex` = call targets the Settlers the provider's own resolver last read (`zeroExSettlers`,
+  never the API's word), spender canonical Permit2 only, and `permit2: {maxSeconds: ZEROEX_MAX_PERMIT_SECONDS}` (600,
+  the package's bound). `permit2Problem` holds the plan's `permit2Transfer` to exactly `{domain, types, primaryType,
+  message}` with the Permit2 domain on the source chain, Permit2's PermitTransferFrom / TokenPermissions and nothing
+  else, the reviewed token and exactly the reviewed input, the call's own target as spender, a uint256 nonce and a
+  deadline within 10 min; a native sale, native value with it, an approval to anything but Permit2, and any venue
+  whose rule has no `permit2` are refused. `planWrites` arms that permit (`{kind: "permit2"}`: the whole payload as
+  stable JSON) and the call with `permit2Signed`: it matches only with exactly the signature the wallet returned for
+  that permit appended (`gate.recordSignature`, fed by the gated account's `signTypedData`; reset on every re-arm). No
+  blanket typed-data allowance exists. Across's rule is its pinned SpokePools (`acrossPins`).
+- **UI.** Names "0x" and "Across", trust "API", logos (web3icons' ZRX / ACX marks on the venue tile, LICENSES.md).
+  0x's price answer has no transaction, so it is `SIGNED_ONLY` (never a deposit address) and its approval spender is
+  named here (`orderSpender` → Permit2); the review's Approval row reads "Permit2 … + a one-time signature" and the
+  wallet steps name the signature before the approval (`walletSteps`). "Not for this pair": 0x "Same-network swaps
+  only" / "Not on this network"; Across by its module's own route check (`acrossRouteOf`, `acrossRouteUnpriced`):
+  "EVM networks only here", "Between networks only", "Not on one of these networks", "Same token on both networks
+  only", "Delivers ETH, not WETH — pick ETH", "Moves ETH as a native coin only", "Doesn't list one of these tokens",
+  "Not into Ethereum yet". Refusals: their texts that read better than the reason alone (0x's transport and key
+  refusals as Fynd's, its liquidity, token-tax and newer-Settler texts; Across's minimums and maximums in the pay
+  token, its 10 % fee cap, a price under what relayers take), the rest by reason (D28).
+- **What cp0x's proxy must forward (the contract with cp0x-api):** `zeroex` → `https://api.0x.org`, only `GET
+  /swap/permit2/price` and `GET /swap/permit2/quote`, query keys `chainId, sellToken, buyToken, sellAmount,
+  slippageBps, taker, recipient, excludedSources` (the module sends no others; this app sets no excluded sources),
+  request headers `accept`, `0x-version`, the client's `0x-api-key` replaced by `ZEROEX_API_KEY`; `across` →
+  `https://api.across.to`, only `POST /v1/quotes` with a JSON body (`accept`, `content-type`), the client's
+  `authorization` replaced by `Bearer ACROSS_API_KEY`. Both answer with `x-swap-web-answer`, follow no redirects, and
+  allow `0x-api-key`, `0x-version` and `authorization` in their CORS preflight. `/health` reports `zeroex` and
+  `across` as "keyed" only with their key set. Until the owner sets the keys, nothing changes in prod.
+- Contract changes: `ProviderName` + `"zeroex" | "across"`, `ProxyVenue` + the same; config exports
+  `standardProxyOnly`, `ProxyOnlyVenue`; swap exports `PROXY_KEY_PLACEHOLDER`, `zeroExSettlers`, `PERMIT2_VENUES`;
+  `ProviderExtras` + `zeroex`, `across`; execute's `VenueRule` (pins) + `permit2?`, `ArmedWrite` + `{kind:
+  "permit2"}` and the call's `permit2Signed`, `matches(…, permitSignature?)`, `permit2Problem`, the gate's
+  `recordSignature`; screens' `walletSteps`.
+
 ---
 
 ## 5. Conventions

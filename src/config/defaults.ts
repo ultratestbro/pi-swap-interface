@@ -70,7 +70,8 @@ function defaultEvmRpc(): Record<number, string[]> {
 }
 
 /**
- * Every venue constructs by default, in ask order (Settings lists them so); fynd is built only in Standard mode (D3).
+ * Every venue constructs by default, in ask order (Settings lists them so); fynd, zeroex and across are built only in
+ * Standard mode (D3, D38).
  * An operator's layer or a viewer's Settings can switch any of them off.
  */
 export const DEFAULT_PROVIDERS: Readonly<Record<ProviderName, boolean>> = {
@@ -89,6 +90,8 @@ export const DEFAULT_PROVIDERS: Readonly<Record<ProviderName, boolean>> = {
   jupiter: true,
   omniston: true,
   fynd: true,
+  zeroex: true,
+  across: true,
 };
 
 export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {

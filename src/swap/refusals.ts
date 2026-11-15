@@ -182,6 +182,86 @@ const RULES: readonly Rule[] = [
     detail: "We simulated its transaction and it would revert, so we left it out — a fresh quote may work.",
   },
 
+  // 0x and Across are reached only through cp0x's proxy (Standard, D38): a transport failure or a refused key means
+  // "not now". 0x's own texts (protocol-swap2-0x 0.1.1 provider.ts / settler.ts), worded where the reason alone would
+  // say less.
+  {
+    provider: "zeroex",
+    category: "unreachable",
+    re: /^API unreachable/,
+    short: "Couldn't reach it — tap refresh",
+    detail: "0x is asked through cp0x's server, and this browser couldn't reach it — an ad blocker, VPN or network filter can cause this.",
+  },
+  {
+    provider: "zeroex",
+    category: "unavailable",
+    re: /^API (?:key rejected|answered HTTP (?!429))/,
+    short: "Unavailable right now — try later",
+    detail: "0x is asked through cp0x's server with cp0x's key, and it couldn't get a quote from 0x just now.",
+  },
+  {provider: "zeroex", category: "amount", re: /too little liquidity for this pair and amount/, short: "Too large for its pools — try less", detail: "Its liquidity runs out before the full amount — try a smaller amount or split the swap."},
+  {provider: "zeroex", category: "pair", re: /does not support one of these tokens|does not serve the token being (?:bought|sold)/, short: "Doesn't list one of these tokens", detail: "This venue doesn't trade one of these tokens on this network."},
+  {
+    provider: "zeroex",
+    category: "pair",
+    re: /taxes transfers/,
+    short: "Doesn't take a token that taxes transfers",
+    detail: "The token you'd receive takes a fee on every transfer, so the amount 0x guarantees wouldn't arrive — it's left out.",
+  },
+  {provider: "zeroex", category: "safety", re: /is below the requested slippage/, short: "Guarantees less than your slippage allows", detail: "Its guaranteed amount is below what your max slippage allows, so we left it out."},
+  {
+    provider: "zeroex",
+    category: "safety",
+    re: /newer than the newest this module accepts/,
+    short: "Uses a 0x contract we haven't checked yet",
+    detail: "0x deployed a new Settler contract; this app calls it once that deployment is reviewed and pinned, so we left it out.",
+  },
+  {provider: "zeroex", category: "unreachable", re: /no RPC answered on chain|could not read the 0x Settler/, short: "No RPC answered — tap refresh", detail: "0x's contract is read from the chain over this network's RPCs, and none of them answered this time."},
+  {provider: "zeroex", category: "setup", re: /no RPC is configured for chain/, short: "Needs an RPC for this network", detail: "0x's contract is read from the chain: add a working RPC for this network in Settings."},
+  // Across (protocol-swap2-across 0.1.0: "across: <what> [<code>]"): API V5 prices through cp0x's proxy; its own
+  // relayer-fee quote and the deposit checks.
+  {
+    provider: "across",
+    category: "unreachable",
+    re: /^Across API V5 did not answer/,
+    short: "Couldn't reach it — tap refresh",
+    detail: "Across is priced through cp0x's server, and this browser couldn't reach it — an ad blocker, VPN or network filter can cause this.",
+  },
+  {
+    provider: "across",
+    category: "amount",
+    re: /the amount must be at least (\d+) base units|relayers take at least (\d+) base units/,
+    short: (m, pay) => minimumOf(m[1] ?? m[2], pay?.decimals, pay),
+    detail: "Below what Across's relayers take on this route — try a larger amount.",
+  },
+  {
+    provider: "across",
+    category: "amount",
+    re: /the amount must be at most (\d+) base units|relayers take at most (\d+) base units/,
+    short: (m, pay) => (pay ? `Maximum ${units4(BigInt(m[1] ?? m[2]!), pay.decimals, false)} ${pay.symbol}` : "Above its maximum for this pair"),
+    detail: "More than Across's relayers take on this route in one deposit — try a smaller amount.",
+  },
+  {
+    provider: "across",
+    category: "unavailable",
+    re: /^Across API V5 answered HTTP (?!429)\d+ (?:unauthenticated|auth\.|permission\.)/,
+    short: "Unavailable right now — try later",
+    detail: "Across is priced through cp0x's server with cp0x's key, and it couldn't get a price from Across just now.",
+  },
+  {
+    provider: "across",
+    category: "amount",
+    re: /as fees, over the (\d+) bps cap/,
+    short: (m) => `Fees would take over ${Number(m[1]) / 100}% — try more`,
+    detail: "At this size Across's fee is above the share of the amount this app accepts — a larger amount spreads it.",
+  },
+  {
+    provider: "across",
+    category: "safety",
+    re: /leaves relayers (?:no fee|\d+ of \d+, under the)/,
+    short: "Priced below what its relayers take",
+    detail: "Its price leaves Across's relayers less than they take to fill a deposit, so it could wait hours for a refund — we left it out.",
+  },
   // ── rate limits (LI.FI keyless: about 75 quotes per 2 h per IP) ──
   {
     category: "busy",
@@ -483,7 +563,7 @@ const RULES: readonly Rule[] = [
   {category: "pair", re: /no pool for|pool does not exist/, short: "No pool for this pair", detail: "It has no pool for one of these tokens."},
   {
     category: "pair",
-    re: /that is a wrap\/unwrap, not a swap/,
+    re: /that is a wrap\/unwrap, not a swap|wrapping and unwrapping are not 0x swaps/,
     short: "A wrap, not a swap",
     detail: "Native coin ⇄ its wrapped token is a 1:1 wrap, which the Wrap venue does.",
   },
