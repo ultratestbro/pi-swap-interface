@@ -35,11 +35,34 @@ export interface FormPreset {
   refund?: string;
 }
 
+/**
+ * A side a pair link named by a token the list doesn't have (D39): it stays empty — never filled with a token the link
+ * only claims — while its address is read and the viewer confirms the import. `settled`: the read found a token, so the
+ * pair may be pinned with that side still empty (a read that fails drops the awaiting side: the default fills it).
+ */
+export interface AwaitingSide {
+  side: "pay" | "receive";
+  key: string;
+  settled: boolean;
+}
+
 const SHARED_FAMILIES = new Set(["evm", "solana", "ton", "tron", "btc", "near", "zcash"]);
 
-/** The opening pair: the preset when both keys are known (pay side payable), else defaultPair over wallet tokens first. */
-function openingPair(tokens: SwapTokensState, preset: FormPreset, payKeys: ReadonlySet<string>): Pair | null {
-  const {byKey, pay, receive} = tokens;
+/**
+ * The opening pair: the preset when both keys are known (pay side payable), else defaultPair over wallet tokens first —
+ * never an imported token (D39) the preset didn't name. An awaited side keeps its key (an empty side) and the other is
+ * chosen as if that side were unset.
+ */
+export function openingPair(tokens: SwapTokensState, preset: FormPreset, payKeys: ReadonlySet<string>, awaiting?: AwaitingSide | null): Pair | null {
+  if (awaiting) {
+    const base = openingPair(tokens, {...preset, [awaiting.side]: undefined}, payKeys);
+    if (!base) return null;
+    return awaiting.side === "pay" ? {pay: awaiting.key, receive: base.receive} : {pay: base.pay, receive: awaiting.key};
+  }
+  const {byKey} = tokens;
+  const named = (t: SwapToken) => !t.imported || t.key === preset.pay || t.key === preset.receive;
+  const pay = tokens.pay.filter(named);
+  const receive = tokens.receive.filter(named);
   if (preset.pay && preset.receive && preset.pay !== preset.receive && payKeys.has(preset.pay) && byKey.has(preset.receive))
     return {pay: preset.pay, receive: preset.receive};
   const prefer = preset.pay && payKeys.has(preset.pay) ? preset.pay : undefined;
@@ -52,6 +75,9 @@ function openingPair(tokens: SwapTokensState, preset: FormPreset, payKeys: Reado
   if (p && preset.receive && byKey.has(preset.receive) && preset.receive !== p.pay) return {pay: p.pay, receive: preset.receive};
   return p;
 }
+
+/** What auto slippage reads a token as: an imported one (D39) is long-tail whatever its symbol says. */
+const slippageSymbol = (t: Pick<SwapToken, "symbol" | "imported">): string => (t.imported ? "" : t.symbol);
 
 /**
  * The gas a MAX keeps back on a gas token (native, or Celo CELO / Arc USDC), 0 otherwise — in the TOKEN's own
@@ -67,9 +93,10 @@ export function reserveFor(t: Pick<SwapToken, "gasToken" | "chain" | "decimals">
 
 /**
  * The form's state. `evmWalletChain` is the CAIP-2 of the chain the connected EVM wallet is on (null without one):
- * the default recipient is checked for contract code there as well as on the destination.
+ * the default recipient is checked for contract code there as well as on the destination. `awaiting`: a side a pair
+ * link named by a token still to import (D39), which stays empty.
  */
-export function useSwapForm(tokens: SwapTokensState, preset: FormPreset, hasWallet: boolean, evmWalletChain: string | null = null) {
+export function useSwapForm(tokens: SwapTokensState, preset: FormPreset, hasWallet: boolean, evmWalletChain: string | null = null, awaiting: AwaitingSide | null = null) {
   const ports = usePorts();
   const [picked, setPicked] = useState<Pair | null>(null);
   const [text, setText] = useState(preset.amount);
@@ -83,15 +110,16 @@ export function useSwapForm(tokens: SwapTokensState, preset: FormPreset, hasWall
   const [pasteNote, setPasteNote] = useState<string | null>(null);
 
   const payKeys = useMemo(() => new Set(tokens.pay.map((t) => t.key)), [tokens.pay]);
-  const opening = useMemo(() => openingPair(tokens, preset, payKeys), [tokens, preset, payKeys]);
-  // Mobile L109-111: once balances are in, a balance refresh must not swap the token under the user.
-  if (!picked && opening && hasWallet && !tokens.loading) setPicked(opening);
+  const opening = useMemo(() => openingPair(tokens, preset, payKeys, awaiting), [tokens, preset, payKeys, awaiting]);
+  // Mobile L109-111: once balances are in, a balance refresh must not swap the token under the user. Not while a link's
+  // token is still being read (D39): a read that fails gives that side back to the default.
+  if (!picked && opening && hasWallet && !tokens.loading && (!awaiting || awaiting.settled)) setPicked(opening);
   const pair = picked ?? opening;
 
   const from = pair ? tokens.byKey.get(pair.pay) : undefined;
   const to = pair ? tokens.byKey.get(pair.receive) : undefined;
   const amountIn = from ? parseUnits(text, from.decimals) : null;
-  const autoBps = from && to ? autoSlippageBps(from.symbol, to.symbol, from.caip2 === to.caip2) : DEFAULT_SLIPPAGE_BPS;
+  const autoBps = from && to ? autoSlippageBps(slippageSymbol(from), slippageSymbol(to), from.caip2 === to.caip2) : DEFAULT_SLIPPAGE_BPS;
   const slippageBps = slippage ?? autoBps;
   const balance = from && from.balance === "loaded" ? BigInt(from.amount) : null;
   const problem = balance !== null ? balanceProblem(amountIn, balance) : null;
@@ -125,11 +153,16 @@ export function useSwapForm(tokens: SwapTokensState, preset: FormPreset, hasWall
   const mirror = (p: Pair | null, amount: string) =>
     setHashQuery(p ? {pay: p.pay, receive: p.receive, amount: amount || null} : {amount: amount || null});
 
-  /** Set the pair; the pay side stays payable, the amount is re-cut to the new decimals, family-bound addresses reset. */
-  function setPair(next: Pair) {
-    const safe = payKeys.has(next.pay) ? next : pair ? {pay: pair.pay, receive: next.receive === pair.pay ? pair.receive : next.receive} : next;
-    const nextFrom = tokens.byKey.get(safe.pay);
-    const nextTo = tokens.byKey.get(safe.receive);
+  /**
+   * Set the pair; the pay side stays payable, the amount is re-cut to the new decimals, family-bound addresses reset.
+   * `fresh`: a token just imported (D39), which the list doesn't have until the next render.
+   */
+  function setPair(next: Pair, fresh?: SwapToken) {
+    const known = (key: string) => tokens.byKey.get(key) ?? (fresh?.key === key ? fresh : undefined);
+    const payable = (key: string) => payKeys.has(key) || (fresh?.key === key && fresh.payMode !== "none");
+    const safe = payable(next.pay) ? next : pair ? {pay: pair.pay, receive: next.receive === pair.pay ? pair.receive : next.receive} : next;
+    const nextFrom = known(safe.pay);
+    const nextTo = known(safe.receive);
     let nextText = text;
     if (nextFrom && nextFrom.key !== from?.key) {
       nextText = sanitizeAmountInput(text, nextFrom.decimals);
@@ -207,9 +240,10 @@ export function useSwapForm(tokens: SwapTokensState, preset: FormPreset, hasWall
       setText(next);
       mirror(pair, next);
     },
-    pick(side: "pay" | "receive", key: string) {
-      if (pair) setPair(pickSide(pair, side, key));
-      else if (side === "pay") setPair({pay: key, receive: to?.key ?? key});
+    /** Pick a token for a side; `fresh`: the token itself when it was imported this moment (D39). */
+    pick(side: "pay" | "receive", key: string, fresh?: SwapToken) {
+      if (pair) setPair(pickSide(pair, side, key), fresh);
+      else if (side === "pay") setPair({pay: key, receive: to?.key ?? key}, fresh);
     },
     flip() {
       if (pair) setPair(flipPair(pair));

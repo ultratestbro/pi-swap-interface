@@ -10,6 +10,7 @@ import type {Address} from "viem";
 import type {Balance, Chain, Owners, Token} from "../../contracts/domain";
 import type {BalancesState} from "../../contracts/ports";
 import {publicClient} from "../evm";
+import {useImportedTokens} from "../imported";
 import {CHAIN_LIST} from "../network";
 import {tokensOf} from "../tokens";
 import {readEvmBalances, type BalanceRead} from "./evm";
@@ -24,25 +25,39 @@ export {TOKEN_2022_MINTS, ataOf, readSolanaBalances} from "./solana";
 export {readTronBalances} from "./tron";
 export {readTonBalances} from "./ton";
 
-/** One balance read: a chain, the connected owner on its family, the catalog tokens it covers. */
-export type BalanceSpec =
+/**
+ * One balance read: a chain, the connected owner on its family, the tokens it covers — the chain's catalog tokens, or
+ * (`imported`, D39) the tokens imported in this browser on it, read apart so an import never re-reads the catalog's.
+ */
+export type BalanceSpec = (
   | {family: "evm"; slug: string; chainId: number; owner: string; tokens: readonly Token[]}
   | {family: "solana"; slug: string; owner: string; tokens: readonly Token[]}
   | {family: "tron"; slug: string; owner: string; tokens: readonly Token[]}
   | {family: "ton"; slug: string; owner: string; tokens: readonly Token[]}
-  | {family: "near"; slug: string; owner: string; tokens: readonly Token[]};
+  | {family: "near"; slug: string; owner: string; tokens: readonly Token[]}
+) & {imported?: true};
 
 /** Base units as decimal strings (react-query data stays plain JSON); null = that token's read failed. */
 export type WireBalances = Record<string, string | null>;
 
-/** The reads `owners` needs, in display order. Families without a reader (BTC, ZEC…) are skipped. */
-export function balanceSpecs(owners: Owners, chains: readonly Chain[] = CHAIN_LIST): BalanceSpec[] {
+/**
+ * The reads `owners` needs, in display order: each chain's catalog tokens, then, on EVM networks and Solana, the
+ * imports on it (`imported`, D39). Families without a reader (BTC, ZEC…) are skipped.
+ */
+export function balanceSpecs(owners: Owners, chains: readonly Chain[] = CHAIN_LIST, imported: readonly Token[] = []): BalanceSpec[] {
   const out: BalanceSpec[] = [];
   for (const c of chains) {
     const tokens = tokensOf(c.slug);
+    const mine = imported.filter((t) => t.chain === c.slug);
+    if (c.family === "evm" && owners.evm && c.chainId !== undefined) {
+      if (tokens.length) out.push({family: "evm", slug: c.slug, chainId: c.chainId, owner: owners.evm, tokens});
+      if (mine.length) out.push({family: "evm", slug: c.slug, chainId: c.chainId, owner: owners.evm, tokens: mine, imported: true});
+    }
+    if (c.family === "solana" && owners.solana) {
+      if (tokens.length) out.push({family: "solana", slug: c.slug, owner: owners.solana, tokens});
+      if (mine.length) out.push({family: "solana", slug: c.slug, owner: owners.solana, tokens: mine, imported: true});
+    }
     if (!tokens.length) continue;
-    if (c.family === "evm" && owners.evm && c.chainId !== undefined) out.push({family: "evm", slug: c.slug, chainId: c.chainId, owner: owners.evm, tokens});
-    if (c.family === "solana" && owners.solana) out.push({family: "solana", slug: c.slug, owner: owners.solana, tokens});
     if (c.family === "tron" && owners.tron) out.push({family: "tron", slug: c.slug, owner: owners.tron, tokens});
     if (c.family === "ton" && owners.ton) out.push({family: "ton", slug: c.slug, owner: owners.ton, tokens});
     if (c.family === "near" && owners.near) out.push({family: "near", slug: c.slug, owner: owners.near, tokens});
@@ -50,8 +65,12 @@ export function balanceSpecs(owners: Owners, chains: readonly Chain[] = CHAIN_LI
   return out;
 }
 
-/** The react-query key of a read. */
-export const balanceKey = (s: Pick<BalanceSpec, "slug" | "owner">): readonly ["bal", string, string] => ["bal", s.slug, s.owner];
+/**
+ * The react-query key of a read: `["bal", slug, owner]`, plus the imported keys for an imports read (D39) — a new
+ * import is a new read, and the activity tracker's `["bal"]` invalidation still reaches every one.
+ */
+export const balanceKey = (s: Pick<BalanceSpec, "slug" | "owner" | "imported" | "tokens">): readonly string[] =>
+  s.imported ? ["bal", s.slug, s.owner, "imported", ...s.tokens.map((t) => t.key)] : ["bal", s.slug, s.owner];
 
 /** Runs one read against the network (our public clients / runtime Solana RPCs / runtime Tron API / the NEAR RPCs). */
 export async function readBalances(spec: BalanceSpec): Promise<WireBalances> {
@@ -96,9 +115,13 @@ export function mergeBalances(specs: readonly BalanceSpec[], results: readonly B
   return {byKey, loading};
 }
 
-/** catalogPort.useBalances: every connected family's catalog balances, one stable `byKey` until a value changes. */
+/**
+ * catalogPort.useBalances: every connected family's catalog balances and those of the tokens imported in this browser
+ * (D39), one stable `byKey` until a value changes.
+ */
 export function useBalances(owners: Owners): BalancesState {
   const qc = useQueryClient();
+  const imported = useImportedTokens();
   const evm = owners.evm;
   const solana = owners.solana;
   const tron = owners.tron;
@@ -106,8 +129,12 @@ export function useBalances(owners: Owners): BalancesState {
   const near = owners.near;
   const specs = useMemo(
     () =>
-      balanceSpecs({...(evm ? {evm} : {}), ...(solana ? {solana} : {}), ...(tron ? {tron} : {}), ...(ton ? {ton} : {}), ...(near ? {near} : {})}),
-    [evm, solana, tron, ton, near],
+      balanceSpecs(
+        {...(evm ? {evm} : {}), ...(solana ? {solana} : {}), ...(tron ? {tron} : {}), ...(ton ? {ton} : {}), ...(near ? {near} : {})},
+        CHAIN_LIST,
+        imported,
+      ),
+    [evm, solana, tron, ton, near, imported],
   );
   // react-query structurally shares the combined result, so `byKey` keeps its identity while the values do.
   const combine = useCallback((results: UseQueryResult<WireBalances>[]) => mergeBalances(specs, results), [specs]);

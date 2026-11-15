@@ -112,6 +112,12 @@ const SAMPLES: readonly [raw: string, category: RefusalCategory, short: string, 
   ["near_intents: corridor paused by the app [dry=true a->b amount=1]", "unavailable", "Paused on this network for now"],
   // Relay
   ["relay: the deposit calls 0xa5f565650890fba1824ee0f21ebbbf660a179934, not the pinned depository [tx-target]", "pair", "Doesn't take this token as a source"],
+  // An imported (unlisted) source, probed 2026-11-15 (DEGEN on Base → Arbitrum USDC): Relay would swap it first through its router.
+  [
+    "relay: the deposit calls 0x5567954cd026cebfe486062cb75848e0f1c12e58, not the Base depository 0x4cd00e387622c35bddb9b4c962c136462338bc31 — routes that first swap on the source chain go through a router and are not signed by this module [tx-target]",
+    "pair",
+    "Doesn't take this token as a source",
+  ],
   ["relay: relay: the order pays 0x1111111111111111111111111111111111111111, not the recipient 0x2222 [output-recipient]", "safety", "Can't confirm it pays you"],
   ["relay: solver 0xabc on \"8453\" is not a pinned Relay solver [solver-not-pinned]", "safety", "Uses a contract we haven't verified"],
   ["relay: the order pays 2 outputs, exactly one is accepted [order-payments]", "safety", "Didn't match what was asked"],

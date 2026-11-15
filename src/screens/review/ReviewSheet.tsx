@@ -315,6 +315,31 @@ export function ReviewSheet({open, draft, tokens, wallets, slippage, onClose, on
   );
 }
 
+/**
+ * An "Imported token" note per side imported by its address (D39): its full contract, read before Confirm — a copy of a
+ * real token differs from it only there. Steps aside once confirmed (D37), like the other notes.
+ */
+function ImportedNotes({tokens}: {tokens: readonly SwapDraft["req"]["from"][]}) {
+  const imported = tokens.filter((t, i) => t.imported && t.contract && tokens.findIndex((x) => x.key === t.key) === i);
+  if (!imported.length) return null;
+  return (
+    <>
+      {imported.map((t) => (
+        <div key={t.key} className={s.otherBox} role="note" data-testid="swap-review-imported">
+          <Text variant="small" weight={600} color="var(--amber)">
+            {`Imported token: ${t.symbol}`}
+          </Text>
+          <Text as="p" variant="meta" color="var(--ink2)" selectable className={s.fine}>
+            {`Not on the token list — added by its address on ${t.chainName}: `}
+            <span className={s.mono}>{t.contract}</span>
+            {". Check it against the project's official sources; no price is shown for it."}
+          </Text>
+        </div>
+      ))}
+    </>
+  );
+}
+
 interface ReviewBodyProps {
   draft: SwapDraft;
   from: SwapDraft["req"]["from"];
@@ -390,6 +415,7 @@ function ReviewBody({draft, from, native, slippage, route, gone, failed, problem
           </Text>
         </div>
       ) : null}
+      {route && !executing ? <ImportedNotes tokens={[from, to]} /> : null}
       {route?.provider === "fynd" && !executing ? (
         <div className={s.licenseBox} role="note" data-testid="swap-review-fynd-license">
           <Text as="p" variant="meta" color="var(--ink2)" selectable className={s.fine}>

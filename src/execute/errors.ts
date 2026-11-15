@@ -87,6 +87,9 @@ export function swapErrorText(e: unknown, nativeSymbol: string): string {
     return `The route is no longer available${detail ? ` (${detail.slice(0, 160)})` : ""}. Refresh and pick a route again.`;
   }
   if (/quote expired/i.test(msg)) return "The quote expired before signing — nothing was swapped. Review it again.";
+  // An imported token (D39) whose decimals on-chain differ from the ones read when it was imported.
+  if (/fromTokenDecimals \d+ does not match|destDecimals \d+ do not match toTokenDecimals/.test(msg))
+    return "This token's decimals on-chain don't match the ones read when it was imported — nothing was signed. Remove it and import it again.";
   // The engine's own refusals: a payload it would not sign, or a wallet on another network than the swap's.
   if (e instanceof Swap2ValidationError) return `This route was refused for safety (${msg.slice(0, 160)}) — nothing was signed.`;
   if (/account is bound to .*, but fromChain is|claim is on .*, but the account is bound to/i.test(msg))

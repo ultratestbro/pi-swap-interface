@@ -9,7 +9,7 @@
  */
 import {createElement, Fragment, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode} from "react";
 import type {ActivityItem, ActivityState, ActivityUrgency, StatusView, SwapRecord} from "../contracts/activity";
-import type {Owners, PriceMap, SwapToken} from "../contracts/domain";
+import type {Owners, PriceMap, SwapToken, Token, TokenLookup} from "../contracts/domain";
 import type {
   ClaimPreview,
   ClaimResult,
@@ -41,6 +41,7 @@ import {
   DEMO_CHAINS,
   DEMO_DEPOSIT_ADDRESS,
   DEMO_EVM_ADDRESS,
+  DEMO_IMPORTABLE,
   DEMO_PRICES,
   DEMO_REFUSALS,
   DEMO_SOLANA_ADDRESS,
@@ -160,9 +161,19 @@ function useDemoBalances(owners: Owners): BalancesState {
   }, [owners.evm, owners.solana]);
 }
 
+/** Demo imports (D39): in memory only — demo mode writes no storage. */
+const demoImports = store<readonly Token[]>(() => []);
+
+/** An imported token with the viewer's state: unpriced, no balance read offline. */
+const importedSwapToken = (t: Token, owners: Owners): SwapToken => {
+  const owner = owners[t.family] ?? null;
+  return {...t, amount: "0", balance: owner ? "loaded" : "none", usd: 0, owner, payMode: owner ? "wallet" : "connect"};
+};
+
 function useDemoSwapTokens(owners: Owners): SwapTokensState {
+  const imported = useSyncExternalStore(demoImports.subscribe, demoImports.get, demoImports.get);
   return useMemo(() => {
-    const all = demoSwapTokens(owners);
+    const all = [...demoSwapTokens(owners), ...imported.map((t) => importedSwapToken(t, owners))];
     return {
       all,
       pay: all.filter((x) => x.payMode !== "none"),
@@ -172,7 +183,15 @@ function useDemoSwapTokens(owners: Owners): SwapTokensState {
       loading: false,
       refresh: () => {},
     };
-  }, [owners]);
+  }, [owners, imported]);
+}
+
+/** Offline reads: DEMO_IMPORTABLE by network and address; anything else isn't found (demo contacts no network). */
+function useDemoTokenLookup(caip2: string | null, address: string | null): TokenLookup {
+  if (!caip2 || !address) return {status: "idle"};
+  const a = address.toLowerCase();
+  const token = DEMO_IMPORTABLE.find((t) => t.caip2 === caip2 && t.contract?.toLowerCase() === a);
+  return token ? {status: "found", token} : {status: "failed", reason: "Demo mode reads only its sample tokens — no network is contacted."};
 }
 
 /** Offline contract check: a fixture token's own contract address reads as a contract, so the warning is reviewable. */
@@ -189,6 +208,9 @@ export const demoCatalogPort: CatalogPort = {
   usePrices: () => DEMO_PRICES,
   useSwapTokens: useDemoSwapTokens,
   useIsContract: useDemoIsContract,
+  useTokenLookup: useDemoTokenLookup,
+  importToken: (t) => demoImports.set([t, ...demoImports.get().filter((x) => x.key !== t.key)]),
+  removeImportedToken: (key) => demoImports.set(demoImports.get().filter((x) => x.key !== key)),
 };
 
 // ── swap ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -225,6 +247,9 @@ const CHAINFLIP_ASSETS = new Set(["ETH", "BTC", "SOL", "USDC", "USDT"]);
 const STABLES = new Set(["USDC", "USDT", "DAI"]);
 /** The demo's EVM networks on Balancer's, Symbiosis' and Omniston's lists alike (Elysium is on none). */
 const BIG_EVM = new Set(["ethereum", "arbitrum", "base"]);
+
+/** Venues whose providers take a token the catalog doesn't list (D39, probed 2026-11-15): the rest sit an import out. */
+const ANY_TOKEN_VENUES: ReadonlySet<string> = new Set(["uniswap", "curve", "balancer", "lifi", "relay", "jupiter", "fynd", "zeroex"]);
 
 /** The page's default venues (DEFAULT_ON_PROVIDERS order), each with the pairs it serves here and how it answers. */
 const VENUES: readonly Venue[] = [
@@ -357,7 +382,7 @@ function useDemoRoutes(r: RoutesRequest | null, prices: PriceMap): RoutesState &
   useEffect(() => {
     if (!r) return;
     const {mode, req} = r;
-    const venues = VENUES.filter((v) => v.serves(req.from, req.to));
+    const venues = VENUES.filter((v) => v.serves(req.from, req.to) && (!(req.from.imported || req.to.imported) || ANY_TOKEN_VENUES.has(v.provider)));
     const asked = venues.map((v) => v.provider);
     const all = VENUES.map((v) => v.provider);
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -668,5 +693,6 @@ export const demoPorts: AppPorts = {
 export function resetDemoState(): void {
   wallets.set(undefined);
   records.set(undefined);
+  demoImports.set(undefined);
   previewBucket = null;
 }

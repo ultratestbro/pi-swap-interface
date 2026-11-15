@@ -24,7 +24,7 @@ import {RecipientBox, RefundBox} from "./form/AddressBoxes";
 import {FlipButton, PayCard, ReceiveCard} from "./form/AmountCards";
 import {CtaBar, SlippageControl, SummaryCard, bpsLabel, slippageText} from "./form/FormParts";
 import {ctaState, heldAs, routeListModel, venuesUnreachable} from "./form/model";
-import {useSwapForm, type FormPreset} from "./form/useSwapForm";
+import {useSwapForm, type AwaitingSide, type FormPreset} from "./form/useSwapForm";
 import {FAMILY_LABEL, plainUnits, walletFamilyOf} from "./labels";
 import {ReviewSheet} from "./review/ReviewSheet";
 import {RoutesPanel} from "./routelist/RoutesPanel";
@@ -32,7 +32,8 @@ import {REVIEW_SCENES, sceneFrom, scenePreset, sceneStatusId, type Scene} from "
 import {SavedNotice} from "./settings/SavedNotice";
 import {SettingsSheet} from "./settings/SettingsSheet";
 import {AppShell} from "./shell/AppShell";
-import {TokenSheet} from "./tokens/TokenSheet";
+import {TokenSheet, type ImportTarget} from "./tokens/TokenSheet";
+import {linkedToken} from "./tokens/importModel";
 import {useShownRoutes} from "./useShownRoutes";
 import {ConnectSheet} from "./wallets/ConnectSheet";
 import f from "./form/Form.module.css";
@@ -52,6 +53,35 @@ function presetOf(q: URLSearchParams, scene: Scene | null, demo: boolean): FormP
     amount: sp?.amount ?? (q.has("amount") ? amount : demo ? DEMO_AMOUNT : ""),
     refund: sp?.refund,
   };
+}
+
+/** A side of a pair link that names a token to import (D39): its key as the list will write it, and the address to read. */
+interface LinkImport {
+  side: "pay" | "receive";
+  key: string;
+  caip2: string;
+  address: string;
+}
+
+/**
+ * The preset with a link's token keys read against the list (D39, linkedToken): known keys as the list writes them,
+ * unusable ones dropped (the default fills that side), and at most one side — the pay side first — to import.
+ */
+function linkedPreset(preset: FormPreset, byKey: ReadonlyMap<string, unknown>): {preset: FormPreset; link: LinkImport | null} {
+  let link: LinkImport | null = null;
+  const side = (s: "pay" | "receive"): string | undefined => {
+    const l = linkedToken(preset[s], byKey);
+    if (l?.kind === "known") return l.key;
+    if (l?.kind === "import" && !link) {
+      link = {side: s, key: l.key, caip2: l.caip2, address: l.address};
+      return l.key;
+    }
+    return undefined;
+  };
+  const pay = side("pay");
+  const receive = side("receive");
+  const {pay: _p, receive: _r, ...rest} = preset;
+  return {preset: {...rest, ...(pay ? {pay} : {}), ...(receive ? {receive} : {})}, link};
 }
 
 /**
@@ -75,8 +105,14 @@ export function SwapApp({scene}: {scene: Scene | null}) {
   const activity = ports.activity.useActivity();
   const hash = useHashRoute();
 
-  const [preset] = useState<FormPreset>(() => presetOf(readHash().query, scene, demo));
-  const form = useSwapForm(tokens, preset, Object.values(wallets.owners).some(Boolean), wallets.evm ? `eip155:${wallets.evm.chainId}` : null);
+  // A pair link's token keys, read against the list (D39): a token the list doesn't have is never trusted on the link's
+  // word — its side opens empty and the import confirmation opens for its address; a read that fails ignores it.
+  const [{preset, link}] = useState(() => linkedPreset(presetOf(readHash().query, scene, demo), tokens.byKey));
+  const linkLookup = ports.catalog.useTokenLookup(link?.caip2 ?? null, link?.address ?? null);
+  const awaitingLink = !!link && !tokens.byKey.has(link.key) && linkLookup.status !== "failed";
+  const linkRead = linkLookup.status === "found";
+  const awaiting = useMemo((): AwaitingSide | null => (awaitingLink && link ? {side: link.side, key: link.key, settled: linkRead} : null), [awaitingLink, link, linkRead]);
+  const form = useSwapForm(tokens, preset, Object.values(wallets.owners).some(Boolean), wallets.evm ? `eip155:${wallets.evm.chainId}` : null, awaiting);
   // Live when both addresses exist; preview prices meanwhile (D7). The mode is part of useRoutes' key, so the preview
   // list clears the moment the request becomes live and a live round runs.
   const request: RoutesRequest | null = form.req ? {mode: "live", req: form.req} : form.preview ? {mode: "preview", req: form.preview} : null;
@@ -116,8 +152,15 @@ export function SwapApp({scene}: {scene: Scene | null}) {
     return () => window.removeEventListener("online", on);
   }, []);
 
-  // The side stays set while the sheet animates closed, so its content doesn't switch lists on the way out.
-  const [tokenSheet, setTokenSheet] = useState<{open: boolean; side: "pay" | "receive"}>({open: scene === "tokens", side: "pay"});
+  // The side stays set while the sheet animates closed, so its content doesn't switch lists on the way out. A pair link
+  // naming a token to import opens it on that import's confirmation (D39).
+  const [tokenSheet, setTokenSheet] = useState<{open: boolean; side: "pay" | "receive"; importing: ImportTarget | null}>(() => ({
+    open: scene === "tokens" || !!link,
+    side: link?.side ?? "pay",
+    importing: link ? {caip2: link.caip2, address: link.address} : null,
+  }));
+  // The link's token couldn't be read: the confirmation closes and the side takes its default (awaiting is null).
+  const tokenSheetOpen = tokenSheet.open && !(tokenSheet.importing && link && linkLookup.status === "failed");
   const [review, setReview] = useState<{draft: SwapDraft; n: number} | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [connect, setConnect] = useState<{open: boolean; focus: WalletFamily | null}>({open: scene === "connect", focus: null});
@@ -239,7 +282,7 @@ export function SwapApp({scene}: {scene: Scene | null}) {
               onPaste={form.pasteAmount}
               note={form.pasteNote}
               onMax={form.max}
-              onPickToken={() => setTokenSheet({open: true, side: "pay"})}
+              onPickToken={() => setTokenSheet({open: true, side: "pay", importing: null})}
             />
             <FlipButton disabled={!form.canFlip} onFlip={form.flip} />
             <ReceiveCard
@@ -249,7 +292,7 @@ export function SwapApp({scene}: {scene: Scene | null}) {
               quoting={!!request && routes.loading}
               held={chosenHeldAs}
               preview={previewList}
-              onPickToken={() => setTokenSheet({open: true, side: "receive"})}
+              onPickToken={() => setTokenSheet({open: true, side: "receive", importing: null})}
             />
           </div>
           {form.from?.payMode === "deposit" ? (
@@ -292,12 +335,15 @@ export function SwapApp({scene}: {scene: Scene | null}) {
       </div>
 
       <TokenSheet
-        open={tokenSheet.open}
+        open={tokenSheetOpen}
         side={tokenSheet.side}
         tokens={tokenSheet.side === "receive" ? tokens.receive : tokens.pay}
         selected={tokenSheet.side === "receive" ? form.pair?.receive : form.pair?.pay}
+        {...(tokenSheet.side === "receive" ? (form.from ? {other: form.from} : {}) : form.to ? {other: form.to} : {})}
+        importing={tokenSheet.importing}
         onPick={(t) => {
-          form.pick(tokenSheet.side, t.key);
+          // A token imported this moment (D39) isn't on the list until the next render: the form takes it as given.
+          form.pick(tokenSheet.side, t.key, t.imported ? t : undefined);
           setTokenSheet((x) => ({...x, open: false}));
         }}
         onClose={() => setTokenSheet((x) => ({...x, open: false}))}

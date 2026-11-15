@@ -534,7 +534,43 @@ Engine mapping for the web (`QuoteParams` from `@anywalletkit/protocol-swap2-cor
 
 Unlisted tokens: `isTokenAddress(caip2, ref)` accepts only an EVM contract or a Solana mint; read decimals
 on-chain (`erc20Abi.decimals` / mint account `decimals`), build with `unlistedAsset(caip2, contract, decimals)`;
-its `symbol` is the address itself by design. Only providers built with `allowUnlistedTokens` quote it.
+its `symbol` is the address itself by design. Only providers built with `allowUnlistedTokens` quote it. The app's
+import by address (2026-11-15, ARCHITECTURE D39) is §3.6.
+
+### 3.6 Imported tokens — `src/catalog/imported.ts` (ARCHITECTURE D39)
+
+A token the catalog doesn't list, on an EVM network or Solana, pasted by its address in the token sheet:
+
+- **Detect** — `detectTokenAddress(text)`: an EVM contract (`0x` + 40 hex, any case) or a 32-byte Solana mint, both by
+  `isTokenAddress` (a 32-byte base58 key reads as Solana first); another family's address → `{family: "unsupported"}`
+  (TON, Tron, NEAR, Bitcoin, Zcash: not importable in v1). `listedToken(caip2, contract)`: the catalog token there, if
+  any (EVM any case, Solana exact) — then there is nothing to import.
+- **Read** — `readTokenForImport(caip2, address)`, through `catalogPort.useTokenLookup` (react-query `["token-meta",
+  caip2, address]`, 10 min; a network failure retried once): EVM `eth_getCode` (code, not an EIP-7702 delegation) then
+  `decimals()` 0x313ce567 (required, 0..36), `symbol()` 0x95d89b41 and `name()` 0x06fdde03 (ABI `string` or legacy
+  `bytes32`, `decodeTokenString`) over `publicClient(chainId)`; Solana one `getMultipleAccounts([mint, metaplexPda],
+  base64)` over `solanaRpcUrls()`: owner SPL Token or Token-2022, `parseMint` (82 bytes, or a Token-2022 mint padded to
+  165 with AccountType 1 at byte 165; initialized at 45, decimals at 44, ≤ 36), the name / symbol from Token-2022's
+  TokenMetadata extension (TLV type 19, its mint field = the mint), else the Metaplex account (key 4, mint at 33..65,
+  borsh name ≤ 64 and symbol ≤ 32 bytes, zero padding stripped), else "UNKNOWN". Texts go through `cleanTokenText`
+  (control / format / private-use / default-ignorable characters stripped, combining-mark stacks cut to two,
+  whitespace collapsed, symbol ≤ 20 and name ≤ 48 characters). Errors are `TokenReadError` (`definitive` unless the RPC
+  didn't answer), worded for the sheet ("No token contract at this address on Base.").
+- **Model** — `importedToken(chain, contract, meta)`: a `Token` with `imported: true`, `name`, `token2022?`,
+  `catalogSymbol` = the contract (checksummed on EVM, verbatim on Solana), `gasToken: false`, key `importKey` =
+  `<slug>:<contract>` (lowercased on EVM, verbatim on Solana).
+- **Keep** — `localStorage cp0x.swap.tokens.v1`: `[{chain, contract, symbol, name, decimals, token2022?}]`, newest
+  first, ≤ `IMPORTED_TOKENS_CAP` (50); `parseImportedTokens` holds every entry to the rules again on each read;
+  `addImportedToken` / `removeImportedToken`; `useImportedTokens()` (useSyncExternalStore, the `storage` event for
+  other tabs); memory only on an IPFS path gateway.
+- **Join** — `useSwapTokens` appends `swapTokens(imported, …)` after the catalog's; `tokenPrice` is undefined for an
+  import; `matchesToken` matches its name (not its contract's middle); `balanceSpecs(owners, chains, imported)` adds a
+  read per network with imports (`imported: true`, key `["bal", slug, owner, "imported", …keys]`); `ataOf(owner, mint,
+  token2022)` derives an imported Token-2022 mint's account under Token-2022.
+- **Look-alikes** — `lookalikeOf(token)`: the listed token on the same network whose symbol (or catalog symbol) reads
+  like the import's symbol or name (`readsAs`: NFKC, lower case, Cyrillic / Greek look-alikes, 0→o, 1/i/|→l, no spaces,
+  dots, dashes or underscores).
+- **Links** — `parseTokenKey(key)`: a hash key naming an importable unlisted token, or null.
 
 ### 3.5 Logos
 
@@ -547,6 +583,8 @@ Mirror `apps/mobile/components/AssetIcon.tsx:104-111`, add the catalog URL befor
 3. `Token.icon` (catalog CMC URL; all 127 distinct URLs answered 200 on 2026-11-11). 31 assets have none
    (e.g. TON USDe/sUSDe/FDUSD/XAUt0/GOMINING/TSLAx/NVDAx, NEAR ETH/wBTC, `pUSD`, `AUSD`, `WXPL`, `wS`, `stS`, `WLD`, `WOKB`, `kBTC`).
 4. Monogram (first 4 chars, uppercased).
+
+An imported token (§3.6) is always its monogram: steps 1-3 would show the listed token's logo for a copy named like it.
 
 Network badge: `NETWORK_LOGOS[slug]` (36 slugs — all but `morph`), else `Chain.icon` (cc.icon, all 46 answered 200).
 

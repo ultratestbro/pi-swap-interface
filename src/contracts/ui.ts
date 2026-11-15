@@ -244,8 +244,11 @@ export interface StepDotProps {
 }
 
 export interface AssetIconProps {
-  /** Token by symbol + chain caip2/contract for the catalog-mirror lookup. */
-  token?: {symbol: string; caip2: string; contract: string | null};
+  /**
+   * Token by symbol + chain caip2/contract for the catalog-mirror lookup. `imported` (D39): a monogram only — a logo
+   * found by an imported token's symbol would dress a copy up as the listed token.
+   */
+  token?: {symbol: string; caip2: string; contract: string | null; imported?: boolean};
   /** Network by slug. */
   network?: string;
   /** px, default 38. */
@@ -253,7 +256,7 @@ export interface AssetIconProps {
 }
 
 export interface TokenIconProps {
-  token: {symbol: string; caip2: string; contract: string | null; chain: string};
+  token: {symbol: string; caip2: string; contract: string | null; chain: string; imported?: boolean};
   size?: number;
   /** Network badge at bottom-right, round(size*.42). Default true. */
   badge?: boolean;

@@ -28,9 +28,12 @@ const TIMEOUT_MS = 10_000;
 
 const enc = getAddressEncoder();
 
-/** The owner's associated token account for `mint`, under the mint's token program. */
-export async function ataOf(owner: string, mint: string): Promise<Address> {
-  const program = TOKEN_2022_MINTS.has(mint) ? TOKEN_2022_PROGRAM : TOKEN_PROGRAM;
+/**
+ * The owner's associated token account for `mint`, under the mint's token program: Token-2022 for the catalog mints in
+ * TOKEN_2022_MINTS and for an imported mint read as Token-2022 (`token2022`, D39), else SPL Token.
+ */
+export async function ataOf(owner: string, mint: string, token2022 = TOKEN_2022_MINTS.has(mint)): Promise<Address> {
+  const program = token2022 ? TOKEN_2022_PROGRAM : TOKEN_PROGRAM;
   const [pda] = await getProgramDerivedAddress({
     programAddress: ATA_PROGRAM,
     seeds: [enc.encode(address(owner)), enc.encode(program), enc.encode(address(mint))],
@@ -38,8 +41,8 @@ export async function ataOf(owner: string, mint: string): Promise<Address> {
   return pda;
 }
 
-/** One JSON-RPC call, each runtime RPC in order until one answers with a result. */
-async function solRpc<T>(method: string, params: unknown[]): Promise<T> {
+/** One JSON-RPC call, each runtime RPC in order until one answers with a result (balances; an import's mint read, D39). */
+export async function solRpc<T>(method: string, params: unknown[]): Promise<T> {
   let last: unknown = new Error("No Solana RPC is configured.");
   for (const url of solanaRpcUrls()) {
     try {
@@ -74,7 +77,7 @@ const isDigits = (s: unknown): s is string => typeof s === "string" && /^\d+$/.t
 export async function readSolanaBalances(owner: string, tokens: readonly Token[]): Promise<BalanceRead> {
   const spl = tokens.filter((t) => t.contract);
   const native = tokens.find((t) => !t.contract);
-  const atas = await Promise.all(spl.map((t) => ataOf(owner, t.contract!)));
+  const atas = await Promise.all(spl.map((t) => ataOf(owner, t.contract!, t.token2022 === true || TOKEN_2022_MINTS.has(t.contract!))));
   const chunks: Address[][] = [];
   for (let i = 0; i < atas.length; i += ACCOUNTS_PER_CALL) chunks.push(atas.slice(i, i + ACCOUNTS_PER_CALL));
   const [lamports, ...pages] = await Promise.all([

@@ -63,6 +63,17 @@ export const DEMO_TOKENS: readonly Token[] = [
   t("elysium", "USDC.e", 6, "0xb47c4C8F73F009CC0C0d3f92B388d13E293F0B65"),
 ];
 
+/**
+ * What a demo import "reads" (D39), offline: a long-tail token on Base, and a copy on Base named like the listed USDC
+ * (the confirmation's look-alike line). Any other address reads as "not found" — demo mode contacts no network.
+ */
+const imported = (slug: string, symbol: string, name: string, decimals: number, contract: string): Token => ({...t(slug, symbol, decimals, contract, contract), gasToken: false, imported: true, name});
+
+export const DEMO_IMPORTABLE: readonly Token[] = [
+  imported("base", "DEGEN", "Degen", 18, "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed"),
+  imported("base", "USDC", "USD Coin", 6, "0x1111111111111111111111111111111111111111"),
+];
+
 export const DEMO_PRICES: PriceMap = {
   ETH: 3120.55,
   WETH: 3120.55,

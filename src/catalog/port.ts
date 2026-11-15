@@ -1,13 +1,15 @@
 /**
- * The catalog's port (D15): the hooks screens reach through `usePorts().catalog`. Chains and tokens are static;
- * balances and prices are react-query reads, so every caller shares one request per key.
+ * The catalog's port (D15): the hooks screens reach through `usePorts().catalog`. Chains and tokens are static, plus
+ * the tokens imported in this browser (D39, a guarded localStorage store); balances, prices and an import's on-chain
+ * read are react-query reads, so every caller shares one request per key.
  */
 import {useQuery} from "@tanstack/react-query";
 import {useMemo} from "react";
-import type {Owners, PriceMap} from "../contracts/domain";
+import type {Owners, PriceMap, TokenLookup} from "../contracts/domain";
 import type {CatalogPort, SwapTokensState} from "../contracts/ports";
 import {useBalances} from "./balances";
 import {isContractAddress} from "./evm";
+import {TokenReadError, addImportedToken, readTokenForImport, removeImportedToken, useImportedTokens} from "./imported";
 import {CHAIN_LIST} from "./network";
 import {lastKnownPrices, loadPrices} from "./prices";
 import {TOKENS, swapTokens} from "./tokens";
@@ -41,12 +43,19 @@ function useStableOwners(owners: Owners): Owners {
   return useMemo(() => Object.fromEntries(JSON.parse(key) as [string, string][]) as Owners, [key]);
 }
 
-/** The token universe with the viewer's balances and prices: held first, pay side = payMode !== "none". */
+/**
+ * The token universe with the viewer's balances and prices: held first, pay side = payMode !== "none". The tokens
+ * imported in this browser (D39) come after the catalog's (held first among them), never priced.
+ */
 export function useSwapTokens(owners: Owners): SwapTokensState {
   const stable = useStableOwners(owners);
   const balances = useBalances(stable);
   const prices = usePrices();
-  const all = useMemo(() => swapTokens(TOKENS, balances.byKey, prices, stable), [balances.byKey, prices, stable]);
+  const imported = useImportedTokens();
+  const all = useMemo(
+    () => [...swapTokens(TOKENS, balances.byKey, prices, stable), ...swapTokens(imported, balances.byKey, prices, stable)],
+    [balances.byKey, prices, stable, imported],
+  );
   const pay = useMemo(() => all.filter((t) => t.payMode !== "none"), [all]);
   const byKey = useMemo(() => new Map(all.map((t) => [t.key, t])), [all]);
   return useMemo(
@@ -67,6 +76,32 @@ export function useIsContract(caip2: string, address: string | null): boolean | 
   return data ?? null;
 }
 
+/** A failed read that asking again could change (a network failure) is retried once; the chain's own answer isn't. */
+const retryRead = (failures: number, e: unknown): boolean => failures < 1 && !(e instanceof TokenReadError && e.definitive);
+
+/**
+ * An import's on-chain read (D39): react-query key `["token-meta", caip2, address]`, kept 10 min (the token sheet and a
+ * pair link asking for the same address share one read). Idle while either is null.
+ */
+export function useTokenLookup(caip2: string | null, address: string | null): TokenLookup {
+  const enabled = !!caip2 && !!address;
+  const {data, error} = useQuery({
+    queryKey: ["token-meta", caip2, address],
+    enabled,
+    queryFn: () => readTokenForImport(caip2!, address!),
+    staleTime: 600_000,
+    gcTime: 1_800_000,
+    retry: retryRead,
+    refetchOnWindowFocus: false,
+  });
+  return useMemo((): TokenLookup => {
+    if (!enabled) return {status: "idle"};
+    if (data) return {status: "found", token: data};
+    if (error) return {status: "failed", reason: error instanceof TokenReadError ? error.message : "Couldn't read this token — try again."};
+    return {status: "loading"};
+  }, [enabled, data, error]);
+}
+
 /** The real catalog port (App.tsx's realPorts). */
 export const catalogPort: CatalogPort = {
   useChains: () => CHAIN_LIST,
@@ -75,4 +110,7 @@ export const catalogPort: CatalogPort = {
   usePrices,
   useSwapTokens,
   useIsContract,
+  useTokenLookup,
+  importToken: addImportedToken,
+  removeImportedToken,
 };

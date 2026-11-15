@@ -77,9 +77,12 @@ export function payModeOf(t: Pick<Token, "family">, chain: Pick<Chain, "receiveO
   return "deposit";
 }
 
-/** A token's USD price: its display symbol first (TON, XDAI), then the catalog symbol, router lookup rules. */
-export const tokenPrice = (t: Pick<Token, "symbol" | "catalogSymbol">, prices: PriceMap): number | undefined =>
-  priceFor(prices, t.symbol) ?? priceFor(prices, t.catalogSymbol);
+/**
+ * A token's USD price: its display symbol first (TON, XDAI), then the catalog symbol, router lookup rules. Never for an
+ * imported token (D39): its symbol is its deployer's word, and a copy named "USDC" must not show USDC's price.
+ */
+export const tokenPrice = (t: Pick<Token, "symbol" | "catalogSymbol" | "imported">, prices: PriceMap): number | undefined =>
+  t.imported ? undefined : (priceFor(prices, t.symbol) ?? priceFor(prices, t.catalogSymbol));
 
 /**
  * Tokens with the viewer's state: held first (by USD, then units), the rest in catalog order. A family with no
@@ -115,13 +118,16 @@ export function swapTokens(
 
 // ── mobile lib/swap/tokens.ts L127-208 (verbatim but for the noted lines) ────────────────────────────────────────
 
-/** Token search: symbol, catalog symbol, network name or slug, or a contract prefix of 4+ characters. */
+/**
+ * Token search: symbol, catalog symbol, network name or slug, or a contract prefix of 4+ characters. An imported token
+ * (D39) by its name instead of its catalog symbol (its contract: a prefix only, like every contract).
+ */
 export function matchesToken(t: SwapToken, q: string): boolean {
   const s = q.trim().toLowerCase();
   if (!s) return true;
   return (
     t.symbol.toLowerCase().includes(s) ||
-    t.catalogSymbol.toLowerCase().includes(s) ||
+    (t.imported ? !!t.name && t.name.toLowerCase().includes(s) : t.catalogSymbol.toLowerCase().includes(s)) ||
     t.chainName.toLowerCase().includes(s) ||
     t.chain.includes(s) ||
     (!!t.contract && s.length >= 4 && t.contract.toLowerCase().startsWith(s))

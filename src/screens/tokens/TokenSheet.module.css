@@ -161,3 +161,206 @@
 .empty {
   padding: 10px;
 }
+
+/* a row with its remove button beside it (imported tokens, D39): the row stays one button, the remove another */
+.tokenItem {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.symbolLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.remove {
+  flex: none;
+  margin-right: 4px;
+}
+
+/* ── import by address (D39) ── */
+.importCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 8px;
+  padding: 8px 0 4px;
+  border-radius: var(--r-control);
+  background: var(--surface1);
+}
+
+.importHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 10px;
+}
+
+.importNet {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: var(--r-chip);
+  background: var(--surface3);
+}
+
+.importSelect {
+  max-width: 150px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  appearance: none;
+  cursor: pointer;
+}
+
+.importSelect:focus-visible {
+  outline: none;
+}
+
+.importNet:focus-within {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.importNote {
+  padding: 4px 10px 8px;
+  line-height: 18px;
+}
+
+.importLoading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 10px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.confirm {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 20px var(--sp-page) 0;
+  overflow-y: auto;
+}
+
+.confirmBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 6px 0 calc(24px + env(safe-area-inset-bottom));
+}
+
+.confirmToken {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.confirmNames {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.addressBox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--r-control);
+  background: var(--surface2);
+}
+
+.addressRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mono {
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.explorer {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  color: var(--accent);
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .explorer:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+.warnBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-control);
+  background: var(--amber-bg);
+}
+
+.warnBox > :first-child {
+  flex: none;
+  margin-top: 1px;
+}
+
+.warnText {
+  line-height: 19px;
+}
+
+.understand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 2px;
+  cursor: pointer;
+}
+
+.checkbox {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.confirmActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

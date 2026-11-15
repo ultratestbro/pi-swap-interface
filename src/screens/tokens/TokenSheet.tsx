@@ -3,13 +3,25 @@
  * search field, a rail of networks (pinned six, then held, then the rest) and
  * the chosen network's tokens, held first. "All" lists what the connected
  * wallets hold anywhere; typing searches every network. Long lists (search,
- * a big network) are virtualized. Import-by-address is not offered in v1.
+ * a big network) are virtualized.
+ *
+ * Importing by address (D39): a pasted EVM contract or Solana mint that no
+ * token on the lookup network has shows an "Import token" result, read
+ * on-chain — an EVM contract on the network the sheet is filtered to (with
+ * "All networks", the other side's, else this side's, else Ethereum), with a
+ * chooser for another; a mint on Solana. Opening it shows the confirmation
+ * (ImportToken.tsx); a confirmed import is kept in this browser and listed
+ * under the catalog with an "Imported" badge and a remove button. An address of
+ * TON, Tron, NEAR, Bitcoin or Zcash says it can't be imported yet.
  */
 import {useVirtualizer} from "@tanstack/react-virtual";
 import {useMemo, useRef, useState, type ReactNode, type RefObject} from "react";
 import type {SwapToken} from "../../contracts/domain";
-import {formatAmount, formatUsd, matchesToken, pickerNetworks} from "../../catalog";
-import {AssetIcon, Divider, Field, Icon, Sheet, SheetHeader, Text, TokenIcon} from "../../ui";
+import {usePorts} from "../../config";
+import {chainBySlugWeb, detectTokenAddress, formatAmount, formatUsd, importable, matchesToken, pickerNetworks} from "../../catalog";
+import {AssetIcon, Divider, Field, Icon, IconButton, Sheet, SheetHeader, Tag, Text, TokenIcon} from "../../ui";
+import {ImportConfirm, ImportResult} from "./ImportToken";
+import {lookupNetwork, tokenAt, unsupportedLine} from "./importModel";
 import s from "./TokenSheet.module.css";
 
 const ALL = "all";
@@ -17,23 +29,44 @@ const ALL = "all";
 const ROW_PX = 52;
 const VIRTUAL_FROM = 60;
 
+/** An import to confirm: the address and the network it was read on. */
+export interface ImportTarget {
+  caip2: string;
+  address: string;
+}
+
 export interface TokenSheetProps {
   open: boolean;
   side: "pay" | "receive";
   tokens: readonly SwapToken[];
   /** The side's current token key. */
   selected?: string;
+  /** The other side's token: where a pasted EVM contract is looked up with "All networks" (D39). */
+  other?: SwapToken;
+  /** Open on this import's confirmation (a pair link naming a token the list doesn't have, D39). */
+  importing?: ImportTarget | null;
   onPick(t: SwapToken): void;
   onClose(): void;
 }
 
-export function TokenSheet({open, side, tokens, selected, onPick, onClose}: TokenSheetProps) {
+export function TokenSheet({open, side, tokens, selected, other, importing, onPick, onClose}: TokenSheetProps) {
   const search = useRef<HTMLInputElement>(null);
   const title = side === "pay" ? "You pay" : "You receive";
   return (
-    <Sheet open={open} onClose={onClose} label={title} width={480} phoneHeight="full" flush initialFocus={search} data-testid="swap-token-sheet">
+    <Sheet open={open} onClose={onClose} label={title} width={480} phoneHeight="full" flush initialFocus={importing ? undefined : search} data-testid="swap-token-sheet">
       {/* the sheet mounts its content only while open (and while closing), so each opening starts fresh */}
-      <Picker key={side} title={title} side={side} tokens={tokens} selected={selected} onPick={onPick} onClose={onClose} search={search} />
+      <Picker
+        key={`${side}:${importing?.address ?? ""}`}
+        title={title}
+        side={side}
+        tokens={tokens}
+        selected={selected}
+        other={other}
+        importing={importing}
+        onPick={onPick}
+        onClose={onClose}
+        search={search}
+      />
     </Sheet>
   );
 }
@@ -43,13 +76,33 @@ interface PickerProps extends Omit<TokenSheetProps, "open"> {
   search: RefObject<HTMLInputElement | null>;
 }
 
-function Picker({title, side, tokens, selected, onPick, onClose, search}: PickerProps) {
+function Picker({title, side, tokens, selected, other, importing, onPick, onClose, search}: PickerProps) {
+  const ports = usePorts();
   const networks = useMemo(() => pickerNetworks(tokens), [tokens]);
   const anyHeld = networks.some((n) => n.held);
+  const own = tokens.find((t) => t.key === selected);
   // Open on the selected token's network, else "All" when something is held, else the first network (mobile L117-122).
-  const [net, setNet] = useState<string>(() => tokens.find((t) => t.key === selected)?.chain ?? (anyHeld ? ALL : (networks[0]?.slug ?? ALL)));
+  const [net, setNet] = useState<string>(() => own?.chain ?? (anyHeld ? ALL : (networks[0]?.slug ?? ALL)));
   const [q, setQ] = useState("");
+  // The import being confirmed (D39): opened from the search, or given by a pair link (then it is the whole sheet).
+  const [confirming, setConfirming] = useState<ImportTarget | null>(importing ?? null);
+  /** The network the viewer picked for a pasted EVM contract (the result's chooser), or null for the default. */
+  const [lookupPick, setLookupPick] = useState<string | null>(null);
   const searching = q.trim().length > 0;
+
+  // A pasted token address (D39): where it is looked up, and whether a token on the list already is it there.
+  const pasted = searching ? detectTokenAddress(q) : null;
+  const importAddr = pasted && pasted.family !== "unsupported" ? pasted : null;
+  const lookupSlug = importAddr
+    ? importAddr.family === "evm" && lookupPick
+      ? lookupPick
+      : lookupNetwork({family: importAddr.family, sheetNet: net === ALL ? null : net, other, own})
+    : null;
+  const lookupChain = lookupSlug ? chainBySlugWeb(lookupSlug) : undefined;
+  const listedThere = importAddr && lookupSlug ? tokenAt(tokens, lookupSlug, importAddr.address) : undefined;
+  const lookupFor = importAddr && importable(lookupChain) && !listedThere ? {caip2: lookupChain.caip2, address: importAddr.address} : null;
+  const lookup = ports.catalog.useTokenLookup(lookupFor?.caip2 ?? null, lookupFor?.address ?? null);
+
   const shown = useMemo(() => {
     if (searching) return tokens.filter((t) => matchesToken(t, q));
     if (net === ALL) return tokens.filter((t) => t.amount !== "0");
@@ -67,7 +120,48 @@ function Picker({title, side, tokens, selected, onPick, onClose, search}: Picker
     setQ("");
     onPick(t);
   };
-  const row = (t: SwapToken) => <TokenRow key={t.key} t={t} side={side} selected={t.key === selected} showNetwork={showNetwork} onPick={() => pick(t)} />;
+  const row = (t: SwapToken) => (
+    <TokenRow
+      key={t.key}
+      t={t}
+      side={side}
+      selected={t.key === selected}
+      showNetwork={showNetwork}
+      onPick={() => pick(t)}
+      onRemove={t.imported ? () => ports.catalog.removeImportedToken(t.key) : undefined}
+    />
+  );
+
+  if (confirming) {
+    return (
+      <ImportConfirm
+        caip2={confirming.caip2}
+        address={confirming.address}
+        tokens={tokens}
+        // From the search, Back returns to it; a pair link's confirmation is the whole sheet.
+        onBack={importing ? undefined : () => setConfirming(null)}
+        onClose={onClose}
+        onImported={pick}
+      />
+    );
+  }
+
+  const importBlock = pasted ? (
+    pasted.family === "unsupported" ? (
+      <Text as="p" variant="small" color="var(--muted)" className={s.empty} data-testid="swap-import-unsupported">
+        {unsupportedLine(pasted.addressFamily)}
+      </Text>
+    ) : lookupFor && lookupSlug ? (
+      <ImportResult
+        chain={lookupSlug}
+        address={lookupFor.address}
+        family={pasted.family}
+        lookup={lookup}
+        onNetwork={setLookupPick}
+        onImport={(t) => setConfirming({caip2: t.caip2, address: t.contract ?? lookupFor.address})}
+      />
+    ) : null
+  ) : null;
 
   return (
     <>
@@ -75,11 +169,14 @@ function Picker({title, side, tokens, selected, onPick, onClose, search}: Picker
         <SheetHeader title={title} onClose={onClose} />
         <Field
           ref={search}
-          aria-label="Search tokens or networks"
-          placeholder="Search tokens or networks"
+          aria-label="Search tokens or networks, or paste a token address"
+          placeholder="Search, or paste a token address"
           leading={<Icon name="search" size={16} color="var(--muted)" />}
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setLookupPick(null);
+          }}
           data-testid="swap-token-search"
           enterKeyHint="search"
         />
@@ -126,10 +223,13 @@ function Picker({title, side, tokens, selected, onPick, onClose, search}: Picker
             ) : null}
           </div>
           <div ref={scroller} className={s.scroll} role="list" aria-label={heading}>
+            {importBlock}
             {shown.length === 0 ? (
-              <Text as="p" variant="small" color="var(--muted)" className={s.empty}>
-                {searching ? `Nothing matches “${q.trim()}”.` : net === ALL ? "No balances yet — pick a network on the left." : "No tokens on this network."}
-              </Text>
+              importBlock ? null : (
+                <Text as="p" variant="small" color="var(--muted)" className={s.empty}>
+                  {searching ? `Nothing matches “${q.trim()}”.` : net === ALL ? "No balances yet — pick a network on the left." : "No tokens on this network."}
+                </Text>
+              )
             ) : long ? (
               <VirtualRows count={shown.length} scroller={scroller} render={(i) => row(shown[i]!)} />
             ) : (
@@ -158,27 +258,43 @@ function VirtualRows({count, scroller, render}: {count: number; scroller: RefObj
   );
 }
 
-/** One token: icon (network badge when the list mixes networks), symbol, chain, and the held amount + USD. */
-function TokenRow({t, side, selected, showNetwork, onPick}: {t: SwapToken; side: "pay" | "receive"; selected: boolean; showNetwork: boolean; onPick(): void}) {
+interface TokenRowProps {
+  t: SwapToken;
+  side: "pay" | "receive";
+  selected: boolean;
+  showNetwork: boolean;
+  onPick(): void;
+  /** An imported token (D39): forget it in this browser. */
+  onRemove?: (() => void) | undefined;
+}
+
+/**
+ * One token: icon (network badge when the list mixes networks), symbol, chain, and the held amount + USD. An imported
+ * token (D39) carries an "Imported" badge, its name, and a remove button beside the row.
+ */
+function TokenRow({t, side, selected, showNetwork, onPick, onRemove}: TokenRowProps) {
   const held = t.amount !== "0";
   const qr = side === "pay" && t.payMode === "deposit";
   const connect = side === "pay" && t.payMode === "connect";
-  const sub = [showNetwork ? t.chainName : null, qr ? "pay by QR" : connect ? "connect a wallet" : null].filter(Boolean).join(" · ");
+  const sub = [t.imported ? t.name : null, showNetwork ? t.chainName : null, qr ? "pay by QR" : connect ? "connect a wallet" : null].filter(Boolean).join(" · ");
   return (
-    <div role="listitem">
+    <div role="listitem" className={s.tokenItem}>
       <button
         type="button"
         className={s.token}
         aria-current={selected || undefined}
-        aria-label={`${t.symbol} on ${t.chainName}${held ? `, ${formatAmount(t.amount, t.decimals)} held` : ""}`}
+        aria-label={`${t.symbol}${t.imported ? " (imported)" : ""} on ${t.chainName}${held ? `, ${formatAmount(t.amount, t.decimals)} held` : ""}`}
         data-testid={`swap-token-${t.key}`}
         onClick={onPick}
       >
         <TokenIcon token={t} size={34} badge={showNetwork} />
         <span className={s.tokenText}>
-          <Text variant="listTitle" lines={1}>
-            {t.symbol}
-          </Text>
+          <span className={s.symbolLine}>
+            <Text variant="listTitle" lines={1}>
+              {t.symbol}
+            </Text>
+            {t.imported ? <Tag tone="amber">Imported</Tag> : null}
+          </span>
           {sub ? (
             <Text variant="meta" color="var(--dim)" lines={1}>
               {sub}
@@ -196,6 +312,19 @@ function TokenRow({t, side, selected, showNetwork, onPick}: {t: SwapToken; side:
           </span>
         ) : null}
       </button>
+      {onRemove ? (
+        <IconButton
+          icon="close"
+          size={30}
+          iconSize={12}
+          variant="flat"
+          className={s.remove}
+          aria-label={`Remove the imported ${t.symbol} on ${t.chainName}`}
+          title="Remove from this browser"
+          onClick={onRemove}
+          data-testid={`swap-token-remove-${t.key}`}
+        />
+      ) : null}
     </div>
   );
 }

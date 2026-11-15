@@ -10,7 +10,7 @@
  */
 import type {ComponentType, ReactNode} from "react";
 import type {ActivityState, SwapRecord} from "./activity";
-import type {Balance, Chain, Owners, PriceMap, SwapToken, Token} from "./domain";
+import type {Balance, Chain, Owners, PriceMap, SwapToken, Token, TokenLookup} from "./domain";
 import type {
   ClaimPreview,
   ClaimResult,
@@ -34,7 +34,10 @@ export interface BalancesState {
 
 /** The token universe with the viewer's balances and prices (catalog.md §3.4 swapTokens, ui-port.md §4.5). */
 export interface SwapTokensState {
-  /** Every catalog token, held first (by USD, then units), then catalog order with each chain's native first. */
+  /**
+   * Every catalog token, held first (by USD, then units), then catalog order with each chain's native first; then the
+   * tokens imported in this browser (D39), held first among them, then newest first — never priced.
+   */
   all: readonly SwapToken[];
   /** Pay side: payMode !== "none" (wallet, connect and deposit tokens). */
   pay: readonly SwapToken[];
@@ -60,6 +63,17 @@ export interface CatalogPort {
    * blocks a swap (a Safe is a contract too); it is a port so the screen stays effect-free and demo stays offline.
    */
   useIsContract(caip2: string, address: string | null): boolean | null;
+  /**
+   * A pasted token address read on-chain for an import (D39): EVM — code, then decimals() (0..36), symbol() and name()
+   * over the runtime RPCs; Solana — the mint account (SPL Token or Token-2022, initialized) and its Token-2022 or
+   * Metaplex metadata over the runtime Solana RPCs. Never a token list, a third-party API or a venue. Idle while either
+   * argument is null; cached per (network, address).
+   */
+  useTokenLookup(caip2: string | null, address: string | null): TokenLookup;
+  /** Keep a confirmed import in this browser (D39; demo: in memory only). It joins useSwapTokens at once. */
+  importToken(token: Token): void;
+  /** Forget an imported token (by key) in this browser. */
+  removeImportedToken(key: string): void;
 }
 
 /** wallets: connect / disconnect, and signers for execution. */

@@ -1084,6 +1084,29 @@ desktop only. Rows are buttons in a virtualized list (`@tanstack/react-virtual`,
 ~400 tokens. Networks without a connected wallet still list (receive side); on the pay side they appear when
 deposit-only. Held dot only for connected families.
 
+**Import by address (web, 2026-11-15, ARCHITECTURE D39).** Placeholder "Search, or paste a token address". When the
+search text is an EVM contract or a Solana mint and no token on the lookup network has it (a listed one, or one
+imported already, simply shows as its row), the list starts with an "Import token" card (surface1, radius 14,
+`data-testid="swap-import-result"`): `caps` dim "IMPORT TOKEN" and, for an EVM contract, a network chooser (a native
+`<select>` of the 31 EVM networks in a surface3 chip, `swap-import-network`) — first the network the sheet is filtered
+to, with "All networks" the other side's, else this side's, else Ethereum; below it the read token as a row
+(`TokenIcon` 34 monogram, `listTitle` symbol, `meta` dim "{name} · {network} · {short address}", an amber `Import` tag;
+`swap-import-open`), a skeleton row "Reading it on {network}…", or the reason in amber (`swap-import-failed`). A TON,
+Tron, NEAR, Bitcoin or Zcash address shows one muted line instead ("TON tokens can't be imported yet — importing by
+address works on EVM networks and Solana.", `swap-import-unsupported`).
+Opening it replaces the list with the confirmation (`swap-import-confirm`): `SheetHeader` "Import token" / "on
+{network}" with Back (to the search) and close; `TokenIcon` 52 monogram with the network badge, `title` symbol,
+`small` ink2 name, `meta` muted "{network} · {n} decimals"; an address box (surface2, radius 14: `caps` "CONTRACT
+ADDRESS", the full address in 12.5 px monospace, selectable, a `CopyButton`, "View on the {network} explorer" in
+accent); the warning (amber-bg box, `info` icon in amber, `small` ink2): "Anyone can create a token with any name —
+including fake copies of real tokens. Check this address against the project's official sources. Swapping an unknown
+token can lose its value."; when it reads like a listed token on that network, a `small` 600 amber line "Not the
+listed {SYMBOL} — that one's address is {short}"; a 20 px checkbox "I understand" (accent), then "Import" (48,
+disabled until checked) and a ghost "Cancel". Imported, the form takes the token and the sheet closes. A pair link
+naming an unlisted token opens the sheet on this confirmation alone (no Back). Imported rows sit after the catalog's
+with an amber "Imported" tag beside the symbol, the name in the sub line, and a 30 px flat close button beside the row
+("Remove the imported {SYMBOL} on {network}", `swap-token-remove-<key>`).
+
 ### 5.8 ReviewSheet: review → approve → swap steps
 
 1. **Review** (mobile §2.6): `SheetHeader` (icon = pay token, title "Review swap", sub `{A chain} → {B chain}`),

@@ -22,6 +22,7 @@ import type {
   SwapRecipient,
   SwapToken,
   Token,
+  TokenAddress,
 } from "./domain";
 import type {ActivityPort, CatalogPort, ExecutePort, SwapPort, WalletsPort} from "./ports";
 import type {PaySide, QuoteRequest, RouteRejection, RouteSnapshot, RoutesRequest, RouteView, VenueTrust, WebRoute} from "./routes";
@@ -96,6 +97,19 @@ export interface CatalogModule {
   publicClient(chainId: number): PublicClient;
   /** Runtime-config RPC list for a chain id ([] when none). */
   evmRpcUrls(chainId: number): readonly string[];
+  // ── imported tokens (D39) ──
+  /** The search text as a token address: an EVM contract or Solana mint (importable), another family's address ("unsupported"), else null. */
+  detectTokenAddress(input: string): TokenAddress | null;
+  /** EVM networks and Solana (not receive-only): where a token can be imported in v1. */
+  importable(chain: Pick<Chain, "family" | "receiveOnly"> | undefined): chain is Chain;
+  /** An imported token's key: `<slug>:<contract>`, lowercased on EVM, verbatim on Solana. */
+  importKey(chain: Pick<Chain, "slug" | "family">, contract: string): string;
+  /** The catalog token at this contract on this network, if it is one. */
+  listedToken(caip2: string, contract: string): Token | undefined;
+  /** A pair link's key naming an importable unlisted token, or null. */
+  parseTokenKey(key: string): {chain: Chain; address: string} | null;
+  /** The listed token an imported one reads like on its network (symbol or name, look-alike letters folded), or null. */
+  lookalikeOf(t: Pick<Token, "caip2" | "symbol" | "name">, listed?: readonly Token[]): Token | null;
 }
 
 /** src/wallets/index.ts */

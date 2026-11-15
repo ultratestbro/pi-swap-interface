@@ -45,7 +45,8 @@ function useFailed(src: string | undefined): [boolean, () => void] {
 
 /** Round logo on a surface3 disc: `network` by catalog slug, else `token` by symbol; monogram fallback. */
 export function AssetIcon({token, network, size = 38, label}: AssetIconProps & Labelled) {
-  const source = network !== undefined ? networkLogo(network) : token ? tokenLogo(token.symbol) : null;
+  // An imported token (D39) is always its monogram: its symbol is whatever its deployer wrote.
+  const source = network !== undefined ? networkLogo(network) : token && !token.imported ? tokenLogo(token.symbol) : null;
   const [failed, fail] = useFailed(source?.src);
   const text = monogram(network ?? token?.symbol ?? "?");
   return (

@@ -47,7 +47,26 @@ export interface Token {
   gasToken: boolean;
   /** CcAsset.icon (CMC URL) — data only, never hotlinked at runtime (D13). */
   icon?: string;
+  /**
+   * A token the viewer imported by its address (D39): read on-chain, kept in this browser only, never priced, never
+   * shown with a logo found by its symbol. Its `catalogSymbol` is its contract (the engine names an unlisted token by
+   * contract or mint, with the decimals read here). Absent on every catalog token.
+   */
+  imported?: true;
+  /** The token's on-chain name, cleaned (imported tokens only: the catalog carries none). */
+  name?: string;
+  /** Solana: the mint belongs to Token-2022, so its associated token accounts derive under that program (imported tokens only). */
+  token2022?: true;
 }
+
+/**
+ * What the token sheet's search text is when it is a token address (D39): an EVM contract (any case) or a Solana mint,
+ * which can be imported, or an address of a family that can't be imported yet (TON, Tron, NEAR, Bitcoin, Zcash).
+ */
+export type TokenAddress = {family: "evm" | "solana"; address: string} | {family: "unsupported"; addressFamily: ChainFamily};
+
+/** An address read on-chain for an import (D39): the token it is (not imported yet), or why it can't be, in the user's words. */
+export type TokenLookup = {status: "idle"} | {status: "loading"} | {status: "found"; token: Token} | {status: "failed"; reason: string};
 
 /** Balance read state per token. "none" = no address of this family is connected. */
 export type BalanceState = "loaded" | "loading" | "none" | "error";

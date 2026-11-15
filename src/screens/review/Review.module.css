@@ -113,3 +113,9 @@
   flex-direction: column;
   gap: 10px;
 }
+
+/* an imported token's contract in its note (D39): every character readable */
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}

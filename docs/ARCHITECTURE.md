@@ -208,7 +208,8 @@ Arbitrum: owner's decision, 2026-11-13). Allowlists (LI.FI targets, THORChain ro
 (+ `amount`, `balance` state, `priceUsd`, `usd`, `owner: string | null`, `payMode`). `key =
 <slug>:<contract lowercased | native>`; `contract` keeps its case. `gasToken` marks natives plus Celo CELO / Arc
 USDC (ERC-20 faces), and MAX reserves gas for them. Pay side = `payMode !== "none"` (`wallet`, `connect`,
-`deposit`); receive side = every token.
+`deposit`); receive side = every token. Tokens imported by their address (D39) join both after the catalog's, marked
+`imported` (their `catalogSymbol` is their contract; never priced).
 
 **D5 — Chains.** `src/shared/chains.ts` is `@cp0x/shared` verbatim with one patch (World Chain's dead tenderly
 RPC → drpc + thirdweb). The web `Chain` adds `catalogKey`, `memo`, `icon`, `receiveOnly` (catalog.md §2.3). The 9
@@ -556,7 +557,8 @@ hooks (call them unconditionally). The recipient's "this is a contract" warning 
   Solana wallet `cp0x.solanaWallet.v1`, Tron wallet `cp0x.tronWallet.v1`, NEAR wallet `cp0x.nearWallet.v1`, the
   remembered TON wallet `cp0x.tonWallet.v1` and TON Connect's session `cp0x.tonconnect.*` (D11), the Settings sheet's
   overrides `cp0x.swap.settings.v1`, the connection mode and Custom endpoints `cp0x.swap.connection.v1`, Custom's venue
-  keys `cp0x.swap.keys.v1`, D30); every access in try/catch. One exception, not ours: once its modal was used, TON
+  keys `cp0x.swap.keys.v1`, D30; the tokens imported by address `cp0x.swap.tokens.v1`, D39 — memory only on an IPFS path
+  gateway); every access in try/catch. One exception, not ours: once its modal was used, TON
   Connect UI keeps `ton-connect-ui_wallet-info`, `ton-connect-ui_preferred-wallet` and
   `ton-connect-ui_last-selected-wallet-info` (the wallet picked there, for its "Recent" mark), unprefixed and without a
   guard; it falls back to memory when `localStorage` can't be read, the runtime builds it inside a try/catch (a
@@ -608,7 +610,9 @@ usdt0, cctp), own-node → "NODE" (thorchain), provider-api → "API" (the rest,
 
 **D22 — Hash routing.** One screen: `#/?pay=<tokenKey>&receive=<tokenKey>&amount=<decimal>&swap=<id>&demo=1`.
 `src/config/hash.ts`: `parseHash`, `formatHash`, `setHashQuery` (replaceState by default), `useHashRoute`. Form
-state may mirror into the hash ("Try again", shareable pairs); addresses never go into the URL.
+state may mirror into the hash ("Try again", shareable pairs); addresses never go into the URL. A token key naming a
+token the list doesn't have (an unlisted EVM contract or Solana mint) is never trusted on the link's word: that side
+opens empty with the import confirmation up (D39).
 
 **D23 — CSS and layout.** Plain CSS Modules (`*.module.css`) over the variables in `src/theme/tokens.css`; global
 CSS only in `src/theme/` (loaded by `src/ui/index.ts`). No Tailwind, no CSS-in-JS library; inline `style` only for
@@ -1534,6 +1538,85 @@ so — like Fynd, and like keyed LI.FI — they exist only in Standard mode and 
   `recordSignature`; screens' `walletSteps`; activity's `ExecStage` + `"permit"`, `SwapRecord.permit`, `SwapStep.key`
   + `"permit"`.
 
+**D39 — Imported tokens (owner, 2026-11-15).** "A user can paste a token's address when it isn't in the list, and swap
+it."
+- **Scope (v1).** EVM networks (all 31) and Solana. A pasted TON, Tron, NEAR, Bitcoin or Zcash address says it can't be
+  imported yet (`detectTokenAddress` → "unsupported"). What an EVM contract or a Solana mint is, swap2-assets'
+  `isTokenAddress` decides — the engine's own test for an unlisted token; a 32-byte base58 key reads as Solana before
+  any shape test (a short one starting with 1 or 3 also has a Bitcoin address's shape).
+- **Where it is looked up.** In the token sheet, when the search text is a token address and no token on the lookup
+  network has it (`tokenAt`; a listed one, or one imported already, just shows as itself): an EVM contract on the
+  network the sheet is filtered to, with "All networks" the other side's network, else this side's, else Ethereum
+  (`lookupNetwork`), with a network chooser in the result to read it on another — one network per read, never all 31
+  at once; a mint on Solana.
+- **What is read, and from where.** On-chain only — never a token list, a third-party API or a venue's word
+  (`readTokenForImport`, `src/catalog/imported.ts`). EVM: `eth_getCode` (code, not an EIP-7702 delegation), then
+  `decimals()` (required, 0..36), `symbol()` and `name()` (ABI string or legacy bytes32) over the catalog's public
+  client — the runtime RPCs, so Standard's proxy RPC first (D30: cp0x sees that read like any RPC call it carries).
+  Solana: one `getMultipleAccounts` over the runtime Solana RPCs for the mint (owner SPL Token or Token-2022,
+  initialized, decimals ≤ 36) and its Metaplex metadata PDA; the name and symbol from Token-2022's metadata extension
+  (TLV 19, for that mint), else Metaplex, else "UNKNOWN". Every text is cleaned (`cleanTokenText`): control, format
+  (bidi overrides, zero-width), private-use and other default-ignorable characters (Hangul fillers) stripped, stacks of
+  combining marks cut to two, whitespace collapsed, a symbol ≤ 20 and a name ≤ 48 characters; missing → "UNKNOWN".
+  react-query `["token-meta", caip2, address]`, 10 min; a network failure is asked again once, the chain's own answer
+  never. Once a wallet of its family is connected its balance is read like the catalog's, in a read of its own per
+  network (`["bal", slug, owner, "imported", …keys]`, still under the tracker's `["bal"]`); an imported Token-2022
+  mint's associated account derives under Token-2022 (`token2022`).
+- **The confirmation** (`ImportToken.tsx`, inside the token sheet; a pair link opens it alone): monogram, symbol,
+  name, network and decimals, the full address (monospace, copyable) with its explorer page, the warning verbatim —
+  "Anyone can create a token with any name — including fake copies of real tokens. Check this address against the
+  project's official sources. Swapping an unknown token can lose its value." — and, when its symbol or name reads as a
+  listed token's symbol on the same network (`lookalikeOf`: NFKC, case, Cyrillic / Greek look-alike letters, 0 / o and
+  1 / l / i folded, spaces and dots dropped), an amber "Not the listed {SYMBOL} — that one's address is {short}" ("…
+  that one is {Chain}'s own coin" for a native). "Import" stays disabled until "I understand" is checked.
+- **Kept in this browser only.** `localStorage cp0x.swap.tokens.v1` (D16): `{chain, contract, symbol, name, decimals,
+  token2022?}` per token, newest first, at most 50 (the oldest go), every read held to the rules again — an importable
+  network, a token address there that isn't a catalog token, whole decimals in 0..36, texts cleaned again, duplicates
+  dropped; every access guarded; another tab's change arrives through the `storage` event. On an IPFS path gateway — one
+  origin for every site on it (D8) — imports live in memory only, so no other site there can plant one that skipped
+  the warning. Key `<slug>:<contract>`: lowercased on EVM like the catalog's, verbatim on Solana (a lowercased mint is
+  another address, and a shared link must still name it). Listed in the sheet after the catalog's tokens, with an
+  "Imported" badge, its name and a remove button.
+- **Never priced, never dressed up.** No USD anywhere and no third-party price lookup: `tokenPrice` gives nothing for an
+  import whatever its symbol, the amount cards say "Imported token · no price", fees and gas stay in the native coin's
+  USD as before, and the router ranks such a pair on raw output (its `usdValue` finds no catalog asset). Its logo is
+  always its monogram (`AssetIcon` never turns an imported token's symbol into a bundled logo). Auto slippage reads it
+  as long-tail (0.3%, D37). The opening pair never picks an imported token the link didn't name.
+- **Links (D22).** A pair link's key naming an unlisted EVM contract or Solana mint not imported in this browser
+  (`linkedToken`) opens that side empty ("Select a token") with the token sheet on that address's confirmation, the
+  warning included: confirmed, the side is the token; cancelled, it stays empty; an address that can't be read is
+  ignored (the default fills the side). A key imported here already, a listed EVM key in another case or a listed
+  Solana mint as written is that token. One side per link (the pay side first).
+- **Engine.** A quote names an imported source by its contract with `sourceDecimals` (`sourceParams`, swap2-core
+  0.14.0) and an imported destination by its contract (as any). Execution passes `fromToken` = the contract with
+  `fromTokenDecimals`, `toTokenDecimals` for an imported destination (a bridge leg's reviewed minimum,
+  `bridgeOut.destDecimals`), and `allowUnlistedTokens: true` for that execution only (`engineConfig({unlisted})`) — a
+  catalog pair runs with the config it always had, its tokens named by catalog symbol. The engine reads the source's
+  decimals again through the account (`getTokenInfo`, one of the gated account's reads) and refuses a mismatch ("This
+  token's decimals on-chain don't match the ones read when it was imported — nothing was signed."); `assertCoherent`
+  holds an import to a token address the catalog doesn't list, the very contract the review showed.
+- **Which venues take one** (dry quotes 2026-11-15 for DEGEN on Base, PEPE on Ethereum and BONK on Solana, a scratch
+  probe over the installed packages, nothing signed): on one network Uniswap, LI.FI, Fynd and 0x quoted, while Curve and
+  Balancer were asked and found no pinned pool; between networks LI.FI (EVM and Solana, either side) and Relay into one
+  (out of one it refuses: its deposit would first swap through a router it doesn't sign for — "Doesn't take this token
+  as a source"); within Solana Jupiter and LI.FI. USDT0, CCTP, THORChain, Chainflip, NEAR Intents, Symbiosis, Omniston
+  and Across resolve both sides in their own lists, so their supportsRoute is false and "Not for this pair" reads
+  "Listed tokens only" (`LISTED_ONLY_VENUES`, providerMeta). Fee-on-transfer tokens: the SDK's own refusals stand (0x
+  refuses a token being bought that taxes transfers: "Doesn't take a token that taxes transfers"); a taxed sale fails
+  the engine's simulation before anything is signed.
+- **Review and gate.** The review shows an amber "Imported token: {SYMBOL}" note with the full contract for each
+  imported side (stepping aside once confirmed, D37). The in-page gate is unchanged in strength: approvals exact to
+  `reviewed.fromContract` and the reviewed spender, call targets pinned per venue, Permit2 held to the reviewed token
+  and input — every check keyed on contracts, none on a catalog symbol (`checkPlan`, `checkPlanBrowser`,
+  `permit2Problem`). The one symbol-keyed check before it, `assertCoherent`'s catalog lookup, has its own branch for an
+  import (above); Tron, TON and NEAR, whose rules read the catalog, aren't importable.
+- Contract changes: domain `Token` + `imported?`, `name?`, `token2022?`, and `TokenAddress`, `TokenLookup`;
+  `CatalogPort` + `useTokenLookup`, `importToken`, `removeImportedToken` (demo: in memory); `CatalogModule` +
+  `detectTokenAddress`, `importable`, `importKey`, `listedToken`, `parseTokenKey`, `lookalikeOf`; ui `AssetIconProps.token`,
+  `TokenIconProps.token` and `TokenChipToken` + `imported?`; swap exports `sourceParams`, `LISTED_ONLY_VENUES`,
+  `ScopeSide.imported`; execute's `engineConfig` + `unlisted`; catalog `ataOf(owner, mint, token2022?)`, `solRpc`,
+  `BalanceSpec.imported`, `balanceSpecs(…, imported)`.
+
 ---
 
 ## 5. Conventions
@@ -1564,7 +1647,7 @@ so — like Fynd, and like keyed LI.FI — they exist only in Standard mode and 
 
 | file | holds |
 |---|---|
-| `src/contracts/domain.ts` | `ChainFamily`, `ChainInfo` (re-exported from shared), `ExtraFamily`, `Family`, `Chain`, `Token`, `BalanceState`, `Balance`, `PayMode`, `SwapToken`, `PriceMap`, `Owners`, `Pair`, `RecipientCheck`, `SwapRecipient`, `PickerNetwork` |
+| `src/contracts/domain.ts` | `ChainFamily`, `ChainInfo` (re-exported from shared), `ExtraFamily`, `Family`, `Chain`, `Token` (+ `imported`, `name`, `token2022`, D39), `TokenAddress`, `TokenLookup`, `BalanceState`, `Balance`, `PayMode`, `SwapToken`, `PriceMap`, `Owners`, `Pair`, `RecipientCheck`, `SwapRecipient`, `PickerNetwork` |
 | `src/contracts/routes.ts` | `RouteTag`, `RouteFee`, `RouteView` (mobile verbatim), `Execution`, `VenueTrust`, `WebRoute`, `PaySide`, `RefusalCategory`, `RouteRejection` (short line, category, detail, raw), `RouteMode`, `RouteSnapshot` (+ `mode`, `venues`), `QuoteRequest` (explicit addresses, D7), `PreviewRequest` (D7), `RoutesRequest`, `RoutesState` (+ `limitedUntil`, D29), `RequoteState` |
 | `src/contracts/execution.ts` | `ReviewedSwap` (mobile verbatim), `SwapDraft`, `ExecutionPhase`, `ExecutionPhaseDetail`, `EvmTransport`, `EvmSourceSigner`, `SolanaSourceSigner`, `TronWebLike`, `TronSourceSigner`, `TonConnectRequest`, `TonSender`, `TonSourceSigner`, `NearInjectedWallet`, `NearSourceSigner`, `SourceSigner`, `ExecuteResult`, `StartSwapInput`, `IssueDepositInput`, `DepositTicket`, `ClaimPreview`, `ClaimResult` |
 | `src/contracts/activity.ts` | `SwapStatus`, `ExecStage`, `SwapRecord` (mobile + `mode`/`deposit`/`heartbeatAt`/`counted`), `RecordSide`, `NewRecordInput`, `StatusView`, `StepState`, `SwapStep`, `ActivityUrgency`, `ActivityItem`, `ActivityState` |
@@ -1581,6 +1664,8 @@ Ports (effectful):
 catalog.useChains(): readonly Chain[]            catalog.useTokens(): readonly Token[]
 catalog.useBalances(owners): BalancesState       catalog.usePrices(): PriceMap
 catalog.useSwapTokens(owners): SwapTokensState   catalog.useIsContract(caip2, address | null): boolean | null
+catalog.useTokenLookup(caip2 | null, address | null): TokenLookup             (D39: an import's on-chain read)
+catalog.importToken(token): void                 catalog.removeImportedToken(key): void
 wallets.Provider                                 wallets.useWallets(): WalletsApi          wallets.getSigner(caip2): Promise<SourceSigner>
 swap.useRoutes(r: RoutesRequest | null, prices): RoutesState & {refresh}
 swap.useRequote(draft | null, prices): RequoteState & {refetch}
@@ -1603,7 +1688,8 @@ store functions the runner writes through (`loadSwaps`, `getSwaps`, `saveSwap`, 
 `TOKEN_BY_KEY`, `ZERO_ADDRESS`, `tokenKey`, `destTokenId`, `matchesToken`, `PINNED_NETWORKS`, `pickerNetworks`,
 `pickSide`, `flipPair`, `defaultPair`, `checkRecipient`, `isAddressFor`, `shortAddress`, `isContractAddress`,
 `txUrl`, `addressUrl`, `formatUsd`, `formatAmount`, `unitsToDecimal`, `VIEM_CHAINS`, `publicClient`,
-`evmRpcUrls`; wallets: `familyOfCaip2`, `useConnectOptions`, `connectOptionGroups`, `WALLETCONNECT_ID`; ui: every
+`evmRpcUrls`, and for imports (D39) `detectTokenAddress`, `importable`, `importKey`, `listedToken`, `parseTokenKey`,
+`lookalikeOf`; wallets: `familyOfCaip2`, `useConnectOptions`, `connectOptionGroups`, `WALLETCONNECT_ID`; ui: every
 primitive + `useBreakpoint`; screens: `SwapScreen`, `Routes`.
 
 Config (`src/config/index.ts`): `getRuntimeConfig`, `loadRuntimeConfig`, `isDemo`, `demoWallets`,

@@ -34,7 +34,9 @@ export interface PayCardProps {
 export function PayCard({from, text, amountIn, problem, balance, onAmount, onPaste, note, onMax, onPickToken}: PayCardProps) {
   const usd = from && amountIn !== null ? usdOf(amountIn, from.decimals, from.priceUsd) : undefined;
   const qr = from?.payMode === "deposit";
-  const foot = note ?? problem ?? (usd !== undefined ? `≈ ${formatUsd(usd)}` : from && from.priceUsd === undefined && amountIn ? "No price" : "≈ $0.00");
+  // An imported token (D39) is never priced: the foot says so instead of "$0.00".
+  const foot =
+    note ?? problem ?? (usd !== undefined ? `≈ ${formatUsd(usd)}` : from?.imported ? "Imported token · no price" : from && from.priceUsd === undefined && amountIn ? "No price" : "≈ $0.00");
   return (
     <Card className={s.card} data-testid="swap-pay-card">
       <div className={s.spread}>
@@ -132,7 +134,13 @@ export function ReceiveCard({from, to, route, quoting, held, preview, onPickToke
       </div>
       <Text as="p" variant="meta" tabular color="var(--dim)" className={`${s.footLine} ${held ? s.updating : s.updatable}`}>
         {/* a no-break space when there is nothing to say: a collapsed line would lift everything under the card */}
-        {usd !== undefined ? `≈ ${formatUsd(usd)}` : to && to.chain !== from?.chain ? `on ${to.chainName}` : "\u00a0"}
+        {usd !== undefined
+          ? `≈ ${formatUsd(usd)}`
+          : to?.imported
+            ? `Imported token${to.chain !== from?.chain ? ` on ${to.chainName}` : ""} · no price`
+            : to && to.chain !== from?.chain
+              ? `on ${to.chainName}`
+              : "\u00a0"}
       </Text>
     </Card>
   );

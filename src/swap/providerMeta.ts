@@ -91,7 +91,18 @@ export interface ScopeSide {
   symbol: string;
   /** null = the network's native coin; absent = unknown. */
   contract?: string | null;
+  /** Imported by its address (D39): not in any venue's own token list. */
+  imported?: boolean;
 }
+
+/**
+ * Venues that serve listed tokens only (D39): their providers resolve both sides in their own asset lists, so a token
+ * imported by its address is never asked of them (each one's supportsRoute is false). Probed 2026-11-15 with dry quotes
+ * for DEGEN on Base, PEPE on Ethereum and BONK on Solana: Uniswap, LI.FI, Fynd and 0x quoted them on one network, LI.FI
+ * between networks (EVM and Solana, either side), Relay into one (out of one it refuses: its deposit would first swap
+ * through a router it doesn't sign for), Jupiter within Solana; Curve and Balancer are asked and find no pinned pool.
+ */
+export const LISTED_ONLY_VENUES: ReadonlySet<string> = new Set(["usdt0", "cctp", "thorchain", "chainflip", "near_intents", "symbiosis", "omniston", "across"]);
 
 /** Venues that also swap within one network (their own supportsSameChain); the router asks no other venue then. */
 const SAME_CHAIN_VENUES: ReadonlySet<string> = new Set(["lifi", "uniswap", "curve", "wrap", "balancer", "fynd", "jupiter", "omniston", "zeroex"]);
@@ -161,11 +172,13 @@ function acrossScope(from: ScopeSide, to: ScopeSide): string {
 
 /**
  * Why an enabled venue wasn't asked for this pair, in one honest line (the route list's "Not for this pair" group).
+ * A venue that serves listed tokens only reads "Listed tokens only" for a token imported by its address (D39).
  * The decision itself is each provider's supportsRoute (D17); these lines only name the venue's scope, and stay
  * generic ("Doesn't cover this pair") where the answer is in a venue's token list — THORChain has no USDT on Solana,
  * for one, but the app would only be guessing which token is missing.
  */
 export function venueScope(provider: string, from: ScopeSide, to: ScopeSide): string {
+  if ((from.imported || to.imported) && LISTED_ONLY_VENUES.has(provider)) return "Listed tokens only";
   const sameNet = from.caip2 === to.caip2;
   const evm = from.family === "evm" && to.family === "evm";
   switch (provider) {

@@ -19,6 +19,10 @@ your browser still checks every quote and transaction (see [Connection modes](#c
 - Bitcoin, Zcash and other chains your browser wallet cannot sign for — and Tron, TON or NEAR without a connected
   wallet of theirs — through deposit-address routes: you get an address and a QR code, you send from any wallet, and
   refunds go to the address you enter.
+- Tokens that aren't in the list, on EVM chains and Solana: paste the token's contract or mint address in the token
+  picker. The page reads its decimals, symbol and name from the chain itself, shows a warning about look-alike copies,
+  and keeps the token in your browser only once you confirm. Venues that trade any token (Uniswap, LI.FI, Jupiter, 0x,
+  Fynd, Relay into a chain) quote it; imported tokens are never priced.
 
 ## Application links
 

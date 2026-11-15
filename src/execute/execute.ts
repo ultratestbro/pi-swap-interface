@@ -19,7 +19,7 @@
 import type {CrossChainRouter} from "@anywalletkit/protocol-swap2-router/router";
 import {RouterSwap2Protocol, type RouterSwap2Config} from "@anywalletkit/protocol-swap2-router/swap2/router";
 import type {Swap2ExecutionPlan, Swap2NativeFeeCeilingContext} from "@anywalletkit/protocol-swap2-core/swap2/base";
-import {ccAsset} from "@anywalletkit/swap2-assets";
+import {ccAsset, ccAssetByToken, isTokenAddress} from "@anywalletkit/swap2-assets";
 import type {SwapToken} from "../contracts/domain";
 import type {
   EvmSourceSigner,
@@ -96,6 +96,12 @@ export function engineConfig(o: {
   reviewExecution: (plan: Swap2ExecutionPlan) => void | Promise<void>;
   onExecutionPhase?: (phase: ExecutionPhase, detail?: ExecutionPhaseDetail) => void;
   decodeTonBody?: (boc: string) => TonBody;
+  /**
+   * A side is a token imported by its address (D39): swap2-core 0.14.0's `allowUnlistedTokens`, set for that execution
+   * only — a catalog pair runs with exactly the config it always had. The engine then reads the source's decimals with
+   * the account's getTokenInfo and refuses ours if they differ.
+   */
+  unlisted?: boolean;
 }): RouterSwap2Config {
   return {
     fromChain: o.fromChain,
@@ -104,6 +110,7 @@ export function engineConfig(o: {
     onExecutionPhase: (phase, detail) => o.onExecutionPhase?.(phase, detail),
     nativeFeeCeiling,
     ...(o.decodeTonBody ? {decodeTonBody: o.decodeTonBody, tonGasCeiling: TON_BODY_GAS} : {}),
+    ...(o.unlisted ? {allowUnlistedTokens: true} : {}),
   };
 }
 
@@ -132,15 +139,23 @@ function assertCoherent({from, to, reviewed, signer}: ExecuteSwapInput): void {
   if (reviewed.fromChain !== from.caip2 || reviewed.destChain !== to.caip2) throw bad("the networks or the token changed");
   if ((reviewed.fromContract === null) !== (from.contract === null) || (from.contract !== null && !same(reviewed.fromContract ?? undefined, from.contract)))
     throw bad("the token you pay changed");
-  // The engine names the source by catalog symbol: it must resolve to the very token the review showed.
-  const asset = ccAsset(from.caip2, from.catalogSymbol);
-  const assetContract = asset?.contract ?? null;
-  if (
-    !asset ||
-    (assetContract === null) !== (reviewed.fromContract === null) ||
-    (assetContract !== null && !same(assetContract, reviewed.fromContract ?? undefined))
-  )
-    throw bad("the token you pay changed");
+  if (from.imported) {
+    // An imported token (D39) is named by its contract: a token address on that network that the catalog doesn't
+    // list (a listed one is always named by its catalog symbol), the very contract the review showed.
+    if (!from.contract || !isTokenAddress(from.caip2, from.contract) || ccAssetByToken(from.caip2, from.contract) || !same(from.contract, reviewed.fromContract ?? undefined))
+      throw bad("the token you pay changed");
+  } else {
+    // The engine names the source by catalog symbol: it must resolve to the very token the review showed.
+    const asset = ccAsset(from.caip2, from.catalogSymbol);
+    const assetContract = asset?.contract ?? null;
+    if (
+      !asset ||
+      (assetContract === null) !== (reviewed.fromContract === null) ||
+      (assetContract !== null && !same(assetContract, reviewed.fromContract ?? undefined))
+    )
+      throw bad("the token you pay changed");
+  }
+  if (to.imported && (!to.contract || !isTokenAddress(to.caip2, to.contract) || ccAssetByToken(to.caip2, to.contract))) throw bad("the networks or the token changed");
   if (!same(reviewed.destToken, destTokenId(to))) throw bad("the networks or the token changed");
   if (reviewed.amountIn <= 0n) throw bad("the amount is not positive");
   if (reviewed.minOut <= 0n) throw bad("the review has no minimum to hold the route to");
@@ -204,12 +219,16 @@ export async function executeSwap(input: ExecuteSwapInput, deps: ExecuteDeps = {
         reviewExecution: arm,
         ...(input.onPhase ? {onExecutionPhase: input.onPhase} : {}),
         ...(tonBody ? {decodeTonBody: tonBody.decodeTonBody} : {}),
+        ...(from.imported || to.imported ? {unlisted: true} : {}),
       }),
     );
     try {
       const res = await protocol.swap2({
-        fromToken: from.catalogSymbol,
+        // An imported source (D39) by its contract and the decimals read on-chain (the engine re-reads and compares
+        // them); an imported destination's decimals hold a bridge leg's reviewed minimum (bridgeOut.destDecimals).
+        ...(from.imported && from.contract ? {fromToken: from.contract, fromTokenDecimals: from.decimals} : {fromToken: from.catalogSymbol}),
         toToken: destTokenId(to),
+        ...(to.imported ? {toTokenDecimals: to.decimals} : {}),
         ...(to.caip2 !== from.caip2 ? {toChain: to.caip2} : {}),
         fromTokenAmount: reviewed.amountIn,
         recipient: reviewed.recipient,

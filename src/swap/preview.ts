@@ -51,6 +51,7 @@ import type {Family} from "../contracts/domain";
 import type {PreviewRequest} from "../contracts/routes";
 import {destTokenId} from "../catalog";
 import {SIGNER_ONLY_REFUSAL} from "./providerWrappers";
+import {sourceParams} from "./source";
 
 /**
  * One sample address per destination family, copied from the SDK's own table (protocol-swap2-near-intents
@@ -170,7 +171,8 @@ export const canPreview = (fromFamily: Family, toFamily: Family): boolean => !!P
 export function previewBaseParams(req: PreviewRequest): QuoteParams {
   return {
     sourceChain: req.from.caip2,
-    sourceToken: req.from.catalogSymbol,
+    // An imported source (D39): its contract and the decimals read on-chain, as in a live quote.
+    ...sourceParams(req.from),
     destChain: req.to.caip2,
     destToken: destTokenId(req.to),
     amountIn: req.amountIn.toString(),

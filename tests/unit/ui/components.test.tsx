@@ -229,6 +229,13 @@ describe("logos", () => {
     expect(render(<AssetIcon network="morph" />).container.textContent).toBe("MORP");
   });
 
+  it("an imported token is always its monogram — never the logo its symbol names (D39)", () => {
+    const fake = {symbol: "USDC", caip2: "eip155:8453", contract: "0x1111111111111111111111111111111111111111", chain: "base", imported: true};
+    const {container} = render(<TokenIcon token={fake} />);
+    expect([...container.querySelectorAll("img")].map((i) => i.getAttribute("src"))).toEqual(["logos/networks/base.svg"]);
+    expect(container.textContent).toBe("USDC");
+  });
+
   it("TokenIcon adds the network badge; logos are decorative unless labelled", () => {
     const {container} = render(<TokenIcon token={{symbol: "USDC", caip2: "eip155:8453", contract: "0x8335", chain: "base"}} />);
     const srcs = [...container.querySelectorAll("img")].map((i) => i.getAttribute("src"));

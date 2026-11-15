@@ -35,6 +35,7 @@ import {buildProviders, closeProviders} from "./providers";
 import {RATE_LIMITED} from "./refusals";
 import {orderRoutes, parseRejections, tagRoutes} from "./routes";
 import {createProviderStores} from "./stores";
+import {sourceParams} from "./source";
 import {toWebRoute} from "./webRoute";
 
 type Prices = Readonly<Record<string, number>>;
@@ -44,14 +45,16 @@ type Prices = Readonly<Record<string, number>>;
  * recipient, `refundAddress` = its refund address — never `to.owner` and never
  * an SDK placeholder. Throws when either is blank, or when handed a preview
  * (its runtime brand), so neither a made-up address nor a preview can reach a
- * live quote, a re-quote or a deposit even if a caller forgets the rule.
+ * live quote, a re-quote or a deposit even if a caller forgets the rule. An
+ * imported source (D39) is named by its contract with the decimals read
+ * on-chain (`sourceDecimals`); an imported destination is its contract, as any.
  */
 export function quoteParams(req: QuoteRequest): QuoteParams {
   if ((req as {preview?: unknown}).preview !== undefined) throw new Error("A preview can't be quoted live: it has no addresses of yours.");
   if (!req.recipient?.trim() || !req.refundAddress?.trim()) throw new Error("A recipient and a refund address are needed to quote.");
   return {
     sourceChain: req.from.caip2,
-    sourceToken: req.from.catalogSymbol,
+    ...sourceParams(req.from),
     destChain: req.to.caip2,
     destToken: destTokenId(req.to),
     amountIn: req.amountIn.toString(),

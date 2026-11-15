@@ -31,6 +31,8 @@ export interface TokenChipToken {
   contract: string | null;
   chain: string;
   chainName: string;
+  /** Imported by its address (D39): a monogram, never a logo found by its symbol. */
+  imported?: boolean;
 }
 
 /** Props of the token chip; `token: null` shows the empty "Select" state. */

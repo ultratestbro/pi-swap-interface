@@ -36,7 +36,8 @@ export {
 } from "./engine";
 
 // ── names / venue facts ──
-export {PERMIT2_VENUES, PROVIDER_NAMES, TWO_PHASE, orderSpender, providerName, venueScope, type ScopeSide} from "./providerMeta";
+export {LISTED_ONLY_VENUES, PERMIT2_VENUES, PROVIDER_NAMES, TWO_PHASE, orderSpender, providerName, venueScope, type ScopeSide} from "./providerMeta";
+export {sourceParams} from "./source";
 export {FYND_LICENSE_URL, VENUE_TRUST, fyndRouterNotice, venueTrust, venueTrustText} from "./venues";
 
 // ── route list ──

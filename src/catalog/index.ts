@@ -2,7 +2,41 @@
  * The catalog's public entry (contract: CatalogModule in src/contracts/modules.ts): networks, tokens, addresses,
  * prices, balances, viem chain definitions and public clients — no backend. Other modules import only from here.
  */
-export {catalogPort, usePrices, useSwapTokens} from "./port";
+export {catalogPort, usePrices, useSwapTokens, useTokenLookup} from "./port";
+
+// ── imported tokens (D39) ──
+export {
+  IMPORTED_TOKENS_CAP,
+  IMPORTED_TOKENS_KEY,
+  MAX_TOKEN_DECIMALS,
+  TokenReadError,
+  UNKNOWN_TOKEN_TEXT,
+  addImportedToken,
+  cleanTokenText,
+  decodeTokenString,
+  decodeUint,
+  detectTokenAddress,
+  importKey,
+  importable,
+  importedToken,
+  importedTokens,
+  listedToken,
+  lookalikeOf,
+  metaplexMetadata,
+  parseImportedTokens,
+  parseMint,
+  parseTokenKey,
+  readEvmToken,
+  readSolanaToken,
+  readTokenForImport,
+  readsAs,
+  removeImportedToken,
+  resetImportedTokens,
+  token2022Metadata,
+  useImportedTokens,
+  type TokenMeta,
+  type TokenReadClient,
+} from "./imported";
 
 // ── networks ──
 export {CHAIN_LIST, QR_FALLBACK_FAMILIES, SIGNING_FAMILIES, chainByCaip2Web, chainBySlugWeb, webChains} from "./network";
