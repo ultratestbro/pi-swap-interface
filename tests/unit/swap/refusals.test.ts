@@ -123,6 +123,10 @@ const SAMPLES: readonly [raw: string, category: RefusalCategory, short: string, 
   ["relay: the order pays 2 outputs, exactly one is accepted [order-payments]", "safety", "Didn't match what was asked"],
   ["relay: no quote — INSUFFICIENT_LIQUIDITY: Max amount is $1,234.", "amount", "Maximum $1,234 right now"],
   ["relay: no quote — AMOUNT_TOO_LOW: Amount too low", "amount", "Too small — try a larger amount"],
+  ["relay: no quote — SWAP_IMPACT_TOO_HIGH: Swap impact is too high: -40.81%", "amount", "Moves the price 41% — try less"],
+  ["relay: no quote — SWAP_IMPACT_TOO_HIGH", "amount", "Moves the price too much — try less"],
+  ["lifi: The slippage is larger than the defined threshold. Please request a new route to get a fresh quote.", "amount", "Can't hold your slippage at this size"],
+  ["lifi: No available quotes for the requested transfer (ROUTE_SLIPPAGE_FLOOR_UNREACHABLE: the slippage floor cannot be met)", "amount", "Can't hold your slippage at this size"],
   ["relay: quote request failed — Failed to fetch", "unreachable", "Couldn't reach it — tap refresh"],
   // Chainflip, Jupiter, CCTP, USDT0, Uniswap, Wrap, Omniston, Symbiosis
   ["chainflip: below the minimum deposit (2000000 BTC)", "amount", "Minimum 0.02 BTC", BTC],
@@ -345,6 +349,19 @@ describe("classifyRefusal: the venue's reason (swap2-core 0.12.0)", () => {
     expect(classifyRefusal("x", "something new and odd 12345", undefined, "rate_limited")).toMatchObject({reason: "Busy right now — try again soon", category: "busy"});
     expect(classifyRefusal("x", "something new and odd 12345", undefined, "chain_halted")).toMatchObject({category: "unavailable"});
     expect(classifyRefusal("x", "something new and odd 12345", undefined, "unsupported_pair")).toMatchObject({reason: "Doesn't support this pair", category: "pair"});
+  });
+
+  it("a venue's own refusal of the amount stays an amount, though its module tags it price_check_failed", () => {
+    // 10 000 USDC Ethereum → clBTC Base, 2026-11-16: Relay's impact cap, tagged price_check_failed by the module.
+    expect(classifyRefusal("relay", "relay: no quote — SWAP_IMPACT_TOO_HIGH: Swap impact is too high: -40.81%", undefined, "price_check_failed")).toMatchObject({
+      reason: "Moves the price 41% — try less",
+      category: "amount",
+    });
+    expect(classifyRefusal("lifi", "lifi: The slippage is larger than the defined threshold. Please request a new route to get a fresh quote.", undefined, "price_check_failed")).toMatchObject({
+      category: "amount",
+    });
+    // Our own checks keep their section: Relay's output floor (also price_check_failed) is a safety skip.
+    expect(classifyRefusal("relay", "relay: the order's minimum output 5 is under the caller's floor 9 [output-minimum]", undefined, "price_check_failed")).toMatchObject({category: "safety"});
   });
 
   it("never overrides a rule that reads the text, and an unknown or absent reason changes nothing", () => {

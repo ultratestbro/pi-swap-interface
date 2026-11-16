@@ -596,7 +596,7 @@ Every mobile pattern keeps its meaning; the wording is shorter and drops the ven
 
 | category | section in the list | examples (short line) |
 |---|---|---|
-| `amount` | Needs a different amount | "Minimum 0.003099 ETH" (1Click "at least …", rounded UP to 4 significant digits), "Minimum $100 right now", "Minimum 0.02 BTC" (base units → `pay`), "Maximum 98.76 USDC" (rounded DOWN), "Fees would take 8.22% of this amount" (THORChain: never "try larger"), "Fees would take 3.5% — try more" (LI.FI fixed fees), "Too small — try a larger amount", "Round the amount to 8 decimals" — Across (D38): "Minimum 2.5 USDC" / "Maximum 685800 USDC" from its "at least / at most N base units", "Fees would take over 10% — try more" (its fee cap); 0x: "Too large for its pools — try less" |
+| `amount` | Needs a different amount | "Moves the price 41% — try less" (Relay `SWAP_IMPACT_TOO_HIGH`), "Can't hold your slippage at this size" (LI.FI SlippageError / `ROUTE_SLIPPAGE_FLOOR_UNREACHABLE`) — both tagged `price_check_failed` by their modules, read by text so they never land under safety (2026-11-16) —, "Minimum 0.003099 ETH" (1Click "at least …", rounded UP to 4 significant digits), "Minimum $100 right now", "Minimum 0.02 BTC" (base units → `pay`), "Maximum 98.76 USDC" (rounded DOWN), "Fees would take 8.22% of this amount" (THORChain: never "try larger"), "Fees would take 3.5% — try more" (LI.FI fixed fees), "Too small — try a larger amount", "Round the amount to 8 decimals" — Across (D38): "Minimum 2.5 USDC" / "Maximum 685800 USDC" from its "at least / at most N base units", "Fees would take over 10% — try more" (its fee cap); 0x: "Too large for its pools — try less" |
 | `setup` | Needs a change on your side | "Pays only the wallet that signs", "Needs more than your 0.5% slippage", "Your max slippage is above its limit", "Doesn't accept this recipient address", "Needs site storage, blocked here", the QR refusals "Needs a wallet that signs on {Chain}" / "Needs a memo — not for QR payments" |
 | `unavailable` | Not available right now | "Its node is catching up — try again soon" (THORNode "stale state"; thorchain 0.4.0: no confirming node within 50 blocks), "Its nodes didn't answer — tap refresh" (incl. THORChain's `/thorchain/lastblock` unread), "Rotating its vault — tap refresh", "SOL trading is paused right now", "Unavailable right now — try later" (5xx), "Quote expired — tap refresh", "Not enough liquidity right now" |
 | `unreachable` | Not available right now | "Couldn't reach it — tap refresh" (fetch / CORS / RPC transport), "Didn't answer in time — tap refresh" (timeouts, aborts; THORChain's 8 s vault-check budget) |
@@ -619,7 +619,8 @@ The venue's own classification (2026-11-15: swap2-core 0.12.0 `Swap2RefusalReaso
 `chain_halted` → "Paused on this network for now", `stale_node`, `quote_expired`, `simulation_failed` → their
 `unavailable` lines; `no_route`, `unsupported_pair` → `pair`; `amount_too_small` / `amount_too_large` /
 `insufficient_liquidity` → `amount`; `recipient_*` → "Can't confirm it pays you", `vault_mismatch` → "Uses a contract
-we haven't verified", `price_check_failed` / `policy_refused` → "Didn't match what was asked". The engine's observer
+we haven't verified", `price_check_failed` / `policy_refused` → "Didn't match what was asked" (a venue's own amount
+refusal its module tags `price_check_failed` — Relay's impact cap, LI.FI's slippage error — has a text rule first). The engine's observer
 and the wrappers (`coolDownOnRateLimit`, `payoutToSigner`) pass it on with the text.
 `tests/unit/swap/refusals.test.ts` is the guard: real SDK texts (the owner's screenshots, LI.FI's live 429, the
 installed `protocol-swap2-*` dists) with their category and short line.

@@ -463,6 +463,24 @@ const RULES: readonly Rule[] = [
     short: "Too large for its pools — try less",
     detail: "Its pools run out before the full amount — try a smaller amount or split the swap.",
   },
+  // The venues' own refusals of the amount that their modules tag `price_check_failed` — read here by their text, so the
+  // reason doesn't file them under "Skipped for your safety": none of them is one of our checks.
+  {
+    // Relay's price-impact cap (SWAP_IMPACT_TOO_HIGH: "Swap impact is too high: -40.81%").
+    provider: "relay",
+    category: "amount",
+    re: /SWAP_IMPACT_TOO_HIGH(?:: Swap impact is too high: -?([\d.]+)%)?/,
+    short: (m) => (m[1] ? `Moves the price ${Math.max(1, Math.round(Number(m[1])))}% — try less` : "Moves the price too much — try less"),
+    detail: "At this size the trade would move the price too far on its route — a smaller amount gets a fair rate.",
+  },
+  {
+    // LI.FI's SlippageError (1007) and its slippage-floor filter: its route can't hold the slippage asked at this size.
+    provider: "lifi",
+    category: "amount",
+    re: /slippage is larger than the defined threshold|ROUTE_SLIPPAGE_FLOOR_UNREACHABLE/i,
+    short: "Can't hold your slippage at this size",
+    detail: "At this amount its route would slip more than your max slippage allows — try a smaller amount or a higher max slippage.",
+  },
 
   // ── the venue is down or paused ──
   {
