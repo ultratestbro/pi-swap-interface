@@ -1087,11 +1087,18 @@ deposit-only. Held dot only for connected families.
 **Import by address (web, 2026-11-15, ARCHITECTURE D39).** Placeholder "Search, or paste a token address". When the
 search text is an EVM contract or a Solana mint and no token on the lookup network has it (a listed one, or one
 imported already, simply shows as its row), the list starts with an "Import token" card (surface1, radius 14,
-`data-testid="swap-import-result"`): `caps` dim "IMPORT TOKEN" and, for an EVM contract, a network chooser (a native
-`<select>` of the 31 EVM networks in a surface3 chip, `swap-import-network`) — first the network the sheet is filtered
-to, with "All networks" the other side's, else this side's, else Ethereum; below it the read token as a row
+`data-testid="swap-import-result"`): `caps` dim "IMPORT TOKEN" and, for an EVM contract, a network chooser of only the
+networks it was found on (read on every EVM network at once, 2026-11-16): `NetworkPicker` as `chip` (26 px surface3
+chip, 16 px network logo, 12 px 500 ink2, chevron; `swap-import-network`, options `swap-import-network-<slug>`), the
+menu right-aligned under it at 248 px (each row the network's logo, name and the chosen one's check; a search field
+past 8 networks; a muted "Checking N more networks…" with a spinner under the list while others read), a bottom sheet
+"The token's network" on phones; a plain chip (logo + name, no chevron) when there is one network and nothing left to
+read. Shown first: the network the sheet is filtered to, with "All networks" the other side's, else this side's,
+else Ethereum — when the token is there; else the first network found. Below it the read token as a row
 (`TokenIcon` 34 — its logo found by contract, else the monogram —, `listTitle` symbol, `meta` dim "{name} · {network} · {short address}", an amber `Import` tag;
-`swap-import-open`), a skeleton row "Reading it on {network}…", or the reason in amber (`swap-import-failed`). A TON,
+`swap-import-open`), a skeleton row "Reading it on {network}…" (or "Looking for it on N networks…" before any has
+it), or in amber (`swap-import-failed`) "No token at this address on any EVM network here." / "Not found on the
+networks that answered — N networks couldn't be reached." with a secondary "Try again" (`swap-import-retry`). A TON,
 Tron, NEAR, Bitcoin or Zcash address shows one muted line instead ("TON tokens can't be imported yet — importing by
 address works on EVM networks and Solana.", `swap-import-unsupported`) — unless a listed token's contract is that
 address (TON USDT's master): then only its row shows.
@@ -1243,7 +1250,8 @@ choice, Custom's RPCs and the keys. Demo mode and an IPFS path gateway save noth
      which stay as the fallback." (with the switch on: "Used alone on their networks: no public RPC is asked there,
      even when yours fails."); a switch row "Use only my RPCs" / "On a network you added one for. Your addresses and
      transactions then reach no public RPC operator there." (`settings-custom-only`, on for an older browser's
-     migrated RPCs); an add row — the network picker (`NetworkPicker.tsx`, no native `<select>`: that opens the OS
+     migrated RPCs); an add row — the network picker (`NetworkPicker.tsx`, its styles in `NetworkPicker.module.css`;
+     also the import's chooser as `chip`; no native `<select>`: that opens the OS
      menu) over the EVM catalog networks then Solana: a 48 px trigger in the field look (`ChainLogo` 20 · the chosen
      name · `chevronDown` 12, turned while open; visually-hidden label "Network", `aria-haspopup="listbox"`); at
      ≥ 640 it opens a popover under the trigger in the §2.4 menu look (`--menu`, radius 14, `--sh-menu`; rows 44 px,

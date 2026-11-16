@@ -49,6 +49,12 @@ export interface SwapTokensState {
   refresh(): void;
 }
 
+/** Reads of one address on several networks (`CatalogPort.useTokenLookups`). */
+export interface TokenLookups {
+  lookups: readonly TokenLookup[];
+  retry(): void;
+}
+
 /** catalog: networks, tokens, balances, prices. */
 export interface CatalogPort {
   useChains(): readonly Chain[];
@@ -70,6 +76,12 @@ export interface CatalogPort {
    * argument is null; cached per (network, address).
    */
   useTokenLookup(caip2: string | null, address: string | null): TokenLookup;
+  /**
+   * One pasted EVM contract read on several networks at once (D39: where it is a token), in the order given — each the
+   * very read `useTokenLookup` makes there (one cache), so the chosen network's result and its confirmation read
+   * nothing again. All idle while `address` is null. `retry()` asks again where a network couldn't be reached.
+   */
+  useTokenLookups(caip2s: readonly string[], address: string | null): TokenLookups;
   /** Keep a confirmed import in this browser (D39; demo: in memory only). It joins useSwapTokens at once. */
   importToken(token: Token): void;
   /** Forget an imported token (by key) in this browser. */

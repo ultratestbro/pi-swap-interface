@@ -562,6 +562,10 @@ A token the catalog doesn't list, on an EVM network or Solana, pasted by its add
   combining-mark stacks cut to two, whitespace collapsed, symbol ≤ 20 and name ≤ 48 characters; nothing visible left —
   no letter, digit, punctuation or symbol — reads "UNKNOWN"). Errors are `TokenReadError` (`definitive` unless the RPC
   didn't answer), worded for the sheet ("No token contract at this address on Base.").
+- **On every network (2026-11-16)** — `catalogPort.useTokenLookups(caip2s, address)`: the same read on each network
+  given (useQueries over the very query options of `useTokenLookup`, one cache), `{lookups, retry()}`; a failure carries
+  `unreachable: true` when no node answered (`TokenReadError.definitive` false), and `retry()` refetches those. The token
+  sheet passes every importable EVM network whose list doesn't have the address (ui-port, ARCHITECTURE D39).
 - **Model** — `importedToken(chain, contract, meta)`: a `Token` with `imported: true`, `name`, `token2022?`,
   `catalogSymbol` = the contract (checksummed on EVM, verbatim on Solana), `gasToken: false`, key `importKey` =
   `<slug>:<contract>` (lowercased on EVM, verbatim on Solana).

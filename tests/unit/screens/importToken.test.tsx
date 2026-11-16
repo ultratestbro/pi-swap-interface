@@ -13,7 +13,21 @@ import {importedToken, chainBySlugWeb, TOKENS, swapTokens} from "../../../src/ca
 import {DEMO_EVM_ADDRESS, demoPorts, resetDemoState} from "../../../src/mocks";
 import {SwapScreen} from "../../../src/screens";
 import {openingPair} from "../../../src/screens/form/useSwapForm";
-import {IMPORT_WARNING, linkedToken, lookalikeLine, lookupNetwork, provisional, showsAddress, tokenAt, unsupportedLine} from "../../../src/screens/tokens/importModel";
+import {
+  EVM_IMPORT_NETWORKS,
+  IMPORT_WARNING,
+  importCandidates,
+  importNetworks,
+  linkedToken,
+  lookalikeLine,
+  lookupNetwork,
+  provisional,
+  shownImportNetwork,
+  showsAddress,
+  tokenAt,
+  unsupportedLine,
+} from "../../../src/screens/tokens/importModel";
+import type {TokenLookup} from "../../../src/contracts/domain";
 import {TokenSheet} from "../../../src/screens/tokens/TokenSheet";
 
 const SLOW = {timeout: 4000};
@@ -40,16 +54,17 @@ afterEach(() => {
 });
 
 describe("the token sheet's import", () => {
-  it("reads a pasted contract on the sheet's network, lets another be chosen, and confirms with the warning", async () => {
+  it("reads a pasted contract on every network, shows the one it is on, and confirms with the warning", async () => {
     renderScreen("#/?amount=0.1");
     fireEvent.click(screen.getByTestId("swap-receive-token"));
     const sheet = await screen.findByTestId("swap-token-sheet");
     fireEvent.change(within(sheet).getByTestId("swap-token-search"), {target: {value: FAKE_USDC}});
-    // Opened on Arbitrum (the receive token's network): the demo token isn't there.
+    // The receive token's network (Arbitrum) doesn't have it: shown on Base, the one network it is on — nothing to choose.
     const result = within(sheet).getByTestId("swap-import-result");
-    expect((within(result).getByTestId("swap-import-network") as HTMLSelectElement).value).toBe("arbitrum");
-    expect(within(result).getByTestId("swap-import-failed").textContent).toMatch(/Demo mode reads only/);
-    fireEvent.change(within(result).getByTestId("swap-import-network"), {target: {value: "base"}});
+    const chip = within(result).getByTestId("swap-import-network");
+    expect(chip.tagName).toBe("SPAN");
+    expect(chip.textContent).toBe("Base");
+    expect(within(result).queryByTestId("swap-import-failed")).toBeNull();
     fireEvent.click(await within(sheet).findByTestId("swap-import-open"));
 
     const confirm = await within(sheet).findByTestId("swap-import-confirm");
@@ -77,6 +92,36 @@ describe("the token sheet's import", () => {
     expect(keys.indexOf(`swap-token-base:${FAKE_USDC}`)).toBeGreaterThan(keys.indexOf(`swap-token-${BASE_USDC_KEY}`));
     fireEvent.click(within(again).getByTestId(`swap-token-remove-base:${FAKE_USDC}`));
     await waitFor(() => expect(within(again).queryByTestId(`swap-token-base:${FAKE_USDC}`)).toBeNull());
+  });
+
+  it("lists only the networks a contract was found on, with their logos, and shows the picked one", async () => {
+    renderScreen("#/?amount=0.1");
+    fireEvent.click(screen.getByTestId("swap-receive-token"));
+    const sheet = await screen.findByTestId("swap-token-sheet");
+    fireEvent.change(within(sheet).getByTestId("swap-token-search"), {target: {value: DEGEN}});
+    const result = within(sheet).getByTestId("swap-import-result");
+    // On Base and Arbitrum in the demo (listed in catalog order): shown first on Arbitrum (the receive token's network).
+    const trigger = within(result).getByTestId("swap-import-network");
+    expect(trigger.tagName).toBe("BUTTON");
+    expect(trigger.textContent).toBe("Arbitrum");
+    expect(within(result).getByTestId("swap-import-open").getAttribute("aria-label")).toBe("Import DEGEN on Arbitrum");
+    fireEvent.click(trigger);
+    const list = await screen.findByTestId("swap-import-network-list");
+    expect(within(list).getAllByRole("option").map((o) => o.textContent)).toEqual(["Arbitrum", "Base"]);
+    expect(within(list).getAllByRole("option").map((o) => o.querySelector("img")?.getAttribute("src"))).toEqual(["logos/networks/arbitrum.svg", "logos/networks/base.svg"]);
+    fireEvent.click(within(list).getByTestId("swap-import-network-base"));
+    await waitFor(() => expect(within(result).getByTestId("swap-import-open").getAttribute("aria-label")).toBe("Import DEGEN on Base"));
+    expect(within(result).getByTestId("swap-import-network").textContent).toBe("Base");
+  });
+
+  it("says a contract is on no network when none has it", async () => {
+    renderScreen("#/?amount=0.1");
+    fireEvent.click(screen.getByTestId("swap-receive-token"));
+    const sheet = await screen.findByTestId("swap-token-sheet");
+    fireEvent.change(within(sheet).getByTestId("swap-token-search"), {target: {value: "0x3333333333333333333333333333333333333333"}});
+    const result = within(sheet).getByTestId("swap-import-result");
+    expect(within(result).getByTestId("swap-import-failed").textContent).toBe("No token at this address on any EVM network here.");
+    expect(within(result).queryByTestId("swap-import-network")).toBeNull();
   });
 
   it("shows the listed token for a listed address — nothing to import", async () => {
@@ -189,6 +234,34 @@ describe("import decisions", () => {
     expect(lookupNetwork({family: "evm", sheetNet: "solana", other: on("bitcoin"), own: on("optimism")})).toBe("optimism");
     expect(lookupNetwork({family: "evm", sheetNet: null})).toBe("ethereum");
     expect(lookupNetwork({family: "solana", sheetNet: "base"})).toBe("solana");
+  });
+
+  it("reads a contract on every EVM network but those whose list has a token there", () => {
+    expect(importCandidates(LIST, DEGEN)).toHaveLength(EVM_IMPORT_NETWORKS.length);
+    const usdc = importCandidates(LIST, "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913").map((c) => c.slug);
+    expect(usdc).not.toContain("base");
+    expect(usdc).toHaveLength(EVM_IMPORT_NETWORKS.length - 1);
+  });
+
+  it("tallies the reads and picks the network shown: the pick, else the preferred one while it reads or has it, else the first found", () => {
+    const nets = ["ethereum", "arbitrum", "base", "polygon"].map((slug) => ({slug}));
+    const found: TokenLookup = {status: "found", token: degen};
+    const none: TokenLookup = {status: "failed", reason: "No token contract at this address."};
+    const offline: TokenLookup = {status: "failed", reason: "Couldn't reach it.", unreachable: true};
+    const reading: TokenLookup = {status: "loading"};
+    expect(importNetworks(nets, [none, found, reading, offline])).toEqual({found: ["arbitrum"], reading: 1, unreachable: 1});
+    const shown = (pick: string | null, preferred: string, lookups: TokenLookup[]) => shownImportNetwork({pick, preferred, candidates: nets, lookups});
+    // The preferred network, while it reads (no jump to whichever answers first) and once it has it.
+    expect(shown(null, "base", [none, found, reading, none])).toBe("base");
+    expect(shown(null, "base", [none, found, found, none])).toBe("base");
+    // Not there: the first network that has it, in catalog order; none yet: null.
+    expect(shown(null, "base", [none, reading, none, found])).toBe("polygon");
+    expect(shown(null, "base", [none, reading, none, reading])).toBeNull();
+    // A pick holds while the token is there; a pick where it isn't falls back like no pick.
+    expect(shown("polygon", "base", [none, found, found, found])).toBe("polygon");
+    expect(shown("ethereum", "base", [none, found, found, found])).toBe("base");
+    // A preferred network not among the candidates (the list has it there): the first found.
+    expect(shown(null, "optimism", [none, found, none, none])).toBe("arbitrum");
   });
 
   it("finds a token on the list at an address: any case on EVM, exactly on Solana", () => {

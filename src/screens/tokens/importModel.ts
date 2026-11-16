@@ -4,14 +4,14 @@
  * a family that can't be imported says, the token the form picks the moment an import is confirmed, and what a pair
  * link's token key is.
  */
-import type {ChainFamily, SwapToken, Token} from "../../contracts/domain";
+import type {Chain, ChainFamily, SwapToken, Token, TokenLookup} from "../../contracts/domain";
 import {CHAIN_LIST, chainBySlugWeb, importKey, importable, listedToken, lookalikeOf, parseTokenKey, shortAddress} from "../../catalog";
 
 /** The confirmation's warning, verbatim (owner, 2026-11-15). */
 export const IMPORT_WARNING =
   "Anyone can create a token with any name — including fake copies of real tokens. Check this address against the project's official sources. Swapping an unknown token can lose its value.";
 
-/** EVM networks a pasted contract can be looked up on (the result's network chooser), catalog order. */
+/** EVM networks a pasted contract is looked up on, catalog order. */
 export const EVM_IMPORT_NETWORKS = CHAIN_LIST.filter((c) => c.family === "evm" && importable(c));
 
 const evmSlug = (slug: string | undefined): string | undefined => {
@@ -20,13 +20,59 @@ const evmSlug = (slug: string | undefined): string | undefined => {
 };
 
 /**
- * Where a pasted EVM contract is looked up first — never every network at once: the network the sheet is filtered to,
- * else (with "All networks") the other side's network, else this side's current token's, else Ethereum. A Solana mint
- * is always looked up on Solana.
+ * Which network a pasted EVM contract is shown on first, when the token is there (`shownImportNetwork`): the network the
+ * sheet is filtered to, else (with "All networks") the other side's network, else this side's current token's, else
+ * Ethereum. A Solana mint is always looked up on Solana.
  */
 export function lookupNetwork(o: {family: "evm" | "solana"; sheetNet: string | null; other?: Pick<SwapToken, "chain"> | undefined; own?: Pick<SwapToken, "chain"> | undefined}): string {
   if (o.family === "solana") return "solana";
   return evmSlug(o.sheetNet ?? undefined) ?? evmSlug(o.other?.chain) ?? evmSlug(o.own?.chain) ?? "ethereum";
+}
+
+/**
+ * The EVM networks a pasted contract is read on (D39, revised 2026-11-16: every one at once, so the chooser lists only
+ * where it is a token): all importable EVM networks but those whose list already has a token at that address (a listed
+ * one, or one imported already — it shows as its row).
+ */
+export function importCandidates(tokens: readonly SwapToken[], address: string): readonly Chain[] {
+  return EVM_IMPORT_NETWORKS.filter((c) => !tokenAt(tokens, c.slug, address));
+}
+
+/** What the reads of one pasted contract across its candidate networks say. */
+export interface ImportNetworks {
+  /** Slugs of the networks where it is a token, catalog order: the chooser's list. */
+  found: readonly string[];
+  /** Reads still going. */
+  reading: number;
+  /** Reads no node answered (asking again may find it there). */
+  unreachable: number;
+}
+
+/** Tally `lookups` (one per candidate, same order). */
+export function importNetworks(candidates: readonly Pick<Chain, "slug">[], lookups: readonly TokenLookup[]): ImportNetworks {
+  const found: string[] = [];
+  let reading = 0;
+  let unreachable = 0;
+  candidates.forEach((c, i) => {
+    const l = lookups[i];
+    if (l?.status === "found") found.push(c.slug);
+    else if (l?.status === "loading") reading++;
+    else if (l?.status === "failed" && l.unreachable) unreachable++;
+  });
+  return {found, reading, unreachable};
+}
+
+/**
+ * The network the import result shows: the viewer's pick while the token is there; else the preferred network
+ * (`lookupNetwork`) while its read is going or once it found the token — so the result doesn't jump to whichever
+ * network answers first —; else the first network that found it; null while none has (yet).
+ */
+export function shownImportNetwork(o: {pick: string | null; preferred: string; candidates: readonly Pick<Chain, "slug">[]; lookups: readonly TokenLookup[]}): string | null {
+  const at = (slug: string) => o.lookups[o.candidates.findIndex((c) => c.slug === slug)];
+  if (o.pick && at(o.pick)?.status === "found") return o.pick;
+  const preferred = at(o.preferred)?.status;
+  if (preferred === "found" || preferred === "loading") return o.preferred;
+  return importNetworks(o.candidates, o.lookups).found[0] ?? null;
 }
 
 /** The token on the list (a catalog token, or one imported already) at this address on this network, if any. */

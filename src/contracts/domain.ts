@@ -68,7 +68,12 @@ export interface Token {
 export type TokenAddress = {family: "evm" | "solana"; address: string} | {family: "unsupported"; addressFamily: ChainFamily};
 
 /** An address read on-chain for an import (D39): the token it is (not imported yet), or why it can't be, in the user's words. */
-export type TokenLookup = {status: "idle"} | {status: "loading"} | {status: "found"; token: Token} | {status: "failed"; reason: string};
+export type TokenLookup =
+  | {status: "idle"}
+  | {status: "loading"}
+  | {status: "found"; token: Token}
+  /** `unreachable`: no node answered (offline, timed out, rate-limited) — asking again may find it; else the chain's own answer. */
+  | {status: "failed"; reason: string; unreachable?: true};
 
 /** Balance read state per token. "none" = no address of this family is connected. */
 export type BalanceState = "loaded" | "loading" | "none" | "error";

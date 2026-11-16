@@ -1,32 +1,82 @@
 /**
  * Importing a token by its address (D39), inside the token sheet: the search result for an address no listed token has
- * on the lookup network (read on-chain, with a network chooser for an EVM contract), and the confirmation — monogram,
- * symbol, name, network, the full address with its explorer page, the warning, an amber line when it reads like a
- * listed token, and a required "I understand" before "Import". Reads go through the catalog port only.
+ * (read on-chain; an EVM contract on every EVM network at once, with a chooser of the networks it was found on), and
+ * the confirmation — logo or monogram, symbol, name, network, the full address with its explorer page, the warning, an
+ * amber line when it reads like a listed token, and a required "I understand" before "Import". Reads go through the
+ * catalog port only.
  */
 import {useId, useState} from "react";
 import type {SwapToken, Token, TokenLookup} from "../../contracts/domain";
 import {usePorts} from "../../config";
 import {addressUrl, chainBySlugWeb, shortAddress} from "../../catalog";
-import {Button, CopyButton, Icon, SheetHeader, Skeleton, Tag, Text, TokenIcon} from "../../ui";
-import {EVM_IMPORT_NETWORKS, IMPORT_WARNING, lookalikeLine, provisional} from "./importModel";
+import {Button, ChainLogo, CopyButton, Icon, SheetHeader, Skeleton, Spinner, Tag, Text, TokenIcon} from "../../ui";
+import {NetworkPicker, type PickerNetwork} from "../settings/NetworkPicker";
+import {IMPORT_WARNING, lookalikeLine, provisional, type ImportNetworks} from "./importModel";
 import s from "./TokenSheet.module.css";
 
+/** Past this many networks found, the chooser gets its search field. */
+const SEARCH_FROM = 8;
+
 export interface ImportResultProps {
-  /** The lookup network's slug. */
-  chain: string;
+  /** The network shown, or null while no network has the token yet (or none does). */
+  chain: string | null;
   address: string;
   family: "evm" | "solana";
+  /** The read on `chain` (idle while it is null). */
   lookup: TokenLookup;
-  /** Look the contract up on another EVM network (EVM only). */
+  /** EVM: what the reads on every candidate network say — the chooser lists `found`. */
+  networks?: ImportNetworks;
+  /** Show the token on another network it was found on (EVM only). */
   onNetwork(slug: string): void;
+  /** Ask again on the networks that couldn't be reached. */
+  onRetry?(): void;
   onImport(token: Token): void;
 }
 
-/** The "Import token" search result: what the chain says the address is, or why it can't be imported, and where to look. */
-export function ImportResult({chain, address, family, lookup, onNetwork, onImport}: ImportResultProps) {
-  const id = useId();
-  const net = chainBySlugWeb(chain);
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/**
+ * The network chip of an EVM result: a chooser of the networks the token was found on (with logos, a line while others
+ * are still read), or the one network as a plain chip when there is nothing to choose.
+ */
+function NetworkChip({chain, networks, onNetwork}: {chain: string; networks: ImportNetworks; onNetwork(slug: string): void}) {
+  const options: PickerNetwork[] = networks.found.flatMap((slug) => {
+    const c = chainBySlugWeb(slug);
+    return c ? [{value: slug, name: c.name, slug}] : [];
+  });
+  const choosable = networks.found.includes(chain) && (options.length > 1 || networks.reading > 0);
+  if (!choosable) {
+    return (
+      <span className={s.importNet} data-testid="swap-import-network">
+        <ChainLogo slug={chain} size={16} />
+        <span className={s.importNetName}>{chainBySlugWeb(chain)?.name ?? chain}</span>
+      </span>
+    );
+  }
+  return (
+    <NetworkPicker
+      networks={options}
+      value={chain}
+      label="The token's network"
+      onChange={onNetwork}
+      variant="chip"
+      searchable={options.length > SEARCH_FROM}
+      footer={
+        networks.reading > 0 ? (
+          <>
+            <Spinner size={14} />
+            <Text variant="meta" color="var(--muted)">{`Checking ${plural(networks.reading, "more network")}…`}</Text>
+          </>
+        ) : null
+      }
+      data-testid="swap-import-network"
+    />
+  );
+}
+
+/** The "Import token" search result: what the chain says the address is, or why it can't be imported, and where it is. */
+export function ImportResult({chain, address, family, lookup, networks, onNetwork, onRetry, onImport}: ImportResultProps) {
+  const net = chain ? chainBySlugWeb(chain) : undefined;
   const token = lookup.status === "found" ? lookup.token : null;
   return (
     <div className={s.importCard} data-testid="swap-import-result" aria-live="polite">
@@ -34,19 +84,7 @@ export function ImportResult({chain, address, family, lookup, onNetwork, onImpor
         <Text variant="caps" color="var(--dim)">
           Import token
         </Text>
-        {family === "evm" ? (
-          <label className={s.importNet} htmlFor={id}>
-            <span className={s.srOnly}>Look it up on</span>
-            <select id={id} className={s.importSelect} value={chain} onChange={(e) => onNetwork(e.target.value)} data-testid="swap-import-network">
-              {EVM_IMPORT_NETWORKS.map((c) => (
-                <option key={c.slug} value={c.slug}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <Icon name="chevronDown" size={12} color="var(--muted)" />
-          </label>
-        ) : null}
+        {family === "evm" && chain && networks ? <NetworkChip chain={chain} networks={networks} onNetwork={onNetwork} /> : null}
       </div>
       {token ? (
         <button type="button" className={s.token} onClick={() => onImport(token)} data-testid="swap-import-open" aria-label={`Import ${token.symbol} on ${token.chainName}`}>
@@ -65,16 +103,27 @@ export function ImportResult({chain, address, family, lookup, onNetwork, onImpor
         <Text as="p" variant="small" color="var(--amber)" className={s.importNote} role="status" data-testid="swap-import-failed">
           {lookup.reason}
         </Text>
-      ) : (
-        <div className={s.importLoading} role="status" aria-label={`Reading the token on ${net?.name ?? chain}`}>
+      ) : chain || (networks?.reading ?? 0) > 0 ? (
+        <div className={s.importLoading} role="status" aria-label={net ? `Reading the token on ${net.name}` : "Looking for the token"}>
           <Skeleton width={34} height={34} radius={17} />
           <span className={s.tokenText}>
             <Skeleton width={70} height={14} />
             <Text variant="meta" color="var(--dim)" lines={1}>
-              {`Reading it on ${net?.name ?? chain}…`}
+              {net ? `Reading it on ${net.name}…` : `Looking for it on ${plural(networks!.reading, "network")}…`}
             </Text>
           </span>
         </div>
+      ) : networks && networks.unreachable > 0 ? (
+        <div className={s.importRetry}>
+          <Text as="p" variant="small" color="var(--amber)" role="status" data-testid="swap-import-failed">
+            {`Not found on the networks that answered — ${plural(networks.unreachable, "network")} couldn't be reached.`}
+          </Text>
+          <Button kind="secondary" height={40} title="Try again" onClick={onRetry} data-testid="swap-import-retry" />
+        </div>
+      ) : (
+        <Text as="p" variant="small" color="var(--amber)" className={s.importNote} role="status" data-testid="swap-import-failed">
+          No token at this address on any EVM network here.
+        </Text>
       )}
     </div>
   );

@@ -1,10 +1,12 @@
 /**
  * Importing a token by its address (D39) in the real build, with the chain stubbed: EVM JSON-RPC answers eth_getCode
- * and decimals() / symbol() / name() for the tokens below (every other call reverts), Solana's getMultipleAccounts
+ * and decimals() / symbol() / name() for the tokens below on their own networks only, told apart by the RPC URL (every
+ * other call reverts), Solana's getMultipleAccounts
  * answers a mint and its Metaplex metadata, the price APIs price DEGEN alone (by its contract), the logo hosts have
  * DEGEN's logo alone, and every other request is recorded and aborted — so the run is deterministic and nothing reaches
  * a venue.
- * - Paste an EVM contract → the confirmation with the warning and its logo → "I understand" → imported, priced and
+ * - Paste an EVM contract → read on all 31 EVM networks; the chooser (the app's own menu, with logos) lists just the two
+ *   it is on → the confirmation with the warning and its logo → "I understand" → imported, priced and
  *   shown with its logo (both found by its contract); the next round asks the
  *   venues for that contract with its decimals (a preview: no wallet; Balancer's SOR query carries both); the venues
  *   with their own token lists read "Listed tokens only" between networks, and keep their network line on one.
@@ -18,14 +20,26 @@
 import {expect, test as base, type Page} from "@playwright/test";
 import {Buffer} from "node:buffer";
 import {encodeAbiParameters, type Hex} from "viem";
+import {DEFAULT_RUNTIME_CONFIG} from "../../src/config/defaults";
 import {expectNoHorizontalScroll, isCp0xHost, isPhone, watchPage, type PageWatch} from "./helpers";
 
 const DEGEN = "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed";
 const FAKE_USDC = "0x2222222222222222222222222222222222222222";
 const BONK = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
-const ERC20: Readonly<Record<string, {decimals: number; symbol: string; name: string}>> = {
-  [DEGEN.toLowerCase()]: {decimals: 18, symbol: "DEGEN", name: "Degen"},
-  [FAKE_USDC]: {decimals: 6, symbol: "USDC", name: "USD Coin"},
+const BASE_ID = 8453;
+const ARBITRUM_ID = 42161;
+/** The stubbed tokens and the networks (chain ids) each is deployed on. */
+const ERC20: Readonly<Record<string, {decimals: number; symbol: string; name: string; chains: readonly number[]}>> = {
+  [DEGEN.toLowerCase()]: {decimals: 18, symbol: "DEGEN", name: "Degen", chains: [BASE_ID, ARBITRUM_ID]},
+  [FAKE_USDC]: {decimals: 6, symbol: "USDC", name: "USD Coin", chains: [BASE_ID]},
+};
+/** Which EVM network an RPC request is for, by its URL (the build's default RPC lists: Public mode). */
+const RPC_CHAIN = new Map(Object.entries(DEFAULT_RUNTIME_CONFIG.evmRpc).flatMap(([id, urls]) => urls.map((u) => [new URL(u).href, Number(id)] as const)));
+const chainOf = (url: string): number | undefined => RPC_CHAIN.get(new URL(url).href);
+/** The stubbed token at `to` on `chainId`, if it is deployed there. */
+const erc20 = (to: unknown, chainId: number | undefined) => {
+  const t = ERC20[String(to).toLowerCase()];
+  return t && chainId !== undefined && t.chains.includes(chainId) ? t : undefined;
 };
 /** How the contract sits in calldata (a padded word): a venue's quote call naming it. */
 const DEGEN_WORD = `000000000000000000000000${DEGEN.slice(2).toLowerCase()}`;
@@ -66,23 +80,23 @@ function solanaAccounts(): unknown[] {
 
 type Rpc = {jsonrpc?: string; id?: unknown; method?: string; params?: unknown[]};
 
-/** One JSON-RPC answer: the stubbed tokens' reads; anything else reverts (venue quotes, gas…) or is unknown. */
-function answer(r: Rpc): Record<string, unknown> {
+/** One JSON-RPC answer on `chainId`: the stubbed tokens' reads; anything else reverts (venue quotes, gas…) or is unknown. */
+function answer(r: Rpc, chainId: number | undefined): Record<string, unknown> {
   const p = r.params ?? [];
   switch (r.method) {
     case "eth_chainId":
-      return {result: "0x2105"};
+      return {result: `0x${(chainId ?? BASE_ID).toString(16)}`};
     case "eth_blockNumber":
       return {result: "0x100"};
     case "eth_gasPrice":
       return {result: "0x3b9aca00"};
     case "eth_getCode":
-      return {result: ERC20[String(p[0]).toLowerCase()] ? "0x6080604052" : "0x"};
+      return {result: erc20(p[0], chainId) ? "0x6080604052" : "0x"};
     case "eth_call": {
       const {to, data} = (p[0] ?? {}) as {to?: string; data?: string};
       // Balancer checks its pinned Vault (WETH()) before it asks its SOR API: Base's WETH.
       if (String(to).toLowerCase() === BALANCER_VAULT && data === "0xad5c4648") return {result: `0x${"4200000000000000000000000000000000000006".padStart(64, "0")}`};
-      const t = ERC20[String(to).toLowerCase()];
+      const t = erc20(to, chainId);
       if (t && data === "0x313ce567") return {result: abi("uint256", BigInt(t.decimals))};
       if (t && data === "0x95d89b41") return {result: abi("string", t.symbol)};
       if (t && data === "0x06fdde03") return {result: abi("string", t.name)};
@@ -128,7 +142,7 @@ async function stubNetwork(page: Page, origin: string): Promise<Seen[]> {
       }
       const calls = rpc ? (Array.isArray(rpc) ? rpc : [rpc]) : [];
       if (calls.length && calls.every((c) => c?.jsonrpc === "2.0")) {
-        const out = calls.map((c) => ({jsonrpc: "2.0", id: c.id, ...answer(c)}));
+        const out = calls.map((c) => ({jsonrpc: "2.0", id: c.id, ...answer(c, chainOf(url.href))}));
         return route.fulfill({status: 200, headers: CORS, contentType: "application/json", body: JSON.stringify(Array.isArray(rpc) ? out : out[0])});
       }
       return route.abort("blockedbyclient");
@@ -190,7 +204,21 @@ test("an EVM contract imports after the warning, and the next round asks the ven
   await page.getByTestId("swap-pay-token").click();
   await paste(page, DEGEN);
   const result = page.getByTestId("swap-import-result");
-  await expect(result.getByTestId("swap-import-network")).toHaveValue("base");
+  // Read on every EVM network at once; shown on Base (the sheet's network), the chooser lists just where it is.
+  const chooser = result.getByTestId("swap-import-network");
+  await expect(chooser).toHaveText("Base");
+  await expect.poll(() => new Set(seen.filter((x) => /"method":"eth_getCode"/.test(x.body) && x.body.toLowerCase().includes(DEGEN.toLowerCase())).map((x) => chainOf(x.url))).size, {timeout: 15_000}).toBe(31);
+  await chooser.click();
+  const list = page.getByTestId("swap-import-network-list");
+  await expect(list.getByRole("option")).toHaveText(["Arbitrum", "Base"]);
+  await expect(list.getByTestId("swap-import-network-arbitrum").locator("img")).toHaveAttribute("src", /logos\/networks\/arbitrum\.svg$/);
+  await expect(list.getByTestId("swap-import-network-base").locator("img")).toHaveAttribute("src", /logos\/networks\/base\.svg$/);
+  await expectNoHorizontalScroll(page);
+  await list.getByTestId("swap-import-network-arbitrum").click();
+  await expect(result.getByTestId("swap-import-open")).toHaveAttribute("aria-label", "Import DEGEN on Arbitrum");
+  await chooser.click();
+  await page.getByTestId("swap-import-network-base").click();
+  await expect(result.getByTestId("swap-import-open")).toHaveAttribute("aria-label", "Import DEGEN on Base");
   await result.getByTestId("swap-import-open").click();
 
   const confirm = page.getByTestId("swap-import-confirm");
@@ -257,8 +285,8 @@ test("a contract pasted with a wrong checksum reads as the token, under its chec
   const confirm = page.getByTestId("swap-import-confirm");
   await expect(confirm.getByTestId("swap-import-symbol")).toHaveText("DEGEN");
   await expect(confirm.getByTestId("swap-import-address")).toHaveText(DEGEN);
-  // The search result and its confirmation share one read.
-  expect(seen.filter((x) => /"method":"eth_getCode"/.test(x.body) && x.body.toLowerCase().includes(DEGEN.toLowerCase()))).toHaveLength(1);
+  // The search result, the chooser's read there and its confirmation share one read per network.
+  expect(seen.filter((x) => chainOf(x.url) === BASE_ID && /"method":"eth_getCode"/.test(x.body) && x.body.toLowerCase().includes(DEGEN.toLowerCase()))).toHaveLength(1);
 });
 
 test("a long imported symbol and name ellipsize, and the row's remove button stays inside the list", async ({page, baseURL}) => {

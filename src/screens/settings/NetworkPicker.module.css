@@ -1,0 +1,213 @@
+/* The network picker (NetworkPicker.tsx): the trigger in the field look (48 px, surface1, 500 15 px) with the
+   network's logo — or, as `chip`, the token sheet's 26 px chip (surface3, 12 px 500 ink2, the import's chooser, D39);
+   the list in the menu look of ui-port §2.4 (bg menu, radius 14, --sh-menu; rows gap 10, padding 0 12, small 500, the
+   active one menu-hover, the chosen one's check 12 accent in a 14 px slot; rows 44 px to touch) — a popover under the
+   trigger at ≥ 640, a bottom sheet below. */
+.picker {
+  position: relative;
+}
+
+.pickerTrigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1.5px solid transparent;
+  border-radius: var(--r-control);
+  background: var(--surface1);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  transition: background-color 0.12s ease;
+}
+
+.pickerTrigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .pickerTrigger:hover {
+    background: var(--surface3);
+  }
+}
+
+.pickerValue {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pickerChevron {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+.pickerTrigger[aria-expanded="true"] .pickerChevron {
+  transform: rotate(180deg);
+}
+
+/* over what follows the add row; scrolled into view inside the sheet body when it opens */
+.popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  max-height: min(380px, 60dvh);
+  padding: 6px;
+  border-radius: var(--r-control);
+  background: var(--menu);
+  box-shadow: var(--sh-menu);
+  animation: popoverIn 0.12s ease-out;
+}
+
+@keyframes popoverIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* the phone sheet (flush): its header and the search stay put, the list scrolls */
+.pickerSheet {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 0 var(--sp-page) 12px;
+}
+
+.pickerPanel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  scroll-margin: 22px; /* the popover scrolled into view whole (its 6 px padding), clear of the dialog's rounded edge */
+}
+
+.options {
+  position: relative; /* the options' offsetTop, for keeping the active one in view */
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--ink);
+  font-size: var(--t-small-size);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.option[aria-selected="true"] {
+  background: var(--menu-hover);
+}
+
+.optionName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.optionCheck {
+  display: flex;
+  flex: none;
+  justify-content: center;
+  width: 14px;
+}
+
+.pickerEmpty {
+  padding: 10px 12px;
+}
+
+/* `chip`: inline in a row, the popover right-aligned under it at a menu's own width */
+.pickerChip {
+  display: inline-block;
+}
+
+.chipTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 170px;
+  height: 26px;
+  padding: 0 8px 0 5px;
+  border: 0;
+  border-radius: var(--r-chip);
+  background: var(--surface3);
+  color: var(--ink2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.chipTrigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.chipTrigger:disabled {
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .chipTrigger:enabled:hover {
+    color: var(--ink);
+  }
+}
+
+.chipTrigger[aria-expanded="true"] .pickerChevron {
+  transform: rotate(180deg);
+}
+
+.popoverChip {
+  left: auto;
+  width: 248px;
+}
+
+/* under the list: what is still being read (the import's other networks) */
+.pickerFoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.options:focus {
+  outline: none; /* the active option carries the focus (aria-activedescendant) */
+}

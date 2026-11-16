@@ -1544,11 +1544,21 @@ it."
   imported yet (`detectTokenAddress` → "unsupported"). What an EVM contract or a Solana mint is, swap2-assets'
   `isTokenAddress` decides — the engine's own test for an unlisted token; a 32-byte base58 key reads as Solana before
   any shape test (a short one starting with 1 or 3 also has a Bitcoin address's shape).
-- **Where it is looked up.** In the token sheet, when the search text is a token address and no token on the lookup
-  network has it (`tokenAt`; a listed one, or one imported already, just shows as itself): an EVM contract on the
-  network the sheet is filtered to, with "All networks" the other side's network, else this side's, else Ethereum
-  (`lookupNetwork`), with a network chooser in the result to read it on another — one network per read, never all 31
-  at once; a mint on Solana. A pasted TON, Tron or NEAR address of a listed token (TON USDT's master) is just that
+- **Where it is looked up (revised 2026-11-16, owner: "не проверяется на каких сетях есть токен").** In the token
+  sheet, when the search text is a token address: an EVM contract is read on every importable EVM network at once
+  whose list doesn't already have a token at it (`importCandidates`; `tokenAt` — a listed one, or one imported
+  already, just shows as itself) — `CatalogPort.useTokenLookups`, each the very read `useTokenLookup` makes there
+  (one react-query cache: the chosen network's result and its confirmation read nothing again), so one `eth_getCode`
+  per network and decimals() / symbol() / name() only where there is code: ~31 RPC requests per pasted contract, through
+  Standard's proxy RPC like any read. `importNetworks` tallies them (found, still reading, unreachable); the result
+  shows (`shownImportNetwork`) the viewer's pick while the token is there, else the preferred network — the one the
+  sheet is filtered to, with "All networks" the other side's, else this side's, else Ethereum (`lookupNetwork`) —
+  while its read goes or once it has the token (no jump to whichever answers first), else the first network found, in
+  catalog order. Its chooser lists only the networks it was found on, with their logos (NetworkPicker's `chip`, a line
+  "Checking N more networks…" while others read; a plain chip when there is one network and nothing left to read).
+  Found nowhere: "No token at this address on any EVM network here."; with networks that couldn't be reached, "Not
+  found on the networks that answered — N networks couldn't be reached." and "Try again" (`retry()` asks those again);
+  nothing at all when the list has it on some network (its row is the answer). A mint is read on Solana. A pasted TON, Tron or NEAR address of a listed token (TON USDT's master) is just that
   token's row, without the "can't be imported" line (`showsAddress`).
 - **What is read, and from where.** On-chain only — never a token list, a third-party API or a venue's word
   (`readTokenForImport`, `src/catalog/imported.ts`); the price and the logo shown beside it are looked up by the
@@ -1643,8 +1653,9 @@ it."
   and input — every check keyed on contracts, none on a catalog symbol (`checkPlan`, `checkPlanBrowser`,
   `permit2Problem`). The one symbol-keyed check before it, `assertCoherent`'s catalog lookup, has its own branch for an
   import (above); Tron, TON and NEAR, whose rules read the catalog, aren't importable.
-- Contract changes: domain `Token` + `imported?`, `name?`, `token2022?`, and `TokenAddress`, `TokenLookup`;
-  `CatalogPort` + `useTokenLookup`, `importToken`, `removeImportedToken` (demo: in memory); `CatalogModule` +
+- Contract changes: domain `Token` + `imported?`, `name?`, `token2022?`, and `TokenAddress`, `TokenLookup` (its failure
+  + `unreachable?`, 2026-11-16); `CatalogPort` + `useTokenLookup`, `useTokenLookups` (+ `TokenLookups`, 2026-11-16),
+  `importToken`, `removeImportedToken` (demo: in memory); `CatalogModule` +
   `detectTokenAddress`, `importable`, `importKey`, `listedToken`, `parseTokenKey`, `canonicalTokenAddress`, `lookalikeOf`;
   ui `AssetIconProps.token`, `TokenIconProps.token` and `TokenChipToken` + `imported?`; swap exports `sourceParams`,
   `LISTED_ONLY_VENUES`, `ScopeSide.imported`; execute's `engineConfig` + `unlisted`; catalog `ataOf(owner, mint,

@@ -22,7 +22,7 @@ import {usePorts} from "../../config";
 import {chainBySlugWeb, detectTokenAddress, formatAmount, formatUsd, importable, matchesToken, pickerNetworks} from "../../catalog";
 import {AssetIcon, Divider, Field, Icon, IconButton, Sheet, SheetHeader, Tag, Text, TokenIcon} from "../../ui";
 import {ImportConfirm, ImportResult} from "./ImportToken";
-import {lookupNetwork, showsAddress, tokenAt, unsupportedLine} from "./importModel";
+import {EVM_IMPORT_NETWORKS, importCandidates, importNetworks, lookupNetwork, shownImportNetwork, showsAddress, tokenAt, unsupportedLine} from "./importModel";
 import s from "./TokenSheet.module.css";
 
 const ALL = "all";
@@ -91,14 +91,21 @@ function Picker({title, side, tokens, selected, other, importing, onPick, onClos
   const [lookupPick, setLookupPick] = useState<string | null>(null);
   const searching = q.trim().length > 0;
 
-  // A pasted token address (D39): where it is looked up, and whether a token on the list already is it there.
+  // A pasted token address (D39): an EVM contract is read on every EVM network whose list doesn't have it (the chooser
+  // lists where it is a token), a Solana mint on Solana; then the network shown, and whether the list already has it.
   const pasted = searching ? detectTokenAddress(q) : null;
   const importAddr = pasted && pasted.family !== "unsupported" ? pasted : null;
-  const lookupSlug = importAddr
-    ? importAddr.family === "evm" && lookupPick
-      ? lookupPick
-      : lookupNetwork({family: importAddr.family, sheetNet: net === ALL ? null : net, other, own})
-    : null;
+  const evmAddr = importAddr?.family === "evm" ? importAddr.address : null;
+  const candidates = evmAddr ? importCandidates(tokens, evmAddr) : [];
+  const probe = ports.catalog.useTokenLookups(candidates.map((c) => c.caip2), evmAddr);
+  const found = evmAddr ? importNetworks(candidates, probe.lookups) : undefined;
+  const preferred = importAddr ? lookupNetwork({family: importAddr.family, sheetNet: net === ALL ? null : net, other, own}) : null;
+  const lookupSlug =
+    importAddr && preferred
+      ? importAddr.family === "evm"
+        ? shownImportNetwork({pick: lookupPick, preferred, candidates, lookups: probe.lookups})
+        : preferred
+      : null;
   const lookupChain = lookupSlug ? chainBySlugWeb(lookupSlug) : undefined;
   const listedThere = importAddr && lookupSlug ? tokenAt(tokens, lookupSlug, importAddr.address) : undefined;
   const lookupFor = importAddr && importable(lookupChain) && !listedThere ? {caip2: lookupChain.caip2, address: importAddr.address} : null;
@@ -154,6 +161,20 @@ function Picker({title, side, tokens, selected, other, importing, onPick, onClos
         <Text as="p" variant="small" color="var(--muted)" className={s.empty} data-testid="swap-import-unsupported">
           {unsupportedLine(pasted.addressFamily)}
         </Text>
+      )
+    ) : found ? (
+      // Found nowhere while the list has it on some network: that row is the answer, with nothing to import.
+      !lookupFor && !found.reading && candidates.length < EVM_IMPORT_NETWORKS.length ? null : (
+        <ImportResult
+          chain={lookupFor ? lookupSlug : null}
+          address={pasted.address}
+          family="evm"
+          lookup={lookup}
+          networks={found}
+          onNetwork={setLookupPick}
+          onRetry={probe.retry}
+          onImport={(t) => setConfirming({caip2: t.caip2, address: t.contract ?? pasted.address})}
+        />
       )
     ) : lookupFor && lookupSlug ? (
       <ImportResult

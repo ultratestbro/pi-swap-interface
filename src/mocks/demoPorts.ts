@@ -28,6 +28,7 @@ import type {
   ExecutePort,
   SwapPort,
   SwapTokensState,
+  TokenLookups,
   WalletsPort,
 } from "../contracts/ports";
 import type {QuoteRequest, RequoteState, RouteRejection, RouteSnapshot, RoutesRequest, RoutesState, VenueTrust, WebRoute} from "../contracts/routes";
@@ -187,11 +188,20 @@ function useDemoSwapTokens(owners: Owners): SwapTokensState {
 }
 
 /** Offline reads: DEMO_IMPORTABLE by network and address; anything else isn't found (demo contacts no network). */
-function useDemoTokenLookup(caip2: string | null, address: string | null): TokenLookup {
+function demoLookup(caip2: string | null, address: string | null): TokenLookup {
   if (!caip2 || !address) return {status: "idle"};
   const a = address.toLowerCase();
   const token = DEMO_IMPORTABLE.find((t) => t.caip2 === caip2 && t.contract?.toLowerCase() === a);
   return token ? {status: "found", token} : {status: "failed", reason: "Demo mode reads only its sample tokens — no network is contacted."};
+}
+
+const useDemoTokenLookup = demoLookup;
+
+/** The same offline reads per network; nothing to ask again. */
+function useDemoTokenLookups(caip2s: readonly string[], address: string | null): TokenLookups {
+  const key = `${caip2s.join(",")}|${address ?? ""}`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- by value: a caller may rebuild the array each render
+  return useMemo(() => ({lookups: caip2s.map((c) => demoLookup(c, address)), retry: () => {}}), [key]);
 }
 
 /** Offline contract check: a fixture token's own contract address reads as a contract, so the warning is reviewable. */
@@ -209,6 +219,7 @@ export const demoCatalogPort: CatalogPort = {
   useSwapTokens: useDemoSwapTokens,
   useIsContract: useDemoIsContract,
   useTokenLookup: useDemoTokenLookup,
+  useTokenLookups: useDemoTokenLookups,
   importToken: (t) => demoImports.set([t, ...demoImports.get().filter((x) => x.key !== t.key)]),
   removeImportedToken: (key) => demoImports.set(demoImports.get().filter((x) => x.key !== key)),
 };

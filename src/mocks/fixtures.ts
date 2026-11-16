@@ -71,6 +71,8 @@ const imported = (slug: string, symbol: string, name: string, decimals: number, 
 
 export const DEMO_IMPORTABLE: readonly Token[] = [
   imported("base", "DEGEN", "Degen", 18, "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed"),
+  // The same address on a second network: the import's network chooser lists both.
+  imported("arbitrum", "DEGEN", "Degen", 18, "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed"),
   imported("base", "USDC", "USD Coin", 6, "0x1111111111111111111111111111111111111111"),
 ];
 

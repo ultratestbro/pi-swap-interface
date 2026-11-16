@@ -1,13 +1,15 @@
 /**
- * Custom's network picker (D30): the networks a Custom RPC can be added for, each with its logo, in the app's own
- * look (a native <select> opens the OS menu). At ≥ 640 px a menu-look popover under the trigger, inside the Settings
- * dialog; below that the app's bottom sheet. Either way a search field keeps focus and drives the list (a combobox
- * over a listbox): arrow keys move, Enter picks, typing filters, Escape closes, and focus goes back to the trigger.
- * A letter typed on the closed trigger opens the list searching for it.
+ * The network picker, each network with its logo, in the app's own look (a native <select> opens the OS menu):
+ * Custom's networks a Custom RPC can be added for (D30), and — as the `chip` variant — the networks a pasted token
+ * contract was found on (the token sheet's import, D39). At ≥ 640 px a menu-look popover under the trigger, inside its
+ * dialog; below that the app's bottom sheet. A search field (when `searchable`) keeps focus and drives the list (a
+ * combobox over a listbox): arrow keys move, Enter picks, typing filters, Escape closes, and focus goes back to the
+ * trigger. A letter typed on the closed trigger opens the list searching for it. Without the search the listbox itself
+ * takes focus, with the same keys.
  */
-import {useEffect, useId, useRef, useState, type KeyboardEvent} from "react";
+import {useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode} from "react";
 import {ChainLogo, Field, Icon, Sheet, SheetHeader, Text, useBreakpoint} from "../../ui";
-import s from "./Settings.module.css";
+import s from "./NetworkPicker.module.css";
 
 /** One network the picker offers. */
 export interface PickerNetwork {
@@ -35,6 +37,9 @@ export function NetworkPicker({
   value,
   label,
   onChange,
+  variant = "field",
+  searchable = true,
+  footer,
   "data-testid": testId = "network-picker",
 }: {
   networks: readonly PickerNetwork[];
@@ -42,6 +47,12 @@ export function NetworkPicker({
   /** The picker's name: visually hidden by the trigger, the sheet's title on phones. */
   label: string;
   onChange(value: string): void;
+  /** "field": a full-width 48 px field (Settings); "chip": an inline 26 px chip, the popover right-aligned under it. */
+  variant?: "field" | "chip";
+  /** The search field above the list (a short list can do without). */
+  searchable?: boolean;
+  /** A line under the list (what is still loading). */
+  footer?: ReactNode;
   /** On the trigger; the list's parts get `-search`, `-list`, `-<value>` and the phone sheet `-sheet`. */
   "data-testid"?: string;
 }) {
@@ -112,24 +123,27 @@ export function NetworkPicker({
     <NetworkList
       networks={networks}
       value={chosen?.value}
-      initialQuery={seed}
+      initialQuery={searchable ? seed : ""}
       listId={listId}
       autoFocus={!phone}
+      searchable={searchable}
+      footer={footer}
       onPick={pick}
       onBack={phone ? undefined : close}
       testId={testId}
     />
   );
+  const chip = variant === "chip";
 
   return (
-    <div ref={box} className={s.picker}>
+    <div ref={box} className={chip ? `${s.picker} ${s.pickerChip}` : s.picker}>
       <span id={labelId} className={s.visuallyHidden}>
         {label}
       </span>
       <button
         ref={trigger}
         type="button"
-        className={s.pickerTrigger}
+        className={chip ? s.chipTrigger : s.pickerTrigger}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open && !phone ? listId : undefined}
@@ -140,7 +154,7 @@ export function NetworkPicker({
         onKeyDown={onTriggerKey}
         data-testid={testId}
       >
-        {chosen ? <ChainLogo slug={chosen.slug} size={20} /> : null}
+        {chosen ? <ChainLogo slug={chosen.slug} size={chip ? 16 : 20} /> : null}
         <span id={valueId} className={s.pickerValue}>
           {chosen?.name}
         </span>
@@ -157,7 +171,7 @@ export function NetworkPicker({
       ) : open ? (
         <div
           ref={popover}
-          className={s.popover}
+          className={chip ? `${s.popover} ${s.popoverChip}` : s.popover}
           // a press inside (an option, the gaps) keeps focus in the search, or the popover would lose its keyboard
           onMouseDown={(e) => !(e.target instanceof HTMLInputElement) && e.preventDefault()}
           // focus gone elsewhere (Tab on to the URL, a click outside) closes it; to the trigger, the trigger decides
@@ -174,13 +188,18 @@ export function NetworkPicker({
   );
 }
 
-/** The search field and the networks it matches; the active one (aria-activedescendant) starts at the chosen one. */
+/**
+ * The search field and the networks it matches — or, not `searchable`, the list alone, focusable itself; the active
+ * one (aria-activedescendant) starts at the chosen one.
+ */
 function NetworkList({
   networks,
   value,
   initialQuery,
   listId,
   autoFocus,
+  searchable,
+  footer,
   onPick,
   onBack,
   testId,
@@ -189,8 +208,10 @@ function NetworkList({
   value: string | undefined;
   initialQuery: string;
   listId: string;
-  /** Focus the search on open (the popover; phones never raise the keyboard by themselves). */
+  /** Focus the search (or the list) on open (the popover; phones never raise the keyboard by themselves). */
   autoFocus: boolean;
+  searchable: boolean;
+  footer?: ReactNode;
   onPick(n: PickerNetwork): void;
   /** Shift+Tab out of the popover's search: closed, back on the trigger (Tab onward closes it by focus alone). */
   onBack?: () => void;
@@ -208,10 +229,10 @@ function NetworkList({
 
   useEffect(() => {
     if (!autoFocus) return;
-    search.current?.focus({preventScroll: true});
+    (searchable ? search.current : listbox.current)?.focus({preventScroll: true});
     // All of the popover in view inside the scrolling Settings body.
     panel.current?.scrollIntoView?.({block: "nearest"});
-  }, [autoFocus]);
+  }, [autoFocus, searchable]);
 
   // Keep the active option in view by scrolling the list alone (scrollIntoView would move the sheet or the page too).
   const currentId = current ? optionId(current) : undefined;
@@ -223,7 +244,7 @@ function NetworkList({
     else if (option.offsetTop + option.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = option.offsetTop + option.offsetHeight - list.clientHeight;
   }, [currentId]);
 
-  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+  const onKey = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (!shown.length) return;
@@ -240,28 +261,39 @@ function NetworkList({
 
   return (
     <div ref={panel} className={s.pickerPanel}>
-      <Field
-        ref={search}
-        role="combobox"
-        aria-label="Search networks"
-        aria-expanded="true"
-        aria-autocomplete="list"
-        aria-controls={listId}
-        aria-activedescendant={currentId}
-        placeholder="Search networks"
-        leading={<Icon name="search" size={16} color="var(--muted)" />}
-        value={query}
-        onChange={(e) => {
-          const next = e.target.value;
-          setQuery(next);
-          setActive(next.trim() ? 0 : chosenIn(matchNetworks(networks, next)));
-        }}
-        onKeyDown={onKey}
-        enterKeyHint="done"
-        data-testid={`${testId}-search`}
-      />
+      {searchable ? (
+        <Field
+          ref={search}
+          role="combobox"
+          aria-label="Search networks"
+          aria-expanded="true"
+          aria-autocomplete="list"
+          aria-controls={listId}
+          aria-activedescendant={currentId}
+          placeholder="Search networks"
+          leading={<Icon name="search" size={16} color="var(--muted)" />}
+          value={query}
+          onChange={(e) => {
+            const next = e.target.value;
+            setQuery(next);
+            setActive(next.trim() ? 0 : chosenIn(matchNetworks(networks, next)));
+          }}
+          onKeyDown={onKey}
+          enterKeyHint="done"
+          data-testid={`${testId}-search`}
+        />
+      ) : null}
       {/* rendered even when empty: the trigger and the search point at it */}
-      <ul ref={listbox} id={listId} role="listbox" aria-label="Networks" className={s.options} data-testid={`${testId}-list`}>
+      <ul
+        ref={listbox}
+        id={listId}
+        role="listbox"
+        aria-label="Networks"
+        className={s.options}
+        // Without the search, the list takes focus and the keys itself.
+        {...(searchable ? {} : {tabIndex: 0, "aria-activedescendant": currentId, onKeyDown: onKey})}
+        data-testid={`${testId}-list`}
+      >
         {shown.map((n, i) => (
           <li
             key={n.value}
@@ -284,6 +316,7 @@ function NetworkList({
           No network matches “{query.trim()}”.
         </Text>
       )}
+      {footer ? <div className={s.pickerFoot}>{footer}</div> : null}
     </div>
   );
 }

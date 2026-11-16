@@ -6,7 +6,7 @@
 import {useQueries, useQuery, type UseQueryResult} from "@tanstack/react-query";
 import {useMemo} from "react";
 import type {Owners, PriceMap, Token, TokenLookup} from "../contracts/domain";
-import type {CatalogPort, SwapTokensState} from "../contracts/ports";
+import type {CatalogPort, SwapTokensState, TokenLookups} from "../contracts/ports";
 import {useBalances} from "./balances";
 import {isContractAddress} from "./evm";
 import {TokenReadError, addImportedToken, canonicalTokenAddress, readTokenForImport, removeImportedToken, useImportedTokens} from "./imported";
@@ -138,30 +138,60 @@ export function useIsContract(caip2: string, address: string | null): boolean | 
 const retryRead = (failures: number, e: unknown): boolean => failures < 1 && !(e instanceof TokenReadError && e.definitive);
 
 /**
- * An import's on-chain read (D39): react-query key `["token-meta", caip2, address]` with the address checksummed on EVM
- * (`canonicalTokenAddress`), kept 10 min — the search result, its confirmation and a pair link share one read, however
- * the address was spelled. Idle while either is null. A token found carries its logo once that arrives (by contract).
+ * The react-query options of an import's on-chain read (D39): key `["token-meta", caip2, address]` with the address
+ * checksummed on EVM (`canonicalTokenAddress`), kept 10 min — the search result, the network chooser's reads, the
+ * confirmation and a pair link share one read, however the address was spelled. Disabled while either is null.
  */
-export function useTokenLookup(caip2: string | null, address: string | null): TokenLookup {
+function lookupQuery(caip2: string | null, address: string | null) {
   const at = caip2 && address ? canonicalTokenAddress(caip2, address) : null;
-  const enabled = !!caip2 && !!at;
-  const {data, error} = useQuery({
+  return {
     queryKey: ["token-meta", caip2, at],
-    enabled,
+    enabled: !!caip2 && !!at,
     queryFn: () => readTokenForImport(caip2!, at!),
     staleTime: 600_000,
     gcTime: 1_800_000,
     retry: retryRead,
     refetchOnWindowFocus: false,
-  });
-  const found = useMemo(() => (enabled && data ? [data] : []), [enabled, data]);
+  };
+}
+
+/** A read's state as the screens see it; a failure says whether a node couldn't be reached (asking again may help). */
+function asLookup(enabled: boolean, data: Token | undefined, error: unknown): TokenLookup {
+  if (!enabled) return {status: "idle"};
+  if (data) return {status: "found", token: data};
+  if (error) {
+    const definitive = error instanceof TokenReadError && error.definitive;
+    return {status: "failed", reason: error instanceof TokenReadError ? error.message : "Couldn't read this token — try again.", ...(definitive ? {} : {unreachable: true as const})};
+  }
+  return {status: "loading"};
+}
+
+/** An import's on-chain read (`lookupQuery`). Idle while either is null. A token found carries its logo once that arrives (by contract). */
+export function useTokenLookup(caip2: string | null, address: string | null): TokenLookup {
+  const q = lookupQuery(caip2, address);
+  const {data, error} = useQuery(q);
+  const found = useMemo(() => (q.enabled && data ? [data] : []), [q.enabled, data]);
   const logos = useImportedLogos(found);
   return useMemo((): TokenLookup => {
-    if (!enabled) return {status: "idle"};
-    if (data) return {status: "found", token: withLogos([data], logos)[0]!};
-    if (error) return {status: "failed", reason: error instanceof TokenReadError ? error.message : "Couldn't read this token — try again."};
-    return {status: "loading"};
-  }, [enabled, data, error, logos]);
+    const l = asLookup(q.enabled, data, error);
+    return l.status === "found" ? {status: "found", token: withLogos([l.token], logos)[0]!} : l;
+  }, [q.enabled, data, error, logos]);
+}
+
+/** Module-level (a stable `combine`): the same object until a read changes. */
+const lookupsOf = (results: UseQueryResult<Token>[]): TokenLookups => ({
+  lookups: results.map((r) => asLookup(r.fetchStatus !== "idle" || r.status !== "pending", r.data, r.error)),
+  retry: () => {
+    for (const r of results) if (r.error && !(r.error instanceof TokenReadError && r.error.definitive)) void r.refetch();
+  },
+});
+
+/**
+ * One pasted contract read on every network given (D39: where it is a token), each read `lookupQuery`'s own — what the
+ * network chooser lists, and the chosen network's result and confirmation read nothing again.
+ */
+export function useTokenLookups(caip2s: readonly string[], address: string | null): TokenLookups {
+  return useQueries({queries: caip2s.map((c) => lookupQuery(c, address)), combine: lookupsOf});
 }
 
 /** The real catalog port (App.tsx's realPorts). */
@@ -173,6 +203,7 @@ export const catalogPort: CatalogPort = {
   useSwapTokens,
   useIsContract,
   useTokenLookup,
+  useTokenLookups,
   importToken: addImportedToken,
   removeImportedToken,
 };
