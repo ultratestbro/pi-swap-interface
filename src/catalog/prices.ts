@@ -6,7 +6,7 @@
  * missing, and a real de-peg must show.
  */
 import {getRuntimeConfig} from "../config";
-import type {PriceMap} from "../contracts/domain";
+import type {PriceMap, Token} from "../contracts/domain";
 
 /**
  * Symbol → price id. A plain value is a CoinGecko id (DefiLlama key `coingecko:<id>`); a value with ":" is a
@@ -60,7 +60,7 @@ const base = (u: string) => u.replace(/\/+$/, "");
 const usable = (p: unknown): p is number => typeof p === "number" && Number.isFinite(p) && p > 0;
 
 /** The outer abort (react-query's) plus our own timeout. AbortSignal.any is recent (Safari 17.4), so it is optional. */
-function withTimeout(ms: number, outer?: AbortSignal): AbortSignal {
+export function withTimeout(ms: number, outer?: AbortSignal): AbortSignal {
   const own = AbortSignal.timeout(ms);
   if (!outer) return own;
   if (typeof AbortSignal.any === "function") return AbortSignal.any([outer, own]);
@@ -119,6 +119,57 @@ export async function fetchPrices(signal?: AbortSignal): Promise<Record<string, 
   } catch {
     return llama;
   }
+}
+
+/**
+ * DefiLlama's chain key per importable network (D39), for `<chain>:<contract>` price keys. Each one checked against
+ * that network's listed USDC / USDT / USDG on 2026-11-16 (a unit test holds every importable network to having one).
+ */
+export const LLAMA_CHAINS: Readonly<Record<string, string>> = {
+  ethereum: "ethereum", arbitrum: "arbitrum", optimism: "optimism", base: "base", solana: "solana", polygon: "polygon",
+  bsc: "bsc", avalanche: "avax", zksync: "era", linea: "linea", scroll: "scroll", unichain: "unichain", monad: "monad",
+  hyperevm: "hyperliquid", gnosis: "xdai", sonic: "sonic", berachain: "berachain", celo: "celo", plasma: "plasma",
+  megaeth: "megaeth", robinhood: "robinhood", worldchain: "wc", sei: "sei", ink: "ink", plume: "plume_mainnet",
+  xlayer: "xlayer", mantle: "mantle", katana: "katana", morph: "morph", flare: "flare", arc: "arc", elysium: "elysium",
+};
+
+/** Below this DefiLlama confidence an imported token's price isn't shown: a thin pool's guess reads as "no price". */
+export const IMPORTED_MIN_CONFIDENCE = 0.9;
+
+/** An imported token's DefiLlama key, by its contract or mint — never its symbol (D39); null for a catalog token. */
+export const importedPriceKey = (t: Pick<Token, "chain" | "contract" | "imported">): string | null => {
+  const chain = LLAMA_CHAINS[t.chain];
+  return t.imported && t.contract && chain ? `${chain}:${t.contract}` : null;
+};
+
+/**
+ * The imported tokens' USD prices, token key → USD (D39): one DefiLlama GET for all of them, by contract or mint, so a
+ * copy named "USDC" gets its own price or none — never USDC's. A price under IMPORTED_MIN_CONFIDENCE is left out. No
+ * CoinGecko fallback (its contract endpoint is per network, and keyless it allows ~5 calls). Throws on a failed request
+ * (react-query keeps the last good map).
+ */
+export async function fetchImportedPrices(tokens: readonly Token[], signal?: AbortSignal): Promise<Record<string, number>> {
+  const keyed = tokens.flatMap((t) => {
+    const k = importedPriceKey(t);
+    return k ? [{token: t.key, key: k, evm: t.family === "evm"}] : [];
+  });
+  if (!keyed.length) return {};
+  const keys = [...new Set(keyed.map((x) => x.key))].sort();
+  const url = `${base(getRuntimeConfig().prices.defillama)}/prices/current/${keys.join(",")}?searchWidth=6h`;
+  const res = await fetch(url, {signal: withTimeout(TIMEOUT_MS, signal)});
+  if (!res.ok) throw new Error(`defillama ${res.status}`);
+  const body = (await res.json()) as {coins?: Record<string, {price?: unknown; confidence?: unknown} | undefined>} | null;
+  const coins = body?.coins ?? {};
+  // A mint is case-sensitive, so only an EVM key falls back to a case-insensitive match.
+  const lower = new Map(Object.entries(coins).map(([k, v]) => [k.toLowerCase(), v]));
+  const out: Record<string, number> = {};
+  for (const x of keyed) {
+    const coin = coins[x.key] ?? (x.evm ? lower.get(x.key.toLowerCase()) : undefined);
+    const p = coin?.price;
+    const c = coin?.confidence;
+    if (usable(p) && (typeof c !== "number" || c >= IMPORTED_MIN_CONFIDENCE)) out[x.token] = p;
+  }
+  return out;
 }
 
 /**

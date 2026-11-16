@@ -1090,13 +1090,13 @@ imported already, simply shows as its row), the list starts with an "Import toke
 `data-testid="swap-import-result"`): `caps` dim "IMPORT TOKEN" and, for an EVM contract, a network chooser (a native
 `<select>` of the 31 EVM networks in a surface3 chip, `swap-import-network`) — first the network the sheet is filtered
 to, with "All networks" the other side's, else this side's, else Ethereum; below it the read token as a row
-(`TokenIcon` 34 monogram, `listTitle` symbol, `meta` dim "{name} · {network} · {short address}", an amber `Import` tag;
+(`TokenIcon` 34 — its logo found by contract, else the monogram —, `listTitle` symbol, `meta` dim "{name} · {network} · {short address}", an amber `Import` tag;
 `swap-import-open`), a skeleton row "Reading it on {network}…", or the reason in amber (`swap-import-failed`). A TON,
 Tron, NEAR, Bitcoin or Zcash address shows one muted line instead ("TON tokens can't be imported yet — importing by
 address works on EVM networks and Solana.", `swap-import-unsupported`) — unless a listed token's contract is that
 address (TON USDT's master): then only its row shows.
 Opening it replaces the list with the confirmation (`swap-import-confirm`): `SheetHeader` "Import token" / "on
-{network}" with Back (to the search) and close; `TokenIcon` 52 monogram with the network badge, `title` symbol,
+{network}" with Back (to the search) and close; `TokenIcon` 52 (logo found by contract, else monogram) with the network badge, `title` symbol,
 `small` ink2 name, `meta` muted "{network} · {n} decimals"; an address box (surface2, radius 14: `caps` "CONTRACT
 ADDRESS", the full address in 12.5 px monospace, selectable, a `CopyButton`, "View on the {network} explorer" in
 accent); the warning (amber-bg box, `info` icon in amber, `small` ink2): "Anyone can create a token with any name —
@@ -1108,7 +1108,9 @@ naming an unlisted token opens the sheet on this confirmation alone (no Back). I
 with an amber "Imported" tag beside the symbol, the name in the sub line, and a 30 px flat close button beside the row
 ("Remove the imported {SYMBOL} on {network}", `swap-token-remove-<key>`); the row gives way to it (`min-width: 0`), so a
 long symbol or name ellipsizes and the button stays inside the list at 375 px. The form's chip reads "{SYMBOL}
-(imported) on {network}, change token" for an imported token.
+(imported) on {network}, change token" for an imported token. Priced by its contract (D39), an import's row shows
+its held value and the amount cards "≈ {usd}" like any token; unpriced, the cards say "Imported token · no price" and
+the review's imported note ends "; no price was found for it".
 
 ### 5.8 ReviewSheet: review → approve → swap steps
 

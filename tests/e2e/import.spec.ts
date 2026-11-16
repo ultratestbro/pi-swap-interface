@@ -1,13 +1,15 @@
 /**
  * Importing a token by its address (D39) in the real build, with the chain stubbed: EVM JSON-RPC answers eth_getCode
  * and decimals() / symbol() / name() for the tokens below (every other call reverts), Solana's getMultipleAccounts
- * answers a mint and its Metaplex metadata, the price APIs answer empty maps, and every other request is recorded and
- * aborted — so the run is deterministic and nothing reaches a venue.
- * - Paste an EVM contract → the confirmation with the warning → "I understand" → imported; the next round asks the
+ * answers a mint and its Metaplex metadata, the price APIs price DEGEN alone (by its contract), the logo hosts have
+ * DEGEN's logo alone, and every other request is recorded and aborted — so the run is deterministic and nothing reaches
+ * a venue.
+ * - Paste an EVM contract → the confirmation with the warning and its logo → "I understand" → imported, priced and
+ *   shown with its logo (both found by its contract); the next round asks the
  *   venues for that contract with its decimals (a preview: no wallet; Balancer's SOR query carries both); the venues
  *   with their own token lists read "Listed tokens only" between networks, and keep their network line on one.
  * - A contract pasted with a wrong checksum reads as the token (viem refuses to call a mis-checksummed address).
- * - A token whose symbol is a listed one's shows the amber look-alike line.
+ * - A token whose symbol is a listed one's shows the amber look-alike line, and its monogram (no logo by its symbol).
  * - A long imported symbol and name ellipsize: the row's remove button stays inside the list on a phone.
  * - A Solana mint imports from its mint account and Metaplex metadata.
  * - A pair link naming an unlisted token opens with that side empty and the confirmation up, and asks no venue for it
@@ -31,6 +33,10 @@ const BASE_PAIR = "pay=base:native&receive=base:0x833589fcd6edb6e08f4c7c32d4f71b
 
 const BALANCER_VAULT = "0xba12222222228d8ba445958a75a0704d566bf2c8";
 const PRICE_HOSTS = new Set(["coins.llama.fi", "api.coingecko.com"]);
+const LOGO_HOSTS = new Set(["token-icons.llamao.fi", "raw.githubusercontent.com"]);
+/** DEGEN's DefiLlama price (by its contract) and logo (a 1×1 PNG) in this run. */
+const DEGEN_USD = 0.0007;
+const PNG_1PX = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 const CORS = {"access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "GET, POST, OPTIONS"};
 
 const abi = (type: "string" | "uint256", v: string | bigint): Hex => encodeAbiParameters([{type}], [v as never]);
@@ -105,7 +111,13 @@ async function stubNetwork(page: Page, origin: string): Promise<Seen[]> {
       const req = route.request();
       const url = new URL(req.url());
       if (req.method() === "OPTIONS") return route.fulfill({status: 204, headers: CORS});
-      if (PRICE_HOSTS.has(url.hostname)) return route.fulfill({status: 200, headers: CORS, contentType: "application/json", body: url.hostname === "coins.llama.fi" ? '{"coins":{}}' : "{}"});
+      if (PRICE_HOSTS.has(url.hostname)) return route.fulfill({status: 200, headers: CORS, contentType: "application/json", body: url.hostname === "coins.llama.fi" ? llamaBody(url) : "{}"});
+      // The logo hosts have DEGEN's alone (DefiLlama's icons and Trust Wallet's assets, by its checksummed contract).
+      if (LOGO_HOSTS.has(url.hostname)) {
+        return url.pathname.includes(DEGEN)
+          ? route.fulfill({status: 200, headers: CORS, contentType: "image/png", body: Buffer.from(PNG_1PX, "base64")})
+          : route.fulfill({status: 404, headers: CORS, contentType: "text/plain", body: "Not found"});
+      }
       const body = req.postData() ?? "";
       seen.push({url: url.href, body});
       let rpc: Rpc | Rpc[] | null;
@@ -123,6 +135,12 @@ async function stubNetwork(page: Page, origin: string): Promise<Seen[]> {
     },
   );
   return seen;
+}
+
+/** DefiLlama's answer: DEGEN priced when the request names it by its contract (an import's price), nothing else. */
+function llamaBody(url: URL): string {
+  const key = `base:${DEGEN}`;
+  return JSON.stringify({coins: url.pathname.includes(key) ? {[key]: {price: DEGEN_USD, symbol: "DEGEN", confidence: 0.99}} : {}});
 }
 
 /** A request naming the contract as a venue would: in a quote's calldata or a venue API's URL or body (not its own reads). */
@@ -182,6 +200,8 @@ test("an EVM contract imports after the warning, and the next round asks the ven
   await expect(confirm.getByTestId("swap-import-warning")).toHaveText(/^Anyone can create a token with any name — including fake copies of real tokens\./);
   await expect(confirm.getByTestId("swap-import-lookalike")).toHaveCount(0);
   await expect(confirm.getByTestId("swap-import-confirm-button")).toBeDisabled();
+  // Its logo, found by its contract, inline (the CSP's img-src stays 'self' data: blob:).
+  await expect(confirm.locator("img").first()).toHaveAttribute("src", `data:image/png;base64,${PNG_1PX}`);
   await expectNoHorizontalScroll(page);
   // Nothing has asked a venue about it yet: only its own reads.
   expect(seen.filter(asksFor), "a venue asked before the import").toEqual([]);
@@ -189,8 +209,10 @@ test("an EVM contract imports after the warning, and the next round asks the ven
   await confirm.getByTestId("swap-import-understand").check();
   await confirm.getByTestId("swap-import-confirm-button").click();
   await expect(page.getByTestId("swap-pay-token")).toHaveAttribute("aria-label", "DEGEN (imported) on Base, change token");
-  await expect(page.getByTestId("swap-pay-usd")).toHaveText("Imported token · no price");
+  await expect(page.getByTestId("swap-pay-token").locator("img").first()).toHaveAttribute("src", `data:image/png;base64,${PNG_1PX}`);
   await page.getByTestId("swap-amount").fill("1000");
+  // Priced by its contract: 1000 × $0.0007.
+  await expect(page.getByTestId("swap-pay-usd")).toHaveText("≈ $0.70");
 
   // The preview round asks the venues that take any token, naming the contract (a quote call's calldata, an API).
   // Balancer's SOR query names the source by contract and its amount in the decimals read on-chain (sourceDecimals):
@@ -269,6 +291,9 @@ test("a token named like a listed one shows the amber look-alike line", async ({
   const confirm = page.getByTestId("swap-import-confirm");
   await expect(confirm.getByTestId("swap-import-symbol")).toHaveText("USDC");
   await expect(confirm.getByTestId("swap-import-lookalike")).toHaveText("Not the listed USDC — that one's address is 0x8335…2913");
+  // No logo by its symbol: its own contract has none, so its monogram stands (the network badge is the only image).
+  await expect(confirm.locator('img[src^="data:"]')).toHaveCount(0);
+  await expect(confirm.locator('img[src*="logos/tokens/"]')).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 });
 

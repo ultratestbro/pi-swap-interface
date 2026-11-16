@@ -55,8 +55,10 @@ cp0x controls only this interface. What it guarantees:
 
 - It adds no restriction of its own: no country or IP blocks, no wallet screening and no token blacklist.
 - It charges nothing, and the venue's quote is shown as the venue returned it.
-- It contacts only the venues, the RPC endpoints, the price APIs, TonAPI once a TON wallet is connected (balances,
-  the jetton wallet a USDT transfer leaves from) and, if you choose them, WalletConnect's relay or the TON Connect
+- It contacts only the venues, the RPC endpoints, the price APIs (DefiLlama also prices a token you imported by its
+  address, by that address), for such a token's logo DefiLlama's token icons and Trust Wallet's assets on GitHub,
+  TonAPI once a TON wallet is connected (balances, the jetton wallet a USDT transfer leaves from) and, if you choose
+  them, WalletConnect's relay or the TON Connect
   bridges (once you open TON Connect, its QR listens on the bridge of every wallet in its list until you close it;
   TON Connect's list server and analytics are never contacted: the list and its icons come with the page) — the
   hosted interface also its own host's page-view count — plus,

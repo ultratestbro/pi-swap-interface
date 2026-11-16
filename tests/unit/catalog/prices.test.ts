@@ -1,6 +1,8 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
-import {PRICE_IDS, TOKENS, fetchPrices, priceFor, tokenPrice} from "../../../src/catalog";
-import {fromGecko, fromLlama, lastKnownPrices, loadPrices, rememberPrices} from "../../../src/catalog/prices";
+import {PRICE_IDS, TOKENS, chainBySlugWeb, fetchPrices, importedToken, priceFor, swapTokens, tokenPrice} from "../../../src/catalog";
+import {importable} from "../../../src/catalog/imported";
+import {CHAIN_LIST} from "../../../src/catalog/network";
+import {LLAMA_CHAINS, fetchImportedPrices, fromGecko, fromLlama, importedPriceKey, lastKnownPrices, loadPrices, rememberPrices} from "../../../src/catalog/prices";
 import {DEFAULT_RUNTIME_CONFIG, setRuntimeConfig} from "../../../src/config";
 
 type Reply = {status?: number; body?: unknown; throws?: Error};
@@ -207,5 +209,74 @@ describe("priceFor", () => {
     expect(priceFor(p, "WETH")).toBe(3000);
     expect(priceFor(p, "USDC")).toBeUndefined(); // no $1 default for display
     expect(priceFor({ETH: 0}, "ETH")).toBeUndefined();
+  });
+});
+
+describe("imported tokens' prices (D39)", () => {
+  const base = chainBySlugWeb("base")!;
+  const solana = chainBySlugWeb("solana")!;
+  const DEGEN = "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed";
+  const BONK = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
+  const degen = importedToken(base, DEGEN, {decimals: 18, symbol: "DEGEN", name: "Degen"});
+  const bonk = importedToken(solana, BONK, {decimals: 5, symbol: "Bonk", name: "Bonk"});
+  // A copy named USDC: found by its own contract, so it can never read as USDC's price.
+  const fakeUsdc = importedToken(base, "0x2222222222222222222222222222222222222222", {decimals: 6, symbol: "USDC", name: "USD Coin"});
+
+  it("every importable network has a DefiLlama chain key", () => {
+    expect(CHAIN_LIST.filter((c) => importable(c) && !LLAMA_CHAINS[c.slug]).map((c) => c.slug)).toEqual([]);
+  });
+
+  it("keys an import by its contract or mint, a catalog token not at all", () => {
+    expect(importedPriceKey(degen)).toBe(`base:${DEGEN}`);
+    expect(importedPriceKey(bonk)).toBe(`solana:${BONK}`);
+    expect(importedPriceKey(importedToken(chainBySlugWeb("avalanche")!, DEGEN, {decimals: 18, symbol: "X", name: "X"}))).toBe(`avax:${DEGEN}`);
+    expect(importedPriceKey(TOKENS.find((t) => t.key === "base:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")!)).toBeNull();
+  });
+
+  it("asks DefiLlama once for every import and maps each price back to its token key", async () => {
+    mockFetch(() => ({
+      body: {
+        coins: {
+          [`base:${DEGEN}`]: {price: 0.0007, symbol: "DEGEN", confidence: 0.999},
+          [`solana:${BONK}`]: {price: 0.0000023, symbol: "bonk", confidence: 0.99},
+        },
+      },
+    }));
+    const prices = await fetchImportedPrices([degen, bonk, fakeUsdc]);
+    expect(calls).toEqual([`https://coins.llama.fi/prices/current/base:0x2222222222222222222222222222222222222222,base:${DEGEN},solana:${BONK}?searchWidth=6h`]);
+    expect(prices).toEqual({[degen.key]: 0.0007, [bonk.key]: 0.0000023});
+    // The copy named USDC has no price, whatever the catalog's map says about "USDC".
+    expect(tokenPrice(fakeUsdc, {USDC: 1}, prices)).toBeUndefined();
+    expect(tokenPrice(degen, {DEGEN: 5}, prices)).toBe(0.0007);
+    expect(tokenPrice(degen, {DEGEN: 5})).toBeUndefined();
+  });
+
+  it("matches an EVM key in any case, never a mint in another case", async () => {
+    mockFetch(() => ({body: {coins: {[`base:${DEGEN.toLowerCase()}`]: {price: 0.0007}, [`solana:${BONK.toLowerCase()}`]: {price: 1}}}}));
+    expect(await fetchImportedPrices([degen, bonk])).toEqual({[degen.key]: 0.0007});
+  });
+
+  it("leaves out a low-confidence or unusable price", async () => {
+    mockFetch(() => ({body: {coins: {[`base:${DEGEN}`]: {price: 0.0007, confidence: 0.5}, [`solana:${BONK}`]: {price: 0, confidence: 0.99}}}}));
+    expect(await fetchImportedPrices([degen, bonk])).toEqual({});
+  });
+
+  it("asks nothing for no imports, follows the configured DefiLlama host, and throws on a failed request", async () => {
+    mockFetch(() => ({body: {coins: {}}}));
+    expect(await fetchImportedPrices([TOKENS[0]!])).toEqual({});
+    expect(calls).toEqual([]);
+    setRuntimeConfig({...DEFAULT_RUNTIME_CONFIG, prices: {...DEFAULT_RUNTIME_CONFIG.prices, defillama: "https://llama.example/"}});
+    await fetchImportedPrices([degen]);
+    expect(calls).toEqual([`https://llama.example/prices/current/base:${DEGEN}?searchWidth=6h`]);
+    mockFetch(() => ({status: 502, body: {}}));
+    await expect(fetchImportedPrices([degen])).rejects.toThrow("defillama 502");
+  });
+
+  it("prices an import in the token list by its key, held imports sorted by USD", () => {
+    const owners = {evm: "0x00000000000000000000000000000000000000aa"};
+    const balances = {[degen.key]: {amount: "1000000000000000000000", state: "loaded" as const}};
+    const [row] = swapTokens([degen], balances, {}, owners, {[degen.key]: 0.0007});
+    expect(row!.priceUsd).toBe(0.0007);
+    expect(row!.usd).toBeCloseTo(0.7);
   });
 });

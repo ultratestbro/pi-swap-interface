@@ -229,11 +229,22 @@ describe("logos", () => {
     expect(render(<AssetIcon network="morph" />).container.textContent).toBe("MORP");
   });
 
-  it("an imported token is always its monogram — never the logo its symbol names (D39)", () => {
+  it("an imported token is its monogram — never the logo its symbol names (D39)", () => {
     const fake = {symbol: "USDC", caip2: "eip155:8453", contract: "0x1111111111111111111111111111111111111111", chain: "base", imported: true};
     const {container} = render(<TokenIcon token={fake} />);
     expect([...container.querySelectorAll("img")].map((i) => i.getAttribute("src"))).toEqual(["logos/networks/base.svg"]);
     expect(container.textContent).toBe("USDC");
+  });
+
+  it("an imported token shows the logo found by its contract, inline only — a URL that would load from a host is ignored", () => {
+    const logo = "data:image/png;base64,iVBORw0KGgo=";
+    const imported = {symbol: "DEGEN", caip2: "eip155:8453", contract: "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed", chain: "base", imported: true};
+    const srcs = (token: typeof imported & {logo?: string}) => [...render(<TokenIcon token={token} />).container.querySelectorAll("img")].map((i) => i.getAttribute("src"));
+    expect(srcs({...imported, logo})).toEqual([logo, "logos/networks/base.svg"]);
+    expect(srcs({...imported, logo: "https://example.com/degen.png"})).toEqual(["logos/networks/base.svg"]);
+    expect(srcs({...imported, logo: "data:text/html;base64,PGI+"})).toEqual(["logos/networks/base.svg"]);
+    // A catalog token never takes a `logo`: its own bundled file stands.
+    expect(srcs({symbol: "USDC", caip2: "eip155:8453", contract: "0x8335", chain: "base", imported: false, logo})).toEqual(["logos/tokens/USDC.svg", "logos/networks/base.svg"]);
   });
 
   it("TokenIcon adds the network badge; logos are decorative unless labelled", () => {

@@ -1,6 +1,7 @@
 /**
  * Token, network and venue logos from the bundled static files only
- * (logos.ts, D13). Anything without a file — or a file that fails to load —
+ * (logos.ts, D13) — and an imported token's from the `data:` URL the catalog
+ * found by its contract (D39). Anything without a file — or a file that fails to load —
  * falls back to the wallet's monogram tile, so a missing logo never shows a
  * broken image. Logos are decorative unless `label` is given: the row next to
  * them names the token or venue.
@@ -43,10 +44,14 @@ function useFailed(src: string | undefined): [boolean, () => void] {
   return [src !== undefined && failed === src, () => setFailed(src ?? null)];
 }
 
+/** An imported token's logo: a `data:image/` URL only — nothing that would load from a host. */
+const importedLogo = (logo: string | undefined): LogoSource | null => (logo?.startsWith("data:image/") ? {src: logo} : null);
+
 /** Round logo on a surface3 disc: `network` by catalog slug, else `token` by symbol; monogram fallback. */
 export function AssetIcon({token, network, size = 38, label}: AssetIconProps & Labelled) {
-  // An imported token (D39) is always its monogram: its symbol is whatever its deployer wrote.
-  const source = network !== undefined ? networkLogo(network) : token && !token.imported ? tokenLogo(token.symbol) : null;
+  // An imported token (D39) never gets the logo its symbol names (that is whatever its deployer wrote): only the one found
+  // by its contract, inline, else its monogram.
+  const source = network !== undefined ? networkLogo(network) : token?.imported ? importedLogo(token.logo) : token ? tokenLogo(token.symbol) : null;
   const [failed, fail] = useFailed(source?.src);
   const text = monogram(network ?? token?.symbol ?? "?");
   return (

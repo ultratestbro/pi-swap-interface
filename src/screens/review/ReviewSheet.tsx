@@ -332,7 +332,7 @@ function ImportedNotes({tokens}: {tokens: readonly SwapDraft["req"]["from"][]}) 
           <Text as="p" variant="meta" color="var(--ink2)" selectable className={s.fine}>
             {`Not on the token list — added by its address on ${t.chainName}: `}
             <span className={s.mono}>{t.contract}</span>
-            {". Check it against the project's official sources; no price is shown for it."}
+            {`. Check it against the project's official sources${t.priceUsd === undefined ? "; no price was found for it" : ""}.`}
           </Text>
         </div>
       ))}

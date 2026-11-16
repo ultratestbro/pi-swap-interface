@@ -209,7 +209,7 @@ Arbitrum: owner's decision, 2026-11-13). Allowlists (LI.FI targets, THORChain ro
 <slug>:<contract lowercased | native>`; `contract` keeps its case. `gasToken` marks natives plus Celo CELO / Arc
 USDC (ERC-20 faces), and MAX reserves gas for them. Pay side = `payMode !== "none"` (`wallet`, `connect`,
 `deposit`); receive side = every token. Tokens imported by their address (D39) join both after the catalog's, marked
-`imported` (their `catalogSymbol` is their contract; never priced).
+`imported` (their `catalogSymbol` is their contract; priced and shown with a logo only as found by that contract).
 
 **D5 — Chains.** `src/shared/chains.ts` is `@cp0x/shared` verbatim with one patch (World Chain's dead tenderly
 RPC → drpc + thirdweb). The web `Chain` adds `catalogKey`, `memo`, `icon`, `receiveOnly` (catalog.md §2.3). The 9
@@ -1551,7 +1551,8 @@ it."
   at once; a mint on Solana. A pasted TON, Tron or NEAR address of a listed token (TON USDT's master) is just that
   token's row, without the "can't be imported" line (`showsAddress`).
 - **What is read, and from where.** On-chain only — never a token list, a third-party API or a venue's word
-  (`readTokenForImport`, `src/catalog/imported.ts`). EVM: the contract checksummed first (a pasted one may carry a
+  (`readTokenForImport`, `src/catalog/imported.ts`); the price and the logo shown beside it are looked up by the
+  contract afterwards (below), never feed the read. EVM: the contract checksummed first (a pasted one may carry a
   wrong checksum or none, and viem refuses to call a mis-checksummed address), `eth_getCode` (code, not an EIP-7702
   delegation), then `decimals()` (required, 0..36), `symbol()` and `name()` (ABI string or legacy bytes32) over the
   catalog's public client — the runtime RPCs, so Standard's proxy RPC first (D30: cp0x sees that read like any RPC call
@@ -1586,11 +1587,27 @@ it."
   the warning. Key `<slug>:<contract>`: lowercased on EVM like the catalog's, verbatim on Solana (a lowercased mint is
   another address, and a shared link must still name it). Listed in the sheet after the catalog's tokens, with an
   "Imported" badge, its name and a remove button.
-- **Never priced, never dressed up.** No USD anywhere and no third-party price lookup: `tokenPrice` gives nothing for an
-  import whatever its symbol, the amount cards say "Imported token · no price", fees and gas stay in the native coin's
-  USD as before, and the router ranks such a pair on raw output (its `usdValue` finds no catalog asset). Its logo is
-  always its monogram (`AssetIcon` never turns an imported token's symbol into a bundled logo). Auto slippage reads it
-  as long-tail (0.3%, D37). The opening pair never picks an imported token the link didn't name.
+- **Priced and pictured by its contract, never by its symbol (revised 2026-11-16, owner: "не показываются картинки и
+  не показывается цена").** Price: DefiLlama `prices/current/<llamaChain>:<contract>` (`fetchImportedPrices`,
+  `src/catalog/prices.ts`; the runtime `prices.defillama` host like the catalog's), one GET for every import,
+  react-query `["imported-prices", …keys]`, 60 s; `LLAMA_CHAINS` maps each importable network to DefiLlama's chain
+  key (avalanche → avax, zksync → era, hyperevm → hyperliquid, gnosis → xdai, worldchain → wc, plume →
+  plume_mainnet; checked against each network's listed stablecoin); a price under confidence 0.9 is left out; no
+  CoinGecko fallback (its contract endpoint is per network and keyless allows ~5 calls). `tokenPrice(t, prices,
+  importedPrices)` reads an import by its token key only, so a copy named "USDC" gets its own price or none — never
+  USDC's. Logo: `fetchTokenLogo` (`src/catalog/importedLogo.ts`) asks DefiLlama's token icons by chain id
+  (`token-icons.llamao.fi`, EVM), then Trust Wallet's assets repository (`raw.githubusercontent.com/trustwallet/assets`,
+  the EVM networks it has and Solana), by the checksummed contract or the mint; never a deployer-chosen URL (Metaplex
+  `uri`, a token list) and never by symbol. The bytes are fetched without credentials or a referrer, kept only if a
+  raster type (png, webp, jpeg, gif, avif — no SVG) of ≤ 256 KB, and shown as a `data:` URL (`Token.logo`, never
+  stored), so the CSP's `img-src 'self' data: blob:` is unchanged on every build; `AssetIcon` takes only a
+  `data:image/` logo for an import and still never turns its symbol into a bundled logo; one read per token for the
+  session (`["token-logo", key]`, retried once when no source could be reached). Without either, as before: "Imported
+  token · no price" on the amount cards, the monogram. What it costs: DefiLlama, and for the logo Trust Wallet's
+  GitHub host, see which contracts this browser imported (the price API already sees the page's IP). The router
+  still ranks such a pair on raw output (its `usdValue` reads catalog assets only — every route delivers the same
+  token, so only the gas term is lost); fees and gas stay in the native coin's USD. Auto slippage reads it as
+  long-tail (0.3%, D37). The opening pair never picks an imported token the link didn't name.
 - **Marked wherever it shows.** The token chip's label reads "{SYMBOL} (imported) on {network}" (as the sheet's row
   does). A swap record keeps an imported side's contract (`fromImportedContract` / `toImportedContract`, set by
   `recordSide`): the activity row carries an amber "Imported" tag ("(imported)" in its label) and the status view tags

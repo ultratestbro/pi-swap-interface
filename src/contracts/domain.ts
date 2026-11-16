@@ -48,11 +48,13 @@ export interface Token {
   /** CcAsset.icon (CMC URL) — data only, never hotlinked at runtime (D13). */
   icon?: string;
   /**
-   * A token the viewer imported by its address (D39): read on-chain, kept in this browser only, never priced, never
-   * shown with a logo found by its symbol. Its `catalogSymbol` is its contract (the engine names an unlisted token by
-   * contract or mint, with the decimals read here). Absent on every catalog token.
+   * A token the viewer imported by its address (D39): read on-chain, kept in this browser only, priced and shown with a
+   * logo only as found by its contract or mint, never by its symbol. Its `catalogSymbol` is its contract (the engine
+   * names an unlisted token by contract or mint, with the decimals read here). Absent on every catalog token.
    */
   imported?: true;
+  /** An imported token's logo, a `data:` URL found by its contract (importedLogo.ts); never stored, absent when none. */
+  logo?: string;
   /** The token's on-chain name, cleaned (imported tokens only: the catalog carries none). */
   name?: string;
   /** Solana: the mint belongs to Token-2022, so its associated token accounts derive under that program (imported tokens only). */

@@ -77,12 +77,18 @@ export function payModeOf(t: Pick<Token, "family">, chain: Pick<Chain, "receiveO
   return "deposit";
 }
 
+const NO_IMPORTED_PRICES: PriceMap = Object.freeze({});
+
 /**
- * A token's USD price: its display symbol first (TON, XDAI), then the catalog symbol, router lookup rules. Never for an
- * imported token (D39): its symbol is its deployer's word, and a copy named "USDC" must not show USDC's price.
+ * A token's USD price: its display symbol first (TON, XDAI), then the catalog symbol, router lookup rules. An imported
+ * token (D39) only by its key in `imported` (found by its contract, `fetchImportedPrices`), never by its symbol: that is
+ * its deployer's word, and a copy named "USDC" must not show USDC's price.
  */
-export const tokenPrice = (t: Pick<Token, "symbol" | "catalogSymbol" | "imported">, prices: PriceMap): number | undefined =>
-  t.imported ? undefined : (priceFor(prices, t.symbol) ?? priceFor(prices, t.catalogSymbol));
+export const tokenPrice = (
+  t: Pick<Token, "key" | "symbol" | "catalogSymbol" | "imported">,
+  prices: PriceMap,
+  imported: PriceMap = NO_IMPORTED_PRICES,
+): number | undefined => (t.imported ? imported[t.key] : (priceFor(prices, t.symbol) ?? priceFor(prices, t.catalogSymbol)));
 
 /**
  * Tokens with the viewer's state: held first (by USD, then units), the rest in catalog order. A family with no
@@ -94,12 +100,13 @@ export function swapTokens(
   balances: Readonly<Record<string, Balance>>,
   prices: PriceMap,
   owners: Owners,
+  importedPrices?: PriceMap,
 ): SwapToken[] {
   const out = tokens.map((t): SwapToken => {
     const owner = owners[t.family] ?? null;
     const b = owner ? balances[t.key] : undefined;
     const amount = b?.state === "loaded" ? b.amount : "0";
-    const priceUsd = tokenPrice(t, prices);
+    const priceUsd = tokenPrice(t, prices, importedPrices);
     const usd = priceUsd !== undefined && amount !== "0" ? Number(unitsToDecimal(amount, t.decimals)) * priceUsd : 0;
     return {
       ...t,

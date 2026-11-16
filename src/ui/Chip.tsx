@@ -31,8 +31,10 @@ export interface TokenChipToken {
   contract: string | null;
   chain: string;
   chainName: string;
-  /** Imported by its address (D39): a monogram, never a logo found by its symbol, and "(imported)" in its label. */
+  /** Imported by its address (D39): its logo found by contract or a monogram, never one found by its symbol, and "(imported)" in its label. */
   imported?: boolean;
+  /** An imported token's logo (`data:image/` URL found by its contract). */
+  logo?: string;
 }
 
 /** Props of the token chip; `token: null` shows the empty "Select" state. */
