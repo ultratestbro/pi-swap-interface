@@ -412,6 +412,21 @@ test("narrow phones (320 and 360 px) never scroll sideways, with or without a wa
   }
 });
 
+test("the desktop route list scrolls down only, never sideways, with its groups open", async ({page}, info) => {
+  test.skip(isPhone(info), "desktop: the list is its own scroll box only from 1024 px");
+  await page.setViewportSize({width: 1280, height: 800});
+  await page.goto("./#/?demo=1");
+  await page.getByTestId("swap-amount").fill("1000");
+  await page.getByTestId("swap-uncovered-toggle").click();
+  const col = page.getByTestId("swap-routes").locator("xpath=ancestor::*[contains(@class, 'routesCol')]");
+  const box = (await col.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  // A trackpad swipe, sideways and down: the refresh button's hit area used to let the list slide 4 px.
+  await page.mouse.wheel(200, 300);
+  await expect.poll(() => col.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  expect(await col.evaluate((el) => [el.scrollLeft, getComputedStyle(el).overflowX])).toEqual([0, "hidden"]);
+});
+
 test("the header's connected wallets: one button, one dropdown with copy and disconnect per wallet (D33)", async ({page}, info) => {
   await page.goto("./#/?demo=1&demoWallets=both");
   const pill = page.getByTestId("swap-wallet-pill");
