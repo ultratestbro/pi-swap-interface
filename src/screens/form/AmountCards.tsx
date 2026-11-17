@@ -112,16 +112,27 @@ export interface ReceiveCardProps {
   onPickToken(): void;
 }
 
-/** "You receive": token chip and the chosen route's expected output (6 decimals at most), or a skeleton while quoting. */
+/**
+ * "You receive": the connected wallet's balance of the token (as on the pay card, without MAX; nothing when no wallet
+ * of its family is connected), the token chip and the chosen route's expected output (6 decimals at most), or a
+ * skeleton while quoting.
+ */
 export function ReceiveCard({from, to, route, quoting, held, preview, onPickToken}: ReceiveCardProps) {
   const usd = to && route ? usdOf(route.destAmount, to.decimals, to.priceUsd) : undefined;
   const amount = route && to ? formatUnits(route.destAmount, to.decimals).replace(/(\.\d{6})\d+$/, "$1") : null;
   const out = amount !== null && preview ? `≈ ${amount}` : amount;
+  const balance = to && to.balance !== "none" ? `Balance ${to.balance === "loaded" ? formatAmount(to.amount, to.decimals) : "—"}` : null;
   return (
     <Card className={s.card} data-testid="swap-receive-card">
-      <Text variant="caps" color="var(--dim)">
-        You receive
-      </Text>
+      <div className={s.spread}>
+        <Text variant="caps" color="var(--dim)">
+          You receive
+        </Text>
+        {/* always laid out (a no-break space without a wallet): the line is a pixel taller than the caps beside it */}
+        <Text variant="meta" color="var(--muted)" tabular lines={1} data-testid={balance ? "swap-receive-balance" : undefined}>
+          {balance ?? "\u00a0"}
+        </Text>
+      </div>
       <div className={s.amountRow}>
         <TokenChip token={to ?? null} onClick={onPickToken} data-testid="swap-receive-token" />
         <span className={s.receiveAmount} aria-busy={held === "updating" || undefined}>
