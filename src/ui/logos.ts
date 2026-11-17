@@ -26,6 +26,7 @@ export const PROVIDER_LOGOS: ReadonlySet<string> = new Set([
   "thorchain",
   "cctp",
   "usdt0",
+  "stargate",
   "chainflip",
   "relay",
   "symbiosis",

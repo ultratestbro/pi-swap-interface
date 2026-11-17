@@ -8,6 +8,7 @@ import {ACROSS_NATIVE, acrossRouteOf} from "@anywalletkit/protocol-swap2-across/
 import {acrossRouteUnpriced} from "@anywalletkit/protocol-swap2-across/pricing";
 import {CF_VAULTS} from "@anywalletkit/protocol-swap2-chainflip/config";
 import {ZEROEX_CHAINS, ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
+import {stargateRegistry} from "@anywalletkit/protocol-swap2-stargate/deployments";
 import {chainByCaip2Web} from "../catalog";
 
 /** Mobile lib/swap/providers.ts PROVIDER_NAMES, plus Curve, 0x and Across. */
@@ -17,6 +18,7 @@ export const PROVIDER_NAMES: Readonly<Record<string, string>> = {
   thorchain: "THORChain",
   cctp: "Circle CCTP",
   usdt0: "USDT0",
+  stargate: "Stargate",
   chainflip: "Chainflip",
   relay: "Relay",
   symbiosis: "Symbiosis",
@@ -102,7 +104,7 @@ export interface ScopeSide {
  * between networks (EVM and Solana, either side), Relay into one (out of one it refuses: its deposit would first swap
  * through a router it doesn't sign for), Jupiter within Solana; Curve and Balancer are asked and find no pinned pool.
  */
-export const LISTED_ONLY_VENUES: ReadonlySet<string> = new Set(["usdt0", "cctp", "thorchain", "chainflip", "near_intents", "symbiosis", "omniston", "across"]);
+export const LISTED_ONLY_VENUES: ReadonlySet<string> = new Set(["usdt0", "stargate", "cctp", "thorchain", "chainflip", "near_intents", "symbiosis", "omniston", "across"]);
 
 /** Venues that also swap within one network (their own supportsSameChain); the router asks no other venue then. */
 const SAME_CHAIN_VENUES: ReadonlySet<string> = new Set(["lifi", "uniswap", "curve", "wrap", "balancer", "fynd", "jupiter", "omniston", "zeroex"]);
@@ -143,6 +145,23 @@ function bridgeScope(provider: "cctp" | "usdt0", coin: string, symbols: readonly
 }
 
 /**
+ * Stargate's scope for a pair it wasn't asked for, read from its own registry (`stargateRegistry`, the pins its checks
+ * use): EVM only; between networks only; a pinned pool / OFT on each side (USDC, USDT, ETH and the WETH OFTs); the same
+ * asset on both, with a pinned path between the two networks.
+ */
+function stargateScope(from: ScopeSide, to: ScopeSide): string {
+  if (from.family !== "evm" || to.family !== "evm") return "EVM networks only here";
+  if (from.caip2 === to.caip2) return "Between networks only";
+  if (from.contract === undefined || to.contract === undefined) return "Doesn't cover this pair";
+  const zero = "0x0000000000000000000000000000000000000000";
+  const a = stargateRegistry.find(from.caip2, from.contract ?? zero);
+  const b = stargateRegistry.find(to.caip2, to.contract ?? zero);
+  if (!a || !b) return "Moves USDC, USDT and ETH only";
+  if (a.assetId !== b.assetId) return "Same token on both networks only";
+  return "Not between these networks";
+}
+
+/**
  * Across's scope for a pair it wasn't asked for, by the first reason that holds, read from its own route check
  * (protocol-swap2-across `acrossRouteOf`, `acrossRouteUnpriced`): EVM only; between networks only; its 17 pinned
  * networks; the same asset on both sides (USDC, USDT / USDT0, ETH / WETH, WBTC); ETH as a native coin only where the
@@ -175,7 +194,13 @@ function acrossScope(from: ScopeSide, to: ScopeSide): string {
  * read "Listed tokens only" then. A network line stands — a venue that can't serve these networks wouldn't serve the
  * pair with listed tokens either.
  */
-const TOKEN_LINES: ReadonlySet<string> = new Set(["Doesn't cover this pair", "Doesn't list one of these tokens", "Moves USDC only", "Moves USDT only"]);
+const TOKEN_LINES: ReadonlySet<string> = new Set([
+  "Doesn't cover this pair",
+  "Doesn't list one of these tokens",
+  "Moves USDC only",
+  "Moves USDT only",
+  "Moves USDC, USDT and ETH only",
+]);
 
 /** An imported side as a coin-only bridge reads it: no symbol, since a copy named USDC isn't USDC to CCTP. */
 const unlisted = (x: ScopeSide): ScopeSide => (x.imported ? {...x, symbol: ""} : x);
@@ -210,6 +235,8 @@ function usualScope(provider: string, from: ScopeSide, to: ScopeSide): string {
       return zeroExServes(from.caip2) ? "Doesn't cover this pair" : "Not on this network";
     case "across":
       return acrossScope(from, to);
+    case "stargate":
+      return stargateScope(from, to);
     case "wrap":
       return "Wraps only, like ETH ⇄ WETH";
     case "jupiter":

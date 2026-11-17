@@ -1364,6 +1364,41 @@ rpcUrls?, maxFeeBps?, quoteTtlMs?, timeoutMs?, fetchImpl?})`.
   Permit2 transfer or typed order.
 - **Availability** as Fynd's and 0x's; its refusals that read better than their reason are worded (ui-port §4.2).
 
+### 4.20 Stargate, `stargate`: every mode (2026-11-17; ARCHITECTURE D40)
+
+`AWK/protocol-swap2-stargate@0.1.0/dist/provider.d.ts`: `stargateProvider({enabled?, rpcUrls, registry?, quoteTtlMs?,
+feeHeadroomBps?, compose?, nativeDrop?, …})`. Off in the package until `enabled: true`.
+
+- **Browser options**: `{enabled: true, rpcUrls: evmRpcByCaip2(evmRpc), scanUrl: api.layerZeroScan}` (USDT0's table: Standard's
+  proxy RPC first; LayerZero Scan, USDT0's too, only to find the destination transaction its status then proves).
+  Keyless, no API: quotes are read from the pinned pools (`quoteOFT` / `quoteSend`) on the source and destination at
+  one block each, so it needs an RPC for both networks. Compose (Taxi + a swap on Ethereum) and native drop stay off;
+  Bus is retired in the package.
+- **Routes**: EVM → EVM between its reviewed deployments (`stargateRegistry`: 25 pools / OFTs on 15 networks — USDC,
+  USDT, ETH and the WETH OFTs), the same asset id on both sides, along a pinned TokenMessaging path; never within one
+  network. Scroll is refused from 2026-12-08 (the package's sunset date). "Not for this pair" reads its registry
+  (providerMeta `stargateScope`): EVM only, between networks only, "Moves USDC, USDT and ETH only", "Same token on
+  both networks only", "Not between these networks"; an imported token reads "Listed tokens only" (listed-only, D39).
+- **What a quote is.** One `sendToken` call on the source pool / OFT (`txRequest.to`; `approvalAddress` the same pool
+  for an ERC-20, none for a native pool), `value` = the LayerZero messaging fee cap (+ the input for ETH), declared as
+  `nativeFee` (the fee plus the package's 25 % headroom, refunded by the endpoint). `feeUsd` is 0 (`feeUsdKnown`
+  false) and the fee is an unpriced `network` row, so the route row prices `nativeFee` itself
+  (`FEE_USD_WITHOUT_BRIDGE_FEE`, as USDT0's): ≈ $1.5 from Arbitrum or Base (2026-11-17). `etaSeconds` is `null`
+  (swap2-core 0.15): shown "—", never "fastest". Minimum = output (Taxi pays the quoted amount or reverts). A dry quote
+  with a blank sender or recipient is priced for the package's placeholder `0x1111…1111` and carries its transaction;
+  a preview is never reviewable (D7), a live quote has the user's addresses (preview.ts).
+- **Native-fee cap** (engine §, `execute.ts` `nativeFeeCeiling`): the fee is above the engine's cap from Avalanche
+  (0.231 AVAX vs 0.1) and at it from Polygon (19.4 POL vs 20), so a Stargate execution from those two may pay up to
+  0.5 AVAX / 40 POL; the 13 others keep the chain's cap (0.0009–0.001 ETH, 0.0026 BNB, 4.3 MNT, 50 S, 38 XPL, 40 SEI,
+  130 PLUME, 671 FLR measured against 0.005 ETH, 0.005 BNB, 20 MNT, 200 S, 150 XPL, 200 SEI, 500 PLUME, 1500 FLR).
+- **Execution and gate**: the package checks the quote against the request and its pins, rebuilds the `sendToken`
+  call and re-quotes the pool right before the broadcast. The gate's rule is the registry's lists (`stargateRegistry`
+  `callTargets` / `spenders`: pools, OFTs and messaging contracts as call targets, ERC-20 pools as spenders — a
+  native pool never is one), with the engine's value checks on `nativeFee`; no Permit2 transfer or typed order.
+- **Status**: the package's `trackIntent`, over the same RPCs: `completed` once the destination pool's payout is
+  proven from finalized receipts on both networks (≈ 15–20 min Arbitrum ↔ Base). Recovery (a cached token, an
+  undelivered message) is a separate paid action the app doesn't offer.
+
 ## 5. Persistent stores (`src/swap/stores.ts`)
 
 ### 5.1 Contract

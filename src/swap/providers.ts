@@ -33,6 +33,7 @@ import {symbiosisProvider} from "@anywalletkit/protocol-swap2-symbiosis/provider
 import {thorchainProvider} from "@anywalletkit/protocol-swap2-thorchain/provider";
 import {uniswapProvider} from "@anywalletkit/protocol-swap2-uniswap/provider";
 import {usdt0Provider} from "@anywalletkit/protocol-swap2-usdt0/provider";
+import {stargateProvider} from "@anywalletkit/protocol-swap2-stargate/provider";
 import {wrapProvider} from "@anywalletkit/protocol-swap2-wrap/provider";
 import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider";
 import type {SettlerResolver} from "@anywalletkit/protocol-swap2-0x/settler";
@@ -59,6 +60,7 @@ export const DEFAULT_ON_PROVIDERS: readonly ProviderName[] = [
   "balancer",
   "wrap",
   "usdt0",
+  "stargate",
   "cctp",
   "thorchain",
   "chainflip",
@@ -164,6 +166,11 @@ export function buildProviders(
   // that route alone (usdt0 0.5.0, core 0.11.0). A TON payout counts as delivered only once the operator's TonAPI shows
   // the jetton paid.
   if (on.usdt0) out.push(usdt0Provider({rpcUrls: evmCaip, scanUrl: config.api.layerZeroScan, tonApiUrl: config.tonApiUrl, meshDestinations: ["ton", "tron"]}));
+  // Stargate V2 Taxi between its pinned pools / OFTs on 15 EVM networks (USDC, USDT, ETH, the WETH OFTs), keyless:
+  // quoted from the pools over the RPC table on both networks, the sendToken call rebuilt and checked here, delivery
+  // proven from finalized receipts on both. Bus is retired, compose and native drop stay off.
+  // Its status finds the destination transaction on LayerZero Scan (the operator's, as USDT0's) and proves it on chain.
+  if (on.stargate) out.push(stargateProvider({enabled: true, rpcUrls: evmCaip, scanUrl: config.api.layerZeroScan}));
   if (on.cctp) {
     const rpcUrls = firstRpc(evm, Object.keys(CCTP_DOMAINS));
     out.push(cctpProvider({apiUrl: config.api.cctp, mode: config.cctp.mode, rpcUrls, fetchImpl: rpcFailoverFetch(failoverLists(evm, rpcUrls))}));

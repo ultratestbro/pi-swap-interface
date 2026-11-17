@@ -98,6 +98,13 @@ describe("toWebRoute", () => {
     expect(toWebRoute(q("usdt0", "1", tron))).not.toHaveProperty("bridgeFeeUsd");
     expect(routeMeta(toWebRoute(q("usdt0", "1", tron)))).toContain("fees $0.30");
   });
+  it("Stargate's LayerZero fee shows in the row: its feeUsd is 0 and its messaging fee unpriced", () => {
+    const eth = {usd: 1823, decimals: 18};
+    const sg = toWebRoute(q("stargate", "1", {feeUsd: 0, txRequest: {to: "0xe8CDF27AcD73a434D661C84887215F7598e7d0d3", value: "849782096747417", nativeFee: "849782096747417"}}), undefined, undefined, eth);
+    expect(sg.bridgeFeeUsd).toBeCloseTo(1.549, 3);
+    expect(routeMeta(sg)).toContain("fees $1.55");
+    expect(sg.trust).toBe("contracts");
+  });
   it("the floor sits a margin under the venue's minimum: min(0.5%, the slippage the route was quoted at)", () => {
     const tight = toWebRoute(q("uniswap", "1000000"), undefined, undefined, undefined, 5);
     expect(tight.floorBps).toBe(5);

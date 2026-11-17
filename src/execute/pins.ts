@@ -31,6 +31,7 @@ import {symbiosisPins} from "@anywalletkit/protocol-swap2-symbiosis/verify";
 import {thorchainPins} from "@anywalletkit/protocol-swap2-thorchain/provider";
 import {uniswapPins} from "@anywalletkit/protocol-swap2-uniswap";
 import {usdt0Pins} from "@anywalletkit/protocol-swap2-usdt0/config";
+import {stargateRegistry} from "@anywalletkit/protocol-swap2-stargate/deployments";
 import {wrapPins} from "@anywalletkit/protocol-swap2-wrap/provider";
 import {ZEROEX_CHAINS, ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
 import {ZEROEX_MAX_PERMIT_SECONDS} from "@anywalletkit/protocol-swap2-0x/settler";
@@ -66,12 +67,19 @@ const zeroExPins: Pins = {
   spenders: (c) => (zeroExChain(ZEROEX_CHAINS, zeroExChainId(c)) ? [ZEROEX_PERMIT2] : []),
 };
 
+/** Stargate: its reviewed deployments' pools / OFTs and messaging contracts as call targets, ERC-20 pools as spenders. */
+const stargateGatePins: Pins = {
+  callTargets: (c) => stargateRegistry.callTargets(c),
+  spenders: (c) => stargateRegistry.spenders(c),
+};
+
 /** Venue → its EVM rule. A venue missing here gets no EVM calldata or order signature at all (checkPlanBrowser). */
 export const VENUE_RULES: Readonly<Record<string, VenueRule>> = {
   lifi: pinned(lifiPins),
   relay: pinned(relayPins),
   cctp: pinned(cctpPins),
   usdt0: pinned(usdt0Pins),
+  stargate: pinned(stargateGatePins),
   chainflip: pinned(chainflipPins),
   uniswap: pinned(uniswapPins),
   // The pinned Router NG per chain (call target and the one spender).

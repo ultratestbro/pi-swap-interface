@@ -35,7 +35,9 @@
  * endpoint with no `taker` when it has none (protocol-swap2-0x 0.1.1 provider.ts getQuote: a dry quote's taker is the
  * refund or recipient only when one is an address), and across prices a dry quote for its own placeholder depositor
  * and recipient (`ACROSS_PLACEHOLDER`, the EVM sample) and never builds or signs it (protocol-swap2-across 0.1.0
- * verify.ts acrossRequestOf, provider.ts requestOf).
+ * verify.ts acrossRequestOf, provider.ts requestOf); stargate prices a dry quote with a blank sender or recipient for
+ * its own placeholder, 0x1111…1111, and returns its transaction built for it (protocol-swap2-stargate 0.1.0, checked
+ * live 2026-11-17) — never issued: a preview is never reviewable (D7), and a live quote carries the user's addresses.
  * The refund address is the user's real one or absent (never "": NEAR reads `refundAddress ?? its placeholder`).
  * Symbiosis' pacer (providers.ts) is the page's one, shared with live rounds: a preview burst queues in it and never
  * goes past its 1 request/s; a superseded round's queued call sends nothing (its signal is aborted).
@@ -118,6 +120,7 @@ export const PREVIEW_VENUES: ReadonlySet<string> = new Set([
   "balancer",
   "wrap",
   "usdt0",
+  "stargate",
   "cctp",
   "thorchain",
   "chainflip",

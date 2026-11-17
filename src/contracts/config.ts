@@ -13,6 +13,7 @@ export type ProviderName =
   | "curve"
   | "wrap"
   | "usdt0"
+  | "stargate"
   | "cctp"
   | "thorchain"
   | "chainflip"

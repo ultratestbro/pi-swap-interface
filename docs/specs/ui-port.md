@@ -418,7 +418,7 @@ Order: action → failed → pending → done; done items stay `DONE_VISIBLE_MS 
 
 14 venues: `near_intents lifi thorchain cctp usdt0 chainflip relay symbiosis omniston uniswap balancer wrap fynd
 jupiter` (the web adds `curve`, and, 2026-11-15, `zeroex` and `across`: web3icons' ZRX and ACX marks at 72 % of a
-`#25222B` tile, 32 / 64 px, ARCHITECTURE D38 — 17 venues in all). 32 pt square → 32/64/96 px PNGs, opaque square tiles; the app clips the corners. Made by
+`#25222B` tile, 32 / 64 px, ARCHITECTURE D38; Stargate's mark on black from stargate.finance's favicon, D40 — 18 venues in all). 32 pt square → 32/64/96 px PNGs, opaque square tiles; the app clips the corners. Made by
 `apps/mobile/scripts/build-provider-logos.py` from the AWK landing's logo set (`~/awk-landing/public/logos`: the
 brands' own marks; cp0x-drawn tiles for Uniswap/Balancer/Wrap), Fynd's docs icon on a `#25222B` tile, Relay's and
 Symbiosis' apple-touch-icons. Copy to `public/logos/providers/` and render

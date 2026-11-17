@@ -4,6 +4,7 @@ import {describe, expect, it} from "vitest";
 import type {Swap2ExecutionPlan} from "@anywalletkit/protocol-swap2-core/swap2/base";
 import {CURVE_DEPLOYMENTS} from "@anywalletkit/protocol-swap2-curve";
 import {FYND_CHAINS} from "@anywalletkit/protocol-swap2-fynd/router";
+import {stargateRegistry} from "@anywalletkit/protocol-swap2-stargate/deployments";
 import type {ReviewedSwap} from "../../../src/contracts/execution";
 import {
   approveData,
@@ -171,6 +172,30 @@ describe("checkPlanBrowser: the browser's checks on top", () => {
     expect(checkPlanBrowser(plan({approvals: [{token: USDC, spender: EVIL, amount: 100_000_000n}]}), evilReview, cctp)).toMatch(/doesn't trust/);
     expect(checkPlanBrowser(plan({source: {kind: "call", to: EVIL, data: "0x01", value: 0n}}), reviewed, cctp)).toMatch(/doesn't trust/);
     expect(checkPlanBrowser(plan({approvals: [], source: {kind: "call", to: SPENDER, value: 0n}}), reviewed, cctp)).toMatch(/plain transfer/);
+  });
+  describe("Stargate: its reviewed pools / OFTs only (stargateRegistry)", () => {
+    const sg = venueRule("stargate");
+    const ARB_USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
+    const ZERO = "0x0000000000000000000000000000000000000000";
+    const usdcPool = stargateRegistry.find("eip155:42161", ARB_USDC)!.address;
+    const ethPool = stargateRegistry.find("eip155:8453", ZERO)!.address;
+    const fee = 849_782_096_747_417n; // the messaging fee cap of a live Arbitrum → Base quote, 2026-11-17
+    const usdcReview = {...reviewed, provider: "stargate", fromChain: "eip155:42161", fromContract: ARB_USDC, amountIn: 25_000_000n, minOut: 24_984_924n, approvalSpender: usdcPool, nativeFee: fee};
+    const usdcPlan = (over: Partial<Swap2ExecutionPlan> = {}) =>
+      plan({provider: "stargate", fromChain: "eip155:42161", sourceAmount: 25_000_000n, destAmount: 24_984_924n, minDestAmount: 24_984_924n, approvals: [{token: ARB_USDC, spender: usdcPool, amount: 25_000_000n, chainId: 42161}], source: {kind: "call", to: usdcPool, data: "0xc7c7f5b3", value: fee, chainId: 42161}, ...over});
+    it("accepts sendToken on the pinned Arbitrum USDC pool, approved to that pool for exactly the input", () => {
+      expect(stargateRegistry.callTargets("eip155:42161").map((a) => a.toLowerCase())).toContain(usdcPool.toLowerCase());
+      expect(checkPlanBrowser(usdcPlan(), usdcReview, sg)).toBeNull();
+    });
+    it("refuses another call target or spender, and pays no deposit address", () => {
+      expect(checkPlanBrowser(usdcPlan({source: {kind: "call", to: EVIL, data: "0xc7c7f5b3", value: fee, chainId: 42161}}), usdcReview, sg)).toMatch(/doesn't trust/);
+      expect(checkPlanBrowser(usdcPlan({approvals: [{token: ARB_USDC, spender: EVIL, amount: 25_000_000n, chainId: 42161}]}), {...usdcReview, approvalSpender: EVIL}, sg)).toMatch(/doesn't trust/);
+      expect(checkPlanBrowser(usdcPlan({approvals: [], source: {kind: "call", to: usdcPool, value: fee, chainId: 42161}}), usdcReview, sg)).toMatch(/plain transfer/);
+    });
+    it("a native pool is a call target, never a spender", () => {
+      expect(stargateRegistry.callTargets("eip155:8453").map((a) => a.toLowerCase())).toContain(ethPool.toLowerCase());
+      expect(stargateRegistry.spenders("eip155:8453").map((a) => a.toLowerCase())).not.toContain(ethPool.toLowerCase());
+    });
   });
   it("a venue with no rule gets no calldata or order at all", () => {
     expect(checkPlanBrowser(plan({provider: "mystery"}), {...reviewed, provider: "mystery"}, undefined)).toMatch(/no pins/);

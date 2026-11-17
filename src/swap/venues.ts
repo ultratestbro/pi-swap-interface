@@ -18,6 +18,8 @@ export const VENUE_TRUST: Readonly<Record<string, VenueTrust>> = {
   balancer: "contracts",
   // OFT quoteSend over RPC; LayerZero DVNs deliver.
   usdt0: "contracts",
+  // The pinned pool's quoteOFT / quoteSend over RPC; LayerZero DVNs deliver.
+  stargate: "contracts",
   // Burn/mint contracts; Circle's attestation to mint.
   cctp: "contracts",
   // THORNode quotes; a second node checks the vault.

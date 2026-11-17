@@ -15,6 +15,7 @@ import {symbiosisProvider} from "@anywalletkit/protocol-swap2-symbiosis/provider
 import {thorchainProvider} from "@anywalletkit/protocol-swap2-thorchain/provider";
 import {uniswapProvider} from "@anywalletkit/protocol-swap2-uniswap/provider";
 import {usdt0Provider} from "@anywalletkit/protocol-swap2-usdt0/provider";
+import {stargateProvider} from "@anywalletkit/protocol-swap2-stargate/provider";
 import {wrapProvider} from "@anywalletkit/protocol-swap2-wrap/provider";
 import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider";
 import {acrossProvider} from "@anywalletkit/protocol-swap2-across/provider";
@@ -80,6 +81,10 @@ vi.mock("@anywalletkit/protocol-swap2-uniswap/provider", async (orig) => {
   const m = await orig<typeof import("@anywalletkit/protocol-swap2-uniswap/provider")>();
   return {...m, uniswapProvider: vi.fn(m.uniswapProvider)};
 });
+vi.mock("@anywalletkit/protocol-swap2-stargate/provider", async (orig) => {
+  const m = await orig<typeof import("@anywalletkit/protocol-swap2-stargate/provider")>();
+  return {...m, stargateProvider: vi.fn(m.stargateProvider)};
+});
 vi.mock("@anywalletkit/protocol-swap2-usdt0/provider", async (orig) => {
   const m = await orig<typeof import("@anywalletkit/protocol-swap2-usdt0/provider")>();
   return {...m, usdt0Provider: vi.fn(m.usdt0Provider)};
@@ -130,6 +135,7 @@ const FACTORIES = [
   thorchainProvider,
   uniswapProvider,
   usdt0Provider,
+  stargateProvider,
   wrapProvider,
 ];
 
@@ -200,7 +206,10 @@ describe("buildProviders: which providers", () => {
     buildProviders(withFlags(ALL_ON), stores(true));
     for (const f of FACTORIES) {
       expect(f).toHaveBeenCalledTimes(1);
-      for (const k of Object.keys(lastConfig(f))) expect(k).not.toMatch(/fee|affiliate|integrator|partner|apiKey|jwt|enabled/i);
+      // Stargate ships off in its package (`enabled` defaults to false): the page builds it only when Settings has it
+      // on, and then says so. Every other module is on by default and gets no `enabled`.
+      const forbidden = f === stargateProvider ? /fee|affiliate|integrator|partner|apiKey|jwt/i : /fee|affiliate|integrator|partner|apiKey|jwt|enabled/i;
+      for (const k of Object.keys(lastConfig(f))) expect(k).not.toMatch(forbidden);
     }
   });
 });
@@ -397,6 +406,8 @@ describe("buildProviders: options", () => {
     expect(lastConfig(usdt0Provider).rpcUrls).toEqual(evmRpcByCaip2(DEFAULT_RUNTIME_CONFIG.evmRpc));
     // The Legacy Mesh into TON and Tron (Tron's fee cap: execute.ts nativeFeeCeiling), TON payouts checked on the operator's TonAPI.
     expect(lastConfig(usdt0Provider)).toMatchObject({meshDestinations: ["ton", "tron"], tonApiUrl: DEFAULT_RUNTIME_CONFIG.tonApiUrl, scanUrl: DEFAULT_RUNTIME_CONFIG.api.layerZeroScan});
+    // Stargate: keyless, quoted from its pools over the same table (both networks), on in every mode.
+    expect(lastConfig(stargateProvider)).toEqual({enabled: true, rpcUrls: evmRpcByCaip2(DEFAULT_RUNTIME_CONFIG.evmRpc), scanUrl: DEFAULT_RUNTIME_CONFIG.api.layerZeroScan});
     expect(lastConfig(uniswapProvider).rpcUrls).toBe(DEFAULT_RUNTIME_CONFIG.evmRpc);
     expect(lastConfig(wrapProvider).rpcUrls).toBe(DEFAULT_RUNTIME_CONFIG.evmRpc);
     expect(lastConfig(balancerProvider).rpcUrls).toBe(DEFAULT_RUNTIME_CONFIG.evmRpc);

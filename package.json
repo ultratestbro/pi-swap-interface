@@ -50,6 +50,7 @@
     "@anywalletkit/protocol-swap2-omniston": "0.5.10",
     "@anywalletkit/protocol-swap2-relay": "0.1.5",
     "@anywalletkit/protocol-swap2-router": "0.7.0",
+    "@anywalletkit/protocol-swap2-stargate": "0.1.0",
     "@anywalletkit/protocol-swap2-symbiosis": "0.1.5",
     "@anywalletkit/protocol-swap2-thorchain": "0.4.4",
     "@anywalletkit/protocol-swap2-uniswap": "0.4.8",

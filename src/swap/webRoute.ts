@@ -27,7 +27,7 @@ import {venueTrust} from "./venues";
  * address, so a QR payer reads "Needs a wallet that signs" instead of a dead
  * end.
  */
-const SIGNED_ONLY: ReadonlySet<string> = new Set(["chainflip", "omniston", "symbiosis", "lifi", "usdt0", "zeroex"]);
+const SIGNED_ONLY: ReadonlySet<string> = new Set(["chainflip", "omniston", "symbiosis", "lifi", "usdt0", "stargate", "zeroex"]);
 
 /** txRequest present (or a signed-only venue) → the wallet signs; else the payer sends to a deposit address. */
 export function executionOf(q: Pick<Quote, "provider" | "txRequest">): Execution {
@@ -38,9 +38,11 @@ export function executionOf(q: Pick<Quote, "provider" | "txRequest">): Execution
  * Venues whose `feeUsd` leaves out the bridge fee they charge on top (`nativeFee`): USDT0 reports its protocol fees only
  * (protocol-swap2-usdt0 0.5.3 chunk-7FQDRYVI.js:333/520), so its Legacy Mesh into Tron read "fees $0.30" with ≈ $13 of
  * LayerZero fee on top. LI.FI's `feeUsd` sums its feeCosts, which already list it ("LayerZero native fee", included:
- * false; protocol-swap2-lifi 0.8.3 chunk-G26GE46T.js:1126).
+ * false; protocol-swap2-lifi 0.8.3 chunk-G26GE46T.js:1126). Stargate (0.1.0) reports `feeUsd` 0 (`feeUsdKnown`
+ * false) and lists its LayerZero messaging fee as a `network` row it doesn't price (≈ 0.00085 ETH from Arbitrum on
+ * 2026-11-17, sealed with headroom that the endpoint refunds).
  */
-const FEE_USD_WITHOUT_BRIDGE_FEE: ReadonlySet<string> = new Set(["usdt0"]);
+const FEE_USD_WITHOUT_BRIDGE_FEE: ReadonlySet<string> = new Set(["usdt0", "stargate"]);
 
 /**
  * An Omniston swap on TON's route, step by step (D35 part C): the DEX each step names (`providerData.routeSteps`, the

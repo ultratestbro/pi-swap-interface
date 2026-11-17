@@ -126,8 +126,20 @@ const TRON_MESH_FEE_CEILING: ReadonlyMap<string, bigint> = new Map([
 ]);
 const TRON_MESH_INTENT = /^usdt0-mesh:\d+:30420(?:~|$)/;
 
-/** The engine's per-execution native-fee cap (swap2-core 0.11.0): the Tron mesh above, the chain's default for every other route. */
+/**
+ * Stargate's LayerZero messaging fee, paid in the source network's coin (sealed with headroom the endpoint refunds), is
+ * above or at the engine's cap from two of its networks (2026-11-17): 0.231 AVAX from Avalanche against 0.1, and 19.4
+ * POL from Polygon against 20. Those two may pay up to about twice what they charged; every other Stargate network's
+ * fee is well under its default cap (0.0009–0.001 ETH, 0.0026 BNB, 4.3 MNT, 50 S, 38 XPL, 40 SEI, 130 PLUME, 671 FLR).
+ */
+const STARGATE_FEE_CEILING: ReadonlyMap<string, bigint> = new Map([
+  ["eip155:43114", 5n * 10n ** 17n], // 0.5 AVAX
+  ["eip155:137", 40n * 10n ** 18n], // 40 POL
+]);
+
+/** The engine's per-execution native-fee cap (swap2-core 0.11.0): the Tron mesh and Stargate above, the chain's default for every other route. */
 export function nativeFeeCeiling({provider, intentId, fromChain, destChain}: Swap2NativeFeeCeilingContext): bigint | undefined {
+  if (provider === "stargate") return STARGATE_FEE_CEILING.get(fromChain);
   return provider === "usdt0" && destChain === "tron:728126428" && TRON_MESH_INTENT.test(intentId) ? TRON_MESH_FEE_CEILING.get(fromChain) : undefined;
 }
 

@@ -329,6 +329,14 @@ describe("executeSwap through the gate (real engine, fake wallet)", () => {
     expect(cfg).not.toHaveProperty("skipAccountChainCheck");
   });
 
+  it("nativeFeeCeiling lets Stargate pay its LayerZero fee from Avalanche and Polygon, where it sits above or at the cap", () => {
+    const ctx = (fromChain: string, provider = "stargate") => ({provider, intentId: "stargate:1:30106:30110:1:taxi:a:b:1:1:0", fromChain, destChain: "eip155:42161", nativeFee: 1n, defaultCap: 1n, maxCeiling: 1n});
+    expect(nativeFeeCeiling(ctx("eip155:43114"))).toBe(5n * 10n ** 17n); // 0.5 AVAX (cap 0.1; 0.231 charged 2026-11-17)
+    expect(nativeFeeCeiling(ctx("eip155:137"))).toBe(40n * 10n ** 18n); // 40 POL (cap 20; 19.4 charged)
+    // Every other Stargate network keeps its cap, and another venue on those networks too.
+    for (const c of ["eip155:1", "eip155:42161", "eip155:8453", "eip155:56", "eip155:5000", "eip155:14"]) expect(nativeFeeCeiling(ctx(c)), c).toBeUndefined();
+    expect(nativeFeeCeiling(ctx("eip155:43114", "lifi"))).toBeUndefined();
+  });
   it("nativeFeeCeiling raises the cap for USDT0's Legacy Mesh into Tron from Ethereum or Arbitrum only", () => {
     const ctx = (o: Partial<Parameters<typeof nativeFeeCeiling>[0]> = {}) => ({
       provider: "usdt0",

@@ -132,6 +132,20 @@ describe("venueScope (the 'Not for this pair' lines)", () => {
     expect(venueScope("zeroex", usdcBase, side("eip155:8453", "evm", "ETH"))).toBe("Doesn't cover this pair");
   });
 
+  it("Stargate: EVM → EVM, the same asset between two pinned pools / OFTs, read from its own registry", () => {
+    const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+    const DAI_MAIN = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
+    const at = (caip2: string, symbol: string, contract: string | null) => ({caip2, family: "evm", symbol, contract});
+    expect(providerName("stargate")).toBe("Stargate");
+    expect(VENUE_TRUST.stargate).toBe("contracts");
+    expect(venueScope("stargate", sol, usdcBase)).toBe("EVM networks only here");
+    expect(venueScope("stargate", at("eip155:8453", "USDC", USDC_BASE), at("eip155:8453", "ETH", null))).toBe("Between networks only");
+    expect(venueScope("stargate", at("eip155:1", "DAI", DAI_MAIN), at("eip155:8453", "USDC", USDC_BASE))).toBe("Moves USDC, USDT and ETH only");
+    expect(venueScope("stargate", at("eip155:8453", "USDC", USDC_BASE), at("eip155:42161", "ETH", null))).toBe("Same token on both networks only");
+    // An imported side reads as any listed-only venue's.
+    expect(venueScope("stargate", {...at("eip155:8453", "DEGEN", "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed"), imported: true}, at("eip155:42161", "USDC", "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"))).toBe("Listed tokens only");
+  });
+
   it("Across: EVM → EVM, the same asset, its pinned chains and tokens, read from the module's own route check (D38)", () => {
     const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
     const USDC_ARB = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";

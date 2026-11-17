@@ -502,7 +502,7 @@ fee caps are advisory only (the wallet picks gas); `swapFeeCap` drives the revie
 native" block.
 
 **D13 — Logos and assets.** Static files only, no runtime hotlinks (CMC / CoinGecko / Trust Wallet / DeBank CDNs
-would see every visitor's IP and token interest). `public/logos/providers/<name>{,@2x,@3x}.png` (17 venues),
+would see every visitor's IP and token interest). `public/logos/providers/<name>{,@2x,@3x}.png` (18 venues),
 `public/logos/networks/<slug>.svg` (split from mobile `assets/logos.ts`), `public/logos/tokens/<SYM>.svg` and
 `public/logos/tokens/png/<stem>@{2,3}x.png` (mobile TOKEN_IMAGES map), optional build-time mirror
 `public/logos/catalog/<caip2_>/<contract|native>.png` + `index.json`. AssetIcon order: bundled PNG by symbol →
@@ -1663,6 +1663,11 @@ it."
   `fromImportedContract?` / `toImportedContract?`, `RecordSide.importedContract?`, `ActivityModule.recordSide`.
 
 ---
+
+**D40 — Stargate (owner, 2026-11-17).** Stargate V2 Taxi is a venue in every mode, on by default: the SDK's new
+`protocol-swap2-stargate` (0.1.0), keyless, quoted from its pinned pools over the page's RPCs, checked and tracked on
+this device (providers §4.20). Its LayerZero fee is priced into the route row and may reach 0.5 AVAX / 40 POL from
+Avalanche / Polygon, where the engine's cap is below or at it.
 
 ## 5. Conventions
 
