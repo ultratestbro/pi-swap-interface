@@ -80,6 +80,9 @@ export const STANDARD_ONLY_PROVIDERS: readonly ProviderName[] = ["fynd", "zeroex
  */
 export const PROXY_KEY_PLACEHOLDER = "cp0x-swap-web-proxy-adds-the-key";
 
+/** How long a firm 0x quote is offered (the module's default is 45 s): long enough to outlive an Ethereum approval. */
+export const ZEROEX_QUOTE_TTL_MS = 120_000;
+
 /** The Settler resolver each built 0x provider reads the on-chain registry through (execute's pins answer from it). */
 const settlerResolvers = new WeakMap<CrossChainProvider, SettlerResolver>();
 
@@ -246,8 +249,13 @@ export function buildProviders(
     // cp0x's slot, which forwards `/swap/permit2/{price,quote}` to api.0x.org with cp0x's key in place of the
     // placeholder; it refuses an answer that came through a redirect or from another origin. Asked only while the slot
     // is live; never direct (no key here).
+    //
+    // quoteTtlMs: the engine signs the permit BEFORE the Permit2 approval and re-quotes when the approval outlives the
+    // quote — and a re-quote is a new permit, so a 45 s quote (the module's default) against an Ethereum approval
+    // (the wallet's prompt, then a block or two) asked for the permit twice: permit, approve, permit. 0x's permits
+    // run 300 s and the module keeps a quote 20 s inside that; the Settler still holds the swap to the minimum.
     const slot = extras.zeroex;
-    const zeroex = zeroExProvider({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: slot.base, rpcUrls: evm});
+    const zeroex = zeroExProvider({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: slot.base, rpcUrls: evm, quoteTtlMs: ZEROEX_QUOTE_TTL_MS});
     const live = whileLive(zeroex, slot.live);
     settlerResolvers.set(live, zeroex.settlerResolver);
     out.push(live);

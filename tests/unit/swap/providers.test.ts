@@ -26,7 +26,7 @@ import {createProxyFetch, healthRoutes} from "../../../src/config/standard";
 import type {ProviderName, RuntimeConfig} from "../../../src/contracts/config";
 import {createQuoteEngine, eligibleProviders, enabledVenues} from "../../../src/swap/engine";
 import {createVenueBackoff} from "../../../src/swap/limiter";
-import {DEFAULT_ON_PROVIDERS, PROXY_KEY_PLACEHOLDER, STANDARD_ONLY_PROVIDERS, buildProviders, closeProviders, evmRpcByCaip2, zeroExSettlers} from "../../../src/swap/providers";
+import {DEFAULT_ON_PROVIDERS, PROXY_KEY_PLACEHOLDER, STANDARD_ONLY_PROVIDERS, ZEROEX_QUOTE_TTL_MS, buildProviders, closeProviders, evmRpcByCaip2, zeroExSettlers} from "../../../src/swap/providers";
 import {classifyRefusal} from "../../../src/swap/refusals";
 import type {ProviderStores} from "../../../src/swap/stores";
 import {request} from "./fixtures";
@@ -654,8 +654,13 @@ describe("0x and Across: Standard only, through cp0x's proxy, while health keys 
     const names = buildProviders(config, stores(true), {fynd: slot(FYND_BASE, () => true), zeroex: slot(ZEROEX_BASE, () => true), across: slot(ACROSS_BASE, () => true)}).map((p) => p.name);
     expect(names.slice(-3)).toEqual(["fynd", "zeroex", "across"]);
     const zx = lastConfig(zeroExProvider);
-    expect(Object.keys(zx).sort()).toEqual(["apiKey", "baseUrl", "rpcUrls"]);
+    expect(Object.keys(zx).sort()).toEqual(["apiKey", "baseUrl", "quoteTtlMs", "rpcUrls"]);
     expect(zx).toMatchObject({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: ZEROEX_BASE});
+    // A firm quote outlives an Ethereum approval, so the engine doesn't re-quote and ask for a second permit; 0x's
+    // permits run 300 s and the module keeps a quote 20 s inside that.
+    expect(zx.quoteTtlMs).toBe(ZEROEX_QUOTE_TTL_MS);
+    expect(ZEROEX_QUOTE_TTL_MS).toBeGreaterThanOrEqual(90_000);
+    expect(ZEROEX_QUOTE_TTL_MS).toBeLessThanOrEqual(280_000);
     expect(zx.rpcUrls).toBe(config.evmRpc);
     const ac = lastConfig(acrossProvider);
     expect(Object.keys(ac).sort()).toEqual(["apiKey", "baseUrl", "fetchImpl", "rpcUrls"]);
