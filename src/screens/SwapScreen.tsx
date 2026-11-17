@@ -281,7 +281,8 @@ export function SwapApp({scene}: {scene: Scene | null}) {
               onAmount={form.setAmount}
               onPaste={form.pasteAmount}
               note={form.pasteNote}
-              onMax={form.max}
+              // A route that charges its fee on top of the amount (Stargate) gets room for it in a native MAX.
+              onMax={() => form.max(chosen?.nativeFee ?? 0n)}
               onPickToken={() => setTokenSheet({open: true, side: "pay", importing: null})}
             />
             <FlipButton disabled={!form.canFlip} onFlip={form.flip} />

@@ -231,11 +231,17 @@ export function useSwapForm(tokens: SwapTokensState, preset: FormPreset, hasWall
       setText(r.text);
       mirror(pair, r.text);
     },
-    max() {
+    /**
+     * `feeOnTop`: the chosen route's native fee paid on top of the amount (a bridge's messaging fee: Stargate's), left
+     * out of a native coin's MAX so the send fits the balance. Not re-applied when the route changes: each quote's fee
+     * differs a little, and following it would re-quote the amount again and again.
+     */
+    max(feeOnTop: bigint = 0n) {
       if (!from || balance === null) return;
       setPasteNote(null);
       if (!picked && pair) setPicked(pair);
-      const max = maxSwappable(balance, from.gasToken, reserveFor(from));
+      const gasMax = maxSwappable(balance, from.gasToken, reserveFor(from));
+      const max = from.contract === null && feeOnTop > 0n ? (gasMax > feeOnTop ? gasMax - feeOnTop : 0n) : gasMax;
       const next = formatUnits(from.gasToken ? trimNativeMax(max, from.decimals) : max, from.decimals);
       setText(next);
       mirror(pair, next);

@@ -138,7 +138,7 @@ export function ReviewSheet({open, draft, tokens, wallets, slippage, onClose, on
   const problem =
     (from.balance === "loaded" && !qr ? balanceProblem(req.amountIn, BigInt(from.amount)) : null) ??
     (short > 0n && route && native
-      ? `Not enough ${native.symbol}: the bridge fee (${amountText(route.nativeFee, native.decimals, native.symbol)}) is paid on top${from.contract === null ? " of the amount" : ""} — ${amountText(short, native.decimals, native.symbol)} short`
+      ? `Not enough ${native.symbol}: the bridge fee (${amountText(route.nativeFee, native.decimals, native.symbol)}) is paid on top${from.contract === null ? " of the amount" : ""} — ${amountText(short, native.decimals, native.symbol)} short${from.contract === null ? ". MAX with this route leaves room for it" : ""}`
       : null) ??
     (uncapped && native ? uncappedFeeText(native.symbol) : null);
   const locked = phase.step === "executing" || phase.step === "issuing";

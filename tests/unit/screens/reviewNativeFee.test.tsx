@@ -71,7 +71,7 @@ describe("nativeShortfall", () => {
 describe("the review with a bridge fee on top", () => {
   it("0.001906 ETH + Stargate's 0.00085 ETH fee from a 0.0023 ETH balance: says it's short and keeps Confirm off", () => {
     renderReview(2_300_000_000_000_000n);
-    expect(screen.getByTestId("swap-review-problem").textContent).toBe("Not enough ETH: the bridge fee (0.0008 ETH) is paid on top of the amount — 0.0005 ETH short");
+    expect(screen.getByTestId("swap-review-problem").textContent).toBe("Not enough ETH: the bridge fee (0.0008 ETH) is paid on top of the amount — 0.0005 ETH short. MAX with this route leaves room for it");
     expect((screen.getByTestId("swap-confirm") as HTMLButtonElement).disabled).toBe(true);
   });
   it("a balance that covers the amount and the fee leaves Confirm on", () => {

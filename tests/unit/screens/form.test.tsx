@@ -58,6 +58,25 @@ describe("useSwapForm", () => {
     expect(result.current.text).toBe("100");
   });
 
+  it("a native MAX leaves room for the chosen route's fee on top (Stargate); a token's MAX doesn't change", () => {
+    const fee = 849_782_096_747_417n;
+    const eth = all.find((t) => t.key === ARB_ETH)!;
+    const plain = renderHook(() => useSwapForm(streaming(ARB_ETH), {amount: ""}, true), {wrapper});
+    act(() => plain.result.current.max());
+    const withFee = renderHook(() => useSwapForm(streaming(ARB_ETH), {amount: ""}, true), {wrapper});
+    act(() => withFee.result.current.max(fee));
+    const gasMax = maxSwappable(BigInt(eth.amount), eth.gasToken, reserveFor(eth));
+    expect(BigInt(eth.amount)).toBeGreaterThan(fee);
+    // Both trimmed the same way (rounded down, never more than the room left).
+    expect(Number(withFee.result.current.text)).toBeLessThanOrEqual(Number(formatUnits(gasMax - fee, eth.decimals)));
+    expect(Number(plain.result.current.text) - Number(withFee.result.current.text)).toBeGreaterThanOrEqual(Number(formatUnits(fee, 18)) - 1e-6);
+    // A token source: the fee comes out of the native balance, not the token's.
+    const usdc = renderHook(() => useSwapForm(streaming(ARB_USDC), {amount: ""}, true), {wrapper});
+    act(() => usdc.result.current.max(fee));
+    const usdcTok = all.find((t) => t.key === ARB_USDC)!;
+    expect(usdc.result.current.text).toBe(formatUnits(BigInt(usdcTok.amount), usdcTok.decimals));
+  });
+
   it("without an edit the opening pair still follows the balances while they stream (control)", () => {
     const {result, rerender} = renderHook(({t}) => useSwapForm(t, {amount: ""}, true), {wrapper, initialProps: {t: streaming(ARB_USDC)}});
     rerender({t: streaming(ARB_ETH)});
