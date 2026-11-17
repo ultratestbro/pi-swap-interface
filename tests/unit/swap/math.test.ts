@@ -3,6 +3,7 @@ import {describe, expect, it} from "vitest";
 import {
   balanceProblem,
   etaLabel,
+  gasBound,
   executionFloor,
   formatRate,
   gasReserve,
@@ -142,6 +143,9 @@ describe("etaLabel", () => {
     expect(etaLabel(812)).toBe("~14 min");
     expect(etaLabel(7200)).toBe("~2 h");
     expect(etaLabel(undefined)).toBe("—");
+    expect(gasBound(0.004)).toBe("gas < $0.01");
+    expect(gasBound(0.01)).toBe("gas ≤ $0.01");
+    expect(gasBound(1.234)).toBe("gas ≤ $1.23");
   });
 });
 

@@ -10,7 +10,7 @@ import type {SwapToken} from "../../contracts/domain";
 import type {QuoteRequest, WebRoute} from "../../contracts/routes";
 import type {ReviewRow} from "../../contracts/ui";
 import {formatUsd, shortAddress} from "../../catalog";
-import {FLOOR_TOLERANCE_BPS, PERMIT2_VENUES, TWO_PHASE, etaLabel, formatRate, impliedSlippagePct, providerName, rate, routeFloor, usdOf} from "../../swap";
+import {FLOOR_TOLERANCE_BPS, PERMIT2_VENUES, TWO_PHASE, etaLabel, formatRate, gasBound, impliedSlippagePct, providerName, rate, routeFloor, usdOf} from "../../swap";
 import {ProviderLogo, VenueBadge, venueTrustText} from "../../ui";
 import {bpsLabel} from "../form/FormParts";
 import {amountText} from "../labels";
@@ -77,7 +77,7 @@ export function reviewRows({req, route, from, to, native, slippage}: ReviewRowsI
     {
       k: "Fees",
       v: route.feeUsd > 0 ? formatUsd(route.feeUsd) : "In the price",
-      note: route.gasUsd !== null ? `+ gas ≤ ${formatUsd(route.gasUsd)} in ${nativeSymbol}` : `+ network fee in ${nativeSymbol}`,
+      note: route.gasUsd !== null ? `+ ${gasBound(route.gasUsd)} in ${nativeSymbol}` : `+ network fee in ${nativeSymbol}`,
     },
     ...(route.nativeFee > 0n && native ? [{k: "Bridge fee", v: amountText(route.nativeFee, native.decimals, native.symbol), note: "on top of the amount"}] : []),
     ...(qr

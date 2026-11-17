@@ -5,6 +5,7 @@
  * only for display (rate, USD). No React — unit-tested in math.test.ts.
  */
 import {unitsToDecimal, type ChainFamily} from "@cp0x/shared";
+import {formatUsd} from "../shared/format";
 
 /** Integer digits the pay field accepts. */
 const MAX_INT_DIGITS = 15;
@@ -134,6 +135,11 @@ export function formatRate(r: number): string {
   if (!Number.isFinite(r) || r <= 0) return "—";
   if (r >= 1000) return Math.round(r).toLocaleString("en-US");
   return Number(r.toPrecision(4)).toString();
+}
+
+/** The gas bound a route row and the review show: "gas ≤ $0.03", or "gas < $0.01" under a cent (not "≤ <$0.01"). */
+export function gasBound(usd: number): string {
+  return usd < 0.01 ? "gas < $0.01" : `gas ≤ ${formatUsd(usd)}`;
 }
 
 /** "~40 s", "~3 min", "~1 h". */

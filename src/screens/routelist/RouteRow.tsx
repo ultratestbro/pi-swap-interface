@@ -16,7 +16,7 @@ import type {Ref} from "react";
 import type {SwapToken} from "../../contracts/domain";
 import type {RouteRejection, WebRoute} from "../../contracts/routes";
 import {formatAmount, formatUsd} from "../../catalog";
-import {etaLabel, providerName, routeFloor, venueTrustText} from "../../swap";
+import {etaLabel, gasBound, providerName, routeFloor, venueTrustText} from "../../swap";
 import {Badge, CopyButton, Icon, ProviderLogo, Spinner, Text, VenueBadge, useBreakpoint} from "../../ui";
 import type {Held, NotForPair} from "../form/model";
 import s from "./Routes.module.css";
@@ -40,15 +40,27 @@ export interface RouteRowProps {
   ref?: Ref<HTMLButtonElement>;
 }
 
+/** The row's ETA, or nothing when the venue gives none (Stargate; LI.FI between networks): never a bare "—". */
+const etaPart = (seconds: number): string | null => {
+  const eta = etaLabel(seconds);
+  return eta === "—" ? null : eta;
+};
+
 /**
  * "~45 s · fees $0.41 · gas ≤ $0.03 · approval" (SwapRouteRow line 2). The fees are the venue's own plus a bridge fee
- * it charges on top and leaves out of them (USDT0's LayerZero fee, `bridgeFeeUsd`).
+ * it charges on top and leaves out of them (USDT0's and Stargate's LayerZero fee, `bridgeFeeUsd`). An unknown ETA is
+ * left out, as the review does.
  */
 export function routeMeta(r: WebRoute): string {
   const feeUsd = r.feeUsd + (r.bridgeFeeUsd ?? 0);
-  const fees = feeUsd > 0 ? ` · fees ${formatUsd(feeUsd)}` : r.gasUsd === null ? " · fees in price" : "";
-  const gas = r.gasUsd !== null ? ` · gas ≤ ${formatUsd(r.gasUsd)}` : "";
-  return `${etaLabel(r.etaSeconds)}${fees}${gas}${r.approvalSpender ? " · approval" : ""}`;
+  return [
+    etaPart(r.etaSeconds),
+    feeUsd > 0 ? `fees ${formatUsd(feeUsd)}` : r.gasUsd === null ? "fees in price" : null,
+    r.gasUsd !== null ? gasBound(r.gasUsd) : null,
+    r.approvalSpender ? "approval" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** The "Preview" tag's tooltip: why the number is an estimate. */
@@ -67,7 +79,7 @@ export function RouteRow({route, to, payChainName, selected, tabbable, trustLine
       role="radio"
       aria-checked={selected}
       tabIndex={tabbable ? 0 : -1}
-      aria-label={`${name}, ${preview ? "preview, " : ""}about ${out} ${to.symbol}, at least ${min} ${to.symbol}, ${etaLabel(route.etaSeconds)}${held ? `, ${held}` : ""}`}
+      aria-label={`${name}, ${preview ? "preview, " : ""}about ${out} ${to.symbol}, at least ${min} ${to.symbol}${etaPart(route.etaSeconds) ? `, ${etaPart(route.etaSeconds)}` : ""}${held ? `, ${held}` : ""}`}
       aria-busy={held === "updating" || undefined}
       data-testid={`swap-route-${route.provider}`}
       data-provider={route.provider}

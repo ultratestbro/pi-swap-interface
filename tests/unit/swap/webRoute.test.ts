@@ -98,6 +98,13 @@ describe("toWebRoute", () => {
     expect(toWebRoute(q("usdt0", "1", tron))).not.toHaveProperty("bridgeFeeUsd");
     expect(routeMeta(toWebRoute(q("usdt0", "1", tron)))).toContain("fees $0.30");
   });
+  it("the row leaves an unknown ETA out and bounds sub-cent gas as < $0.01 (not \"— · … gas ≤ <$0.01\")", () => {
+    const eth = {usd: 1823, decimals: 18};
+    const sg = toWebRoute(q("stargate", "1", {etaSeconds: null, feeUsd: 0, txRequest: {to: "0xe8CDF27AcD73a434D661C84887215F7598e7d0d3", value: "849782096747417", nativeFee: "849782096747417"}}), undefined, undefined, eth);
+    expect(routeMeta({...sg, gasUsd: 0.004})).toBe("fees $1.55 · gas < $0.01");
+    expect(routeMeta({...sg, gasUsd: 0.03, approvalSpender: "0xe8CDF27AcD73a434D661C84887215F7598e7d0d3"})).toBe("fees $1.55 · gas ≤ $0.03 · approval");
+    expect(routeMeta({...sg, etaSeconds: 15, gasUsd: 0.004})).toBe("~15 s · fees $1.55 · gas < $0.01");
+  });
   it("Stargate's LayerZero fee shows in the row: its feeUsd is 0 and its messaging fee unpriced", () => {
     const eth = {usd: 1823, decimals: 18};
     const sg = toWebRoute(q("stargate", "1", {feeUsd: 0, txRequest: {to: "0xe8CDF27AcD73a434D661C84887215F7598e7d0d3", value: "849782096747417", nativeFee: "849782096747417"}}), undefined, undefined, eth);
