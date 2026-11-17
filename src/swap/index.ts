@@ -63,6 +63,8 @@ export {
   balanceProblem,
   etaLabel,
   gasBound,
+  gasInNative,
+  nativeShortfall,
   executionFloor,
   formatRate,
   gasReserve,

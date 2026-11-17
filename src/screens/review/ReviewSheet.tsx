@@ -22,7 +22,7 @@ import type {WebRoute} from "../../contracts/routes";
 import type {WalletFamily, WalletsApi} from "../../contracts/wallets";
 import {savedOverrides, usePorts} from "../../config";
 import {chainBySlugWeb, destTokenId} from "../../catalog";
-import {FYND_LICENSE_URL, PERMIT2_VENUES, balanceProblem, fyndRouterNotice, isStale, routeFloor} from "../../swap";
+import {FYND_LICENSE_URL, PERMIT2_VENUES, balanceProblem, fyndRouterNotice, gasInNative, isStale, nativeShortfall, routeFloor} from "../../swap";
 import {swapErrorText, swapFeeCap, uncappedFeeText} from "../../execute";
 import {statusView, swapSteps, wasInterrupted} from "../../activity";
 import {Button, Icon, ReviewSkeleton, Sheet, SheetHeader, SwapSteps, Text, TokenIcon, TxReviewCard, formatCountdown, showToast} from "../../ui";
@@ -122,8 +122,25 @@ export function ReviewSheet({open, draft, tokens, wallets, slippage, onClose, on
       decimals: chain.native.decimals,
       ...(nativePrice !== undefined ? {nativePriceUsd: nativePrice} : {}),
     }) === undefined;
+  // A fee charged on top of the amount (Stargate's, USDT0's LayerZero fee) comes out of the native balance with the
+  // network fee — and with the amount itself from a native source: the node refuses a send it can't cover.
+  const nativeToken = tokens.byKey.get(`${from.chain}:native`);
+  const short =
+    route && native && !qr && nativeToken?.balance === "loaded"
+      ? nativeShortfall({
+          amountIn: req.amountIn,
+          sourceIsNative: from.contract === null,
+          nativeFee: route.nativeFee,
+          gas: gasInNative(route.gasUsd, nativePrice, native.decimals),
+          nativeBalance: BigInt(nativeToken.amount),
+        })
+      : 0n;
   const problem =
-    (from.balance === "loaded" && !qr ? balanceProblem(req.amountIn, BigInt(from.amount)) : null) ?? (uncapped && native ? uncappedFeeText(native.symbol) : null);
+    (from.balance === "loaded" && !qr ? balanceProblem(req.amountIn, BigInt(from.amount)) : null) ??
+    (short > 0n && route && native
+      ? `Not enough ${native.symbol}: the bridge fee (${amountText(route.nativeFee, native.decimals, native.symbol)}) is paid on top${from.contract === null ? " of the amount" : ""} — ${amountText(short, native.decimals, native.symbol)} short`
+      : null) ??
+    (uncapped && native ? uncappedFeeText(native.symbol) : null);
   const locked = phase.step === "executing" || phase.step === "issuing";
 
   // Confirmed: follow the record until the swap is broadcast (→ status) or stops before it (→ why).

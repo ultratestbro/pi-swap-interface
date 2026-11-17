@@ -79,6 +79,9 @@ export function swapErrorText(e: unknown, nativeSymbol: string): string {
   if (e instanceof Swap2MaybeSentError || causes(e).some((x) => x.maybeSent === true))
     return "The network didn't confirm it got the transaction — it may still go through. Check Activity before trying again.";
   if (e instanceof Swap2InsufficientGasError) return `Not enough ${nativeSymbol} to pay the network fees — nothing was sent.`;
+  // The node's own refusal of a send the balance can't cover (amount + a bridge fee on top + gas), viem's text.
+  if (/exceeds the balance of the account|insufficient funds/i.test(msg))
+    return `Not enough ${nativeSymbol} for the amount, the bridge fee and the network fee — nothing was sent.`;
   if (e instanceof Swap2InFlightError) return "This swap is already running — wait for its result.";
   // A live minimum under the reviewed one comes back as "no route available :: <venue>: floor breach …" — it's the price.
   if (/minAmountOut|below the (requested|caller)|floor/i.test(msg)) return "The price moved below your minimum — nothing was swapped. Review it again.";
@@ -101,7 +104,7 @@ export function swapErrorText(e: unknown, nativeSymbol: string): string {
 export function swapFailureExpected(e: unknown): boolean {
   if (isFeeCapRefusal(e) || isWalletRejection(e) || e instanceof Swap2InsufficientGasError || e instanceof Swap2InFlightError) return true;
   if (e instanceof SwapReviewMismatch || e instanceof SwapGateRefusal) return false;
-  return /no route available|quote expired|minAmountOut|below the (requested|caller)|floor/i.test(shortError(e));
+  return /no route available|quote expired|minAmountOut|below the (requested|caller)|floor|exceeds the balance of the account|insufficient funds/i.test(shortError(e));
 }
 
 /** Swap2MaybeSentError: the source broadcast may be on its way — never retry; track its id / hash (mobile, verbatim). */

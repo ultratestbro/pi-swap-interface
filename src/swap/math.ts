@@ -208,6 +208,24 @@ export function trimNativeMax(amount: bigint, decimals: number): bigint {
 }
 
 /** Why the amount can't be swapped, or null (the pay field and the review). */
+/**
+ * What a route that charges a native fee on top of the amount (a bridge's messaging fee: Stargate, USDT0, LI.FI's
+ * LayerZero routes) is short of in the native coin: that fee and the network fee, plus the amount when the source is
+ * that coin, against the native balance. 0n when nothing is missing or the route charges no such fee. `gas` is the
+ * route's own estimate in base units, 0n when unknown (the wallet still checks it).
+ */
+export function nativeShortfall(o: {amountIn: bigint; sourceIsNative: boolean; nativeFee: bigint; gas: bigint; nativeBalance: bigint}): bigint {
+  if (o.nativeFee <= 0n) return 0n;
+  const need = (o.sourceIsNative ? o.amountIn : 0n) + o.nativeFee + o.gas;
+  return need > o.nativeBalance ? need - o.nativeBalance : 0n;
+}
+
+/** A USD gas estimate in the native coin's base units, rounded up; 0n when either number is missing. */
+export function gasInNative(gasUsd: number | null, nativePriceUsd: number | undefined, decimals: number): bigint {
+  if (gasUsd === null || !(gasUsd > 0) || !nativePriceUsd || !(nativePriceUsd > 0)) return 0n;
+  return BigInt(Math.ceil((gasUsd / nativePriceUsd) * 10 ** decimals));
+}
+
 export function balanceProblem(amount: bigint | null, balance: bigint): string | null {
   if (amount === null || amount === 0n) return null;
   return amount > balance ? "Insufficient balance" : null;
