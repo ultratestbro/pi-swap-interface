@@ -267,7 +267,7 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
     const valueUsd = prices && Object.keys(prices).length ? usdValue(prices, {gasUsd: (q) => gas(q)}) : undefined;
     const settled = new Set<string>();
     const sameChain = params.sourceChain === params.destChain;
-    /** Venues that quoted an ETA of 0 or less this round (LI.FI same-chain): ranked by etaForRanking, never "fastest". */
+    /** Venues that quoted an ETA of 0 or less (LI.FI same-chain), or none (null, swap2-core 0.15): ranked by etaForRanking, never "fastest". */
     const unknownEta = new Set<string>();
     /** Venues this round refused itself, sending nothing (preview-only skips, back-off): their rows are `skipped`. */
     const skipped = new Set<string>();
@@ -347,7 +347,7 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
           if (s) s.addEventListener("abort", settle, {once: true});
           else void call.finally(settle).catch(() => {});
           return untilAborted(call, round.signal).then((q) => {
-            if (!q || q.etaSeconds > 0) return q;
+            if (!q || (q.etaSeconds ?? 0) > 0) return q;
             unknownEta.add(p.name);
             return {...q, etaSeconds: etaForRanking(sameChain)};
           });

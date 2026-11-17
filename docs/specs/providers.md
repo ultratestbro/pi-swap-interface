@@ -84,29 +84,29 @@ and `batch.sh`.
 ## 1. Packages and import paths
 
 ```jsonc
-// package.json — exact pins (re-synced on every AWK bump; last 2026-11-15)
+// package.json — exact pins (re-synced on every AWK bump; last 2026-11-17)
 "dependencies": {
-  "@anywalletkit/core": "0.8.0",                       // peer of every provider package
-  "@anywalletkit/protocol-swap2-core": "0.14.0",       // refusal reasons (0.12.0), Permit2 transfers (0.13.0), QuoteParams.sender (0.14.0)
-  "@anywalletkit/protocol-swap2-router": "0.6.2",      // RouteSet.refusals (0.6.0), keeps ownGasEstimate (0.6.1)
+  "@anywalletkit/core": "0.9.0",                       // peer of every provider package
+  "@anywalletkit/protocol-swap2-core": "0.15.0",       // refusal reasons (0.12.0), Permit2 transfers (0.13.0), QuoteParams.sender (0.14.0), etaSeconds may be null (0.15.0)
+  "@anywalletkit/protocol-swap2-router": "0.7.0",      // RouteSet.refusals (0.6.0), keeps ownGasEstimate (0.6.1), nullable fastest (0.7.0)
   "@anywalletkit/swap2-assets": "0.3.0",
-  "@anywalletkit/protocol-swap2-near-intents": "0.3.7",
-  "@anywalletkit/protocol-swap2-lifi": "0.8.3",            // EVM → Solana checked (§4.2)
-  "@anywalletkit/protocol-swap2-thorchain": "0.4.3",       // any ActiveVault confirms (§4.3)
-  "@anywalletkit/protocol-swap2-cctp": "0.5.7",
-  "@anywalletkit/protocol-swap2-usdt0": "0.5.3",           // Legacy Mesh into TON and Tron (§4.5)
-  "@anywalletkit/protocol-swap2-chainflip": "0.4.9",
-  "@anywalletkit/protocol-swap2-relay": "0.1.4",           // its fee itemized only when priced on the source chain
-  "@anywalletkit/protocol-swap2-uniswap": "0.4.7",
-  "@anywalletkit/protocol-swap2-curve": "0.1.6",     // added 2026-11-12 (§4.17)
-  "@anywalletkit/protocol-swap2-fynd": "0.2.12",     // added 2026-11-12, Standard only (§4.14)
-  "@anywalletkit/protocol-swap2-wrap": "0.4.4",
-  "@anywalletkit/protocol-swap2-jupiter": "0.3.10",
-  "@anywalletkit/protocol-swap2-symbiosis": "0.1.4",   // default on since 2026-11-12
-  "@anywalletkit/protocol-swap2-balancer": "0.3.9",    // default on since 2026-11-12
-  "@anywalletkit/protocol-swap2-omniston": "0.5.9",    // default on since 2026-11-12 (lazy chunk); rev2 TON minter since 0.5.5
-  "@anywalletkit/protocol-swap2-0x": "0.1.1",          // added 2026-11-15, Standard only (§4.18)
-  "@anywalletkit/protocol-swap2-across": "0.1.0",      // added 2026-11-15, Standard only (§4.19)
+  "@anywalletkit/protocol-swap2-near-intents": "0.3.8",
+  "@anywalletkit/protocol-swap2-lifi": "0.8.4",            // EVM → Solana checked (§4.2)
+  "@anywalletkit/protocol-swap2-thorchain": "0.4.4",       // any ActiveVault confirms (§4.3)
+  "@anywalletkit/protocol-swap2-cctp": "0.5.8",
+  "@anywalletkit/protocol-swap2-usdt0": "0.5.4",           // Legacy Mesh into TON and Tron (§4.5)
+  "@anywalletkit/protocol-swap2-chainflip": "0.4.10",
+  "@anywalletkit/protocol-swap2-relay": "0.1.5",           // its fee itemized only when priced on the source chain
+  "@anywalletkit/protocol-swap2-uniswap": "0.4.8",
+  "@anywalletkit/protocol-swap2-curve": "0.1.7",     // added 2026-11-12 (§4.17)
+  "@anywalletkit/protocol-swap2-fynd": "0.3.0",      // added 2026-11-12, Standard only (§4.14); TychoRouterV3 redeployed 2026-11-16 + Arc, Elysium (0.3.0)
+  "@anywalletkit/protocol-swap2-wrap": "0.4.5",
+  "@anywalletkit/protocol-swap2-jupiter": "0.3.11",
+  "@anywalletkit/protocol-swap2-symbiosis": "0.1.5",   // default on since 2026-11-12
+  "@anywalletkit/protocol-swap2-balancer": "0.3.10",    // default on since 2026-11-12
+  "@anywalletkit/protocol-swap2-omniston": "0.5.10",    // default on since 2026-11-12 (lazy chunk); rev2 TON minter since 0.5.5
+  "@anywalletkit/protocol-swap2-0x": "0.1.2",          // added 2026-11-15, Standard only (§4.18)
+  "@anywalletkit/protocol-swap2-across": "0.1.1",      // added 2026-11-15, Standard only (§4.19)
   "buffer": "6.0.3",                                   // only for the Omniston chunk's global polyfill
   "viem": "2.57.10"                                    // the version cp0x-elysium resolves; dedupe with wagmi
 }
@@ -1149,7 +1149,7 @@ a sender. Each dry quote is kept in the quote store with the addresses it was gi
 
 ### 4.14 Fynd, `fynd`: Standard only (rewritten 2026-11-12)
 
-`AWK/protocol-swap2-fynd@0.2.12/dist/provider.d.ts`; the SDK's requests read in `dist/chunk-6AQCGGUZ.js:71-235`.
+`AWK/protocol-swap2-fynd@0.3.0/dist/provider.d.ts` (chunk names below as read on 0.2.12); the SDK's requests read in `dist/chunk-6AQCGGUZ.js:71-235`.
 
 - **Why only Standard.** The hosted API (`https://fynd-api.propellerheads.xyz`) sends no CORS headers (checked
   2026-11-12: `OPTIONS` → 404, `POST` → 401 without a key, no `Access-Control-*`), and its key is cp0x's, the
@@ -1163,7 +1163,8 @@ a sender. Each dry quote is kept in the quote store with the addresses it was gi
   `authorization` (the page adds only `x-cp0x-swap-web`, D30), and standard.ts sends it to the proxy as the hosted
   API's path under its `/v1` base, `…/venue/fynd/<slug>/quote` (`proxyVenueUrl`). The proxy adds cp0x's key as the
   raw `authorization` header (the SDK sends it raw, no `Bearer`). Slugs:
-  `ethereum` (1), `base` (8453), `arbitrum` (42161), `bsc` (56), `polygon` (137), `unichain` (130), `robinhood` (4663).
+  `ethereum` (1), `base` (8453), `arbitrum` (42161), `bsc` (56), `polygon` (137), `unichain` (130), `robinhood` (4663), `arc` (5042) and `elysium` (99901) since fynd 0.3.0 (the proxy's
+  slugs follow, cp0x-mobile PR #93).
   No other Fynd path is called; simulation and receipts go over `rpcUrls` (Standard: the proxy RPC first).
 - **Availability.** `whileLive` gates `supportsRoute` (and `supportsChain`/`supportsChainPair`) on the slot: before
   health answers, with Fynd "anonymous", or after a stop, Fynd is simply not asked (no row in the route list, not
@@ -1182,7 +1183,7 @@ a sender. Each dry quote is kept in the quote store with the addresses it was gi
   funds. A token input is not simulated at quote time. Its texts name the recipient only in "calldata pays …, not
   <receiver>" (`chunk-6WSGOEAI.js:80`, checksummed): the EVM sample, scrubbed. No check is changed; the preview is
   never reviewable (D7).
-- **Routes**: same-chain, exact input, on the seven chains above. **Checks** (all the SDK's, none weakened): the
+- **Routes**: same-chain, exact input, on the nine chains above. **Checks** (all the SDK's, none weakened): the
   calldata targets the pinned TychoRouterV3, is a plain `singleSwap`/`sequentialSwap`/`splitSwap`, spends exactly the
   input, pays the recipient, carries the quoted output and minimum and no client fee, and the fee breakdown adds
   up; a route through an excluded protocol is refused; a native input is simulated at quote time, every swap right

@@ -48,7 +48,8 @@ export function toRouteView(q: QuoteLike, source?: {chain: string; isToken: bool
     sourceAmount: big(q.sourceAmount),
     destAmount: big(q.destAmount),
     minDestAmount: big(q.minDestAmount),
-    etaSeconds: Number.isFinite(q.etaSeconds) ? q.etaSeconds : 0,
+    // 0 = unknown, as the engine leaves it (null since swap2-core 0.15): etaLabel shows "—".
+    etaSeconds: typeof q.etaSeconds === "number" && Number.isFinite(q.etaSeconds) ? q.etaSeconds : 0,
     feeUsd: Number.isFinite(q.feeUsd) ? q.feeUsd : 0,
     fees: (q.fees ?? []).map((f) => ({
       type: f.type,

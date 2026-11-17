@@ -5,10 +5,10 @@ for that commit. Paths starting with `apps/mobile/` and `packages/shared/` are u
 the installed copies under `~/cp0x-elysium/node_modules/.pnpm/@anywalletkit+*/node_modules/@anywalletkit/*`
 (router 0.5.4, core 0.10.3, swap2-assets 0.3.0, lifi 0.7.0, relay 0.1.0, symbiosis 0.1.0, near-intents 0.3.3,
 thorchain 0.3.5, chainflip 0.4.5, cctp 0.5.3, usdt0 0.4.4, omniston 0.5.5, uniswap 0.4.3, balancer 0.3.5, wrap 0.4.0,
-fynd 0.2.8, jupiter 0.3.6; `@anywalletkit/core` 0.8.0). This repo now pins (2026-11-15) router 0.6.2, core 0.14.0,
-lifi 0.8.3, relay 0.1.4, symbiosis 0.1.4, near-intents 0.3.7, thorchain 0.4.3, chainflip 0.4.9, cctp 0.5.7, usdt0
-0.5.3, omniston 0.5.9, uniswap 0.4.7, balancer 0.3.9, curve 0.1.6, wrap 0.4.4, fynd 0.2.12, jupiter 0.3.10,
-wallet-solana 0.6.2; what that changed for the UI is in the refusal table (§4.2: every module now classifies its
+fynd 0.2.8, jupiter 0.3.6; `@anywalletkit/core` 0.8.0). This repo now pins (2026-11-17) router 0.7.0, core 0.15.0,
+lifi 0.8.4, relay 0.1.5, symbiosis 0.1.5, near-intents 0.3.8, thorchain 0.4.4, chainflip 0.4.10, cctp 0.5.8, usdt0
+0.5.4, omniston 0.5.10, uniswap 0.4.8, balancer 0.3.10, curve 0.1.7, wrap 0.4.5, fynd 0.3.0, jupiter 0.3.11,
+wallet-solana 0.6.3; what that changed for the UI is in the refusal table (§4.2: every module now classifies its
 refusals, swap2-core 0.12.0, and a text the table doesn't know is worded by that reason) and the "Not for this pair"
 lines (§5.5).
 

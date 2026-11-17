@@ -78,7 +78,7 @@ export async function issueDeposit(input: IssueDepositInput, deps: DepositDeps =
     destAmount,
     minDestAmount,
     validUntilMs: q.validUntilMs,
-    etaSeconds: q.etaSeconds,
+    etaSeconds: q.etaSeconds ?? 0,
   };
   saveSwap(
     newRecord(

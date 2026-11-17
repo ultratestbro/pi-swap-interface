@@ -33,14 +33,14 @@ Pin exact versions (this repo's `package.json`, re-synced on every AWK bump; las
 
 | package | version | used for |
 |---|---|---|
-| `@anywalletkit/core` | 0.8.0 | `externalSigner`, `UserRejectedError`, `TokenInfo`, `Swap2Options`… (peer of everything) |
-| `@anywalletkit/protocol-swap2-core` | 0.14.0 | engine, types, errors (refusal reasons), `validQuote`, Permit2 (`/util`: `PERMIT2_ADDRESS`, `PERMIT2_TRANSFER_TYPES`, `appendPermit2Signature`) |
-| `@anywalletkit/protocol-swap2-router` | 0.6.2 | `CrossChainRouter` (+ `lastRefusals`), `RouterSwap2Protocol`, `usdValue` |
+| `@anywalletkit/core` | 0.9.0 | `externalSigner`, `UserRejectedError`, `TokenInfo`, `Swap2Options`… (peer of everything) |
+| `@anywalletkit/protocol-swap2-core` | 0.15.0 | engine, types, errors (refusal reasons), `validQuote`, Permit2 (`/util`: `PERMIT2_ADDRESS`, `PERMIT2_TRANSFER_TYPES`, `appendPermit2Signature`) |
+| `@anywalletkit/protocol-swap2-router` | 0.7.0 | `CrossChainRouter` (+ `lastRefusals`), `RouterSwap2Protocol`, `usdValue` |
 | `@anywalletkit/swap2-assets` | 0.3.0 | catalog (`ccAsset`, `ccAssetByToken`, `CC_SOURCE_CHAINS`) |
 | `@anywalletkit/tx-preview-evm` | 0.5.1 | dependency of the engine (`decodeCall`) |
-| `@anywalletkit/wallet-evm` | 0.8.0 | `WalletAccountReadOnlyEvm` (reads, quotes, simulation) |
-| `@anywalletkit/wallet-solana` | 0.6.2 | `WalletAccountSolana`, `serializedGuardFromExecution` |
-| provider modules | lifi 0.8.3, relay 0.1.4, symbiosis 0.1.4, near-intents 0.3.7, chainflip 0.4.9, cctp 0.5.7, thorchain 0.4.3, usdt0 0.5.3, uniswap 0.4.7, curve 0.1.6, wrap 0.4.4, balancer 0.3.9, fynd 0.2.12, 0x 0.1.1 and across 0.1.0 (Standard only), jupiter 0.3.10, omniston 0.5.9 | the providers spec covers these |
+| `@anywalletkit/wallet-evm` | 0.8.1 | `WalletAccountReadOnlyEvm` (reads, quotes, simulation) |
+| `@anywalletkit/wallet-solana` | 0.6.3 | `WalletAccountSolana`, `serializedGuardFromExecution` |
+| provider modules | lifi 0.8.4, relay 0.1.5, symbiosis 0.1.5, near-intents 0.3.8, chainflip 0.4.10, cctp 0.5.8, thorchain 0.4.4, usdt0 0.5.4, uniswap 0.4.8, curve 0.1.7, wrap 0.4.5, balancer 0.3.10, fynd 0.3.0, 0x 0.1.2 and across 0.1.1 (Standard only), jupiter 0.3.11, omniston 0.5.10 (2026-11-17: dependency bumps, plus fynd's redeployed TychoRouterV3 and Arc / Elysium; swap2-core 0.15 lets `etaSeconds` be `null`, read as an unknown ETA like 0) | the providers spec covers these |
 | `viem` | one version, `2.57.x` (the version mobile resolves) | swap2-core needs `^2.45.0`. Dedupe with wagmi (`pnpm.overrides`) |
 
 Exact imports. These are the subpath exports in each `package.json`:
