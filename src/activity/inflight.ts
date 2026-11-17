@@ -285,6 +285,10 @@ export function parseStored(raw: string | null | undefined): SwapRecord[] {
       ...(t.depositReceived === true ? {depositReceived: true} : {}),
       ...(n(t.heartbeatAt) ? {heartbeatAt: t.heartbeatAt} : {}),
       ...(t.counted === true ? {counted: true} : {}),
+      ...(s(t.statsId) && /^[A-Za-z0-9_-]{16,64}$/.test(t.statsId) ? {statsId: t.statsId} : {}),
+      ...(t.reported === "stuck" || t.reported === "final" ? {reported: t.reported} : {}),
+      ...(n(t.usdIn) && t.usdIn >= 0 ? {usdIn: t.usdIn} : {}),
+      ...(n(t.slippageBps) && t.slippageBps >= 0 ? {slippageBps: t.slippageBps} : {}),
     });
   }
   return out;
@@ -356,6 +360,8 @@ export function newRecord(x: NewRecordInput, now = Date.now()): SwapRecord {
     ...(x.to.importedContract ? {toImportedContract: x.to.importedContract} : {}),
     ...(x.mode ? {mode: x.mode} : {}),
     ...(x.deposit ? {deposit: x.deposit} : {}),
+    ...(x.usdIn !== undefined && Number.isFinite(x.usdIn) ? {usdIn: x.usdIn} : {}),
+    ...(x.slippageBps !== undefined ? {slippageBps: x.slippageBps} : {}),
     status: "pending",
     createdAt: now,
     updatedAt: now,
@@ -540,7 +546,28 @@ export function readsSent(r: SwapRecord): boolean {
  */
 export function noteSent(prev: SwapRecord | undefined, next: SwapRecord): {record: SwapRecord; sent: boolean} {
   if (next.counted) return {record: next, sent: false};
-  if (prev?.counted) return {record: {...next, counted: true}, sent: false};
+  if (prev?.counted) return {record: {...next, counted: true, ...carried(prev, next)}, sent: false};
   if (!readsSent(next) || (prev && readsSent(prev))) return {record: next, sent: false};
   return {record: {...next, counted: true}, sent: true};
+}
+
+/** The report's id and what was reported (D41), carried onto a replacing record that lacks them. */
+const carried = (prev: SwapRecord, next: SwapRecord): Pick<SwapRecord, "statsId" | "reported"> => ({
+  ...(next.statsId ?? prev.statsId ? {statsId: next.statsId ?? prev.statsId} : {}),
+  ...(next.reported ?? prev.reported ? {reported: next.reported ?? prev.reported} : {}),
+});
+
+/** An outcome report (D41): `stuck` (it may still end) or `final`. */
+export type OutcomeReport = "stuck" | "final";
+
+/**
+ * `next` as the store keeps it, after noteSent: `reported` set when this very write makes a counted swap (one with a
+ * report id) final — or, before that, flags it stuck (the tracker's stuckReported) — then `report` says which, once
+ * per swap and kind, like `counted`. A swap stopped before its broadcast was never counted, so it reports nothing.
+ */
+export function noteOutcome(next: SwapRecord): {record: SwapRecord; report: OutcomeReport | null} {
+  if (!next.counted || !next.statsId || next.reported === "final") return {record: next, report: null};
+  if (isFinal(next.status)) return {record: {...next, reported: "final"}, report: "final"};
+  if (next.stuckReported && !next.reported) return {record: {...next, reported: "stuck"}, report: "stuck"};
+  return {record: next, report: null};
 }

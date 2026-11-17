@@ -48,6 +48,8 @@ const submitting = (localId: string): SwapRecord => ({...rec(localId), status: "
 let fetchMock: ReturnType<typeof vi.fn>;
 const posts = () => fetchMock.mock.calls as [string, RequestInit][];
 const bodies = () => posts().map(([, init]) => JSON.parse(String(init.body)) as unknown);
+/** Each report's venue, networks and mode (a counted record's report carries more: D41, tested below). */
+const heads = () => (bodies() as {venue: string; from: string; to: string; mode: string}[]).map(({venue, from, to, mode}) => ({venue, from, to, mode}));
 /** A store whose sent swaps go to the counter on a Standard page, through the fake fetch. */
 const counting = (page: PageConnection = STANDARD) => (r: SwapRecord) => countSent(r, {page, demo: false, fetch: fetchMock as unknown as typeof fetch});
 
@@ -81,7 +83,7 @@ afterEach(() => {
 });
 
 describe("what is sent", () => {
-  it("exactly {venue, from, to, mode} to <API>/api/v2/swap-web/sent: a keepalive text/plain POST, no credentials, no referrer, a timeout", () => {
+  it("a record counted before report ids: exactly {venue, from, to, mode} to <API>/api/v2/swap-web/sent: a keepalive text/plain POST, no credentials, no referrer, a timeout", () => {
     countSent(rec("awk1.near_intents.q.0xh", {sourceHash: "0xh"}), {page: STANDARD, demo: false, fetch: fetchMock as unknown as typeof fetch});
     expect(posts()).toHaveLength(1);
     const [url, init] = posts()[0]!;
@@ -142,7 +144,7 @@ describe("when: once per swap, at the moment it reads as sent", () => {
     s.updateSwap(localId, (r) => ({...r, stage: "signing"}));
     expect(fetchMock).not.toHaveBeenCalled();
     s.updateSwap(localId, (r) => ({...r, stage: "broadcast", sourceHash: "0xh"}));
-    expect(bodies()).toEqual([{venue: "near_intents", from: "tron:728126428", to: "eip155:8453", mode: "wallet"}]);
+    expect(heads()).toEqual([{venue: "near_intents", from: "tron:728126428", to: "eip155:8453", mode: "wallet"}]);
     expect(s.getSwap(localId)?.counted).toBe(true);
     // The engine's id replaces the local record with a fresh one: the flag goes with it, nothing more is sent.
     s.replaceSwap(localId, {...rec("awk1.near_intents.q.0xh", {sourceHash: "0xh"}), localId});
@@ -159,7 +161,7 @@ describe("when: once per swap, at the moment it reads as sent", () => {
     s.saveSwap(submitting("local.maybe"));
     s.replaceSwap("local.maybe", {...rec("awk1.near_intents.m.0xm", {sourceHash: "0xm", maybeSent: true}), localId: "local.maybe"});
     s.saveSwap(rec("awk1.omniston.o1", {provider: "omniston", fromChain: "ton:-239", toChain: "ton:-239"}));
-    expect(bodies()).toEqual([
+    expect(heads()).toEqual([
       {venue: "near_intents", from: "tron:728126428", to: "eip155:8453", mode: "wallet"},
       {venue: "omniston", from: "ton:-239", to: "ton:-239", mode: "wallet"},
     ]);
@@ -173,7 +175,7 @@ describe("when: once per swap, at the moment it reads as sent", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     // The venue sees the deposit (NEAR's KNOWN_DEPOSIT_TX / PROCESSING): still pending, counted now — not at settlement.
     s.updateSwap(id, (r) => applyStatus(r, "pending", [], T0 + 15_000, true));
-    expect(bodies()).toEqual([{venue: "near_intents", from: "tron:728126428", to: "eip155:8453", mode: "deposit"}]);
+    expect(heads()).toEqual([{venue: "near_intents", from: "tron:728126428", to: "eip155:8453", mode: "deposit"}]);
     s.updateSwap(id, (r) => applyStatus(r, "pending", [], T0 + 18_000, true));
     s.updateSwap(id, (r) => applyStatus(r, "completed", [{hash: "0xd", type: "destination"}], T0 + 20_000));
     s.updateSwap(id, (r) => applyStatus(r, "completed", [], T0 + 30_000));
@@ -231,7 +233,22 @@ describe("when: once per swap, at the moment it reads as sent", () => {
     finish({id: "awk1.relay.r1.0xrelay"});
     await new Promise((res) => setTimeout(res, 0));
     expect(posts().map(([url]) => url)).toEqual([`${BASE}/sent`]);
-    expect(bodies()).toEqual([{venue: "relay", from: "eip155:8453", to: "eip155:42161", mode: "wallet"}]);
+    expect(bodies()).toEqual([
+      {
+        id: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/),
+        venue: "relay",
+        from: "eip155:8453",
+        to: "eip155:42161",
+        mode: "wallet",
+        tokenIn: "ETH",
+        tokenOut: "ETH",
+        amountIn: "0.000000000000000001",
+        expectedOut: "0.000000000000000001",
+        minOut: "0.000000000000000001",
+        slippageBps: 50,
+      },
+    ]);
+    expect(getSwaps().find((r) => r.localId === id)?.statsId).toBe((bodies()[0] as {id: string}).id);
     expect(getSwaps().find((r) => r.localId === id)?.counted).toBe(true);
 
     // The same swap on a Public page: nothing.

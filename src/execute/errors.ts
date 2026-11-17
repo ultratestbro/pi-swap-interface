@@ -4,11 +4,13 @@
  * the swap is not-sent) versus maybe-sent (tracked, never retried).
  */
 import {
+  refusalOf,
   Swap2InFlightError,
   Swap2InsufficientGasError,
   Swap2MaybeSentError,
   Swap2ValidationError,
 } from "@anywalletkit/protocol-swap2-core/errors";
+import {GATE_REASONS} from "../swap/refusals";
 import {SwapGateRefusal, SwapReviewMismatch} from "./gate";
 
 /** The wallet rejection line (D25). One constant so the review, the record and the tests agree. */
@@ -111,4 +113,32 @@ export function swapFailureExpected(e: unknown): boolean {
 export function maybeSent(e: unknown): {id?: string; hash?: string} | null {
   if (!(e instanceof Swap2MaybeSentError)) return null;
   return {...(e.id ? {id: e.id} : {}), ...(e.hash ? {hash: e.hash} : {})};
+}
+
+/** A review mismatch's reason as a code: its words, without hex, addresses or numbers ("the amount changed" → "amount_changed"). */
+const reviewCode = (message: string): string =>
+  `review:${
+    message
+      .replace(/0x[0-9a-fA-F]+|[1-9A-HJ-NP-Za-km-z]{25,}|\d+/g, " ")
+      .toLowerCase()
+      .replace(/\b(the|a|an)\b/g, " ")
+      .replace(/[^a-z]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40) || "mismatch"
+  }`;
+
+/**
+ * A failure worth a refusal report (D41): the person declined in the wallet, or a check refused the route before
+ * signing — a write the plan didn't arm, a review mismatch, the account's fee cap, an SDK safety refusal. Its code is
+ * fixed, the SDK's reason, or the mismatch's words as a slug: never free text. Null for anything else.
+ */
+export function refusalReport(e: unknown): {kind: "gate" | "wallet"; code: string | null} | null {
+  if (isWalletRejection(e)) return {kind: "wallet", code: null};
+  const chain = causes(e);
+  if (chain.some((x) => x instanceof SwapGateRefusal)) return {kind: "gate", code: "unarmed_write"};
+  const mismatch = chain.find((x) => x instanceof SwapReviewMismatch) as SwapReviewMismatch | undefined;
+  if (mismatch) return {kind: "gate", code: reviewCode(mismatch.message)};
+  if (isFeeCapRefusal(e)) return {kind: "gate", code: "fee_cap"};
+  const reason = refusalOf(e)?.reason;
+  return reason && GATE_REASONS.has(reason) ? {kind: "gate", code: reason} : null;
 }

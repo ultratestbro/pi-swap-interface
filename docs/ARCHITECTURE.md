@@ -1090,7 +1090,7 @@ three pills), phones one combined pill, and every pill opened the whole wallet s
   card, the steps, each state's order of actions) and `tests/e2e/demo.spec.ts` (Done in view with the sheet body not
   scrolling: in progress and delivered, and an approval then a claim, at every width).
 
-**D36 — Swap counts in Standard mode (owner, 2026-11-13).** The owner asked to count swaps anonymously and see them
+**D36 — Swap counts in Standard mode (owner, 2026-11-13; widened by D41).** The owner asked to count swaps anonymously and see them
 daily in cp0x's ops chat: swaps per day, per venue, per direction (source network → destination network), every venue
 including the on-chain ones; counts only, no volume. The server half is cp0x-api's `POST /api/v2/swap-web/sent` and a
 daily cron (its `docs/swap-web-proxy.md` §8): per-UTC-day counts of venue × direction × mode, kept 120 days, no IP.
@@ -1668,6 +1668,42 @@ it."
 `protocol-swap2-stargate` (0.1.0), keyless, quoted from its pinned pools over the page's RPCs, checked and tracked on
 this device (providers §4.20). Its LayerZero fee is priced into the route row and may reach 0.5 AVAX / 40 POL from
 Avalanche / Polygon, where the engine's cap is below or at it.
+
+**D41 — Swap reports in Standard mode (owner, 2026-11-17; widens D36).** The owner asked to see, per swap, which
+asset went to which, between which networks, how much was sent, what was expected and what actually arrived — in a
+swaps chat as each swap goes, and in the daily summary — plus the routes the SDK's check refused and the declines in
+the wallet. Amounts are kept to 3 significant figures (the owner's choice: volume and fill quality without amounts
+precise enough to find the transaction); no address, hash, time or free text is sent. The server half is cp0x-api's
+`POST /sent`, `/done` and `/refused` (its `docs/swap-web-proxy.md` §8): a Turso database of its own, the swaps chat,
+the summary.
+- **`/sent`** replaces D36's body for a record counted from now on: the store's write that counts the swap (`counted`)
+  also draws its report id (`statsId`, 16 random bytes; not the swap's id, not the wallet's) and the report carries
+  it with the venue, networks, mode, the two symbols (`reportSymbol`), `amountIn` / `expectedOut` / `minOut`
+  (`roundUnits`: base units to 3 significant figures, half up; `minOut` is the record's execution floor), the
+  amount's value in USD by the page's prices at the review (`usdIn`, kept on the record by the runner and
+  `issueDeposit`; absent for an unpriced token) and the slippage. A record counted before has no id and keeps D36's
+  body. When it is sent is D36's rule, unchanged.
+- **`/done`**: the store notes the write that makes a counted swap with an id stuck (the tracker's `stuckReported`)
+  or final (`noteOutcome`, flag `reported`, once per kind, same tab rule as `counted`) and hands it to
+  `reportOutcome`, which posts the outcome — `done` (completed or partial), `refunded`, else `failed`; `stuck` — and its
+  duration. For a delivered swap it first reads what actually arrived from the delivery transaction (`received.ts`:
+  the record's claim or destination hash — for a swap on one network the swap itself; EVM: the token's Transfer logs
+  to the recipient, or for the native coin the balance change at that block plus the gas when the recipient sent it;
+  Solana: token balances before/after, or lamports plus the fee; Tron: TRC-20 Transfer logs; other networks not read)
+  and sends it rounded, with `diffBps` (against `expectedOut`) and `belowMin` (under `minOut`) worked out here from
+  the exact amounts. Unreadable: the outcome alone.
+- **`/refused`**: the runner reports a failure `refusalReport` classifies — the person declining in the wallet
+  (`wallet`), or a check refusing before signing (`gate`: a write the plan didn't arm `unarmed_write`, a review
+  mismatch as `review:<its words as a slug, no hex or numbers>`, the account's fee cap `fee_cap`, an SDK safety reason
+  from `GATE_REASONS`). A quote round's safety refusal (a router the venue's pins don't know, a vault that can't be
+  verified) is reported once per page (`once`); previews never.
+- **Only Standard, fire-and-forget**: D36's rules — a Standard page with a plan, never Public, Custom, demo or a build
+  without the API; simple `text/plain` POSTs to the plan's base with `keepalive`, no credentials, no referrer, 5 s; the
+  answer is never read. guard-dist's one-origin rule stands (URLs are built from the plan's base).
+- **Tests.** `tests/unit/activity/reports.test.ts` (rounding, the report, the id drawn once and carried, outcomes once
+  per kind, the outcome's figures, refusal classes and the once-per-page rule), `received.test.ts` (each network's
+  reading), `counter.test.ts` (D36's timing and dedupe, now with the richer body), e2e `standard.spec.ts` (one `/sent`
+  with exactly the report's keys, no recipient, ≤ 3 significant figures; none in Public).
 
 ## 5. Conventions
 

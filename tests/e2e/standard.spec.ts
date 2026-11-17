@@ -652,7 +652,7 @@ async function sendTronSwap(page: Page, tron: TronSeen): Promise<void> {
   await expect(page.getByTestId("swap-status")).toBeVisible({timeout: 10_000});
 }
 
-test("a swap the wallet broadcasts is counted once: one POST /sent, venue and networks only, never again after a reload", async ({page, baseURL}) => {
+test("a swap the wallet broadcasts is reported once: one POST /sent, amounts rounded, no address or hash, never again after a reload", async ({page, baseURL}) => {
   test.setTimeout(120_000);
   const watch = watchPage(page);
   const origin = new URL(baseURL!).origin;
@@ -665,8 +665,15 @@ test("a swap the wallet broadcasts is counted once: one POST /sent, venue and ne
   await sendTronSwap(page, tron);
 
   await expect.poll(() => counted.length, {timeout: 10_000}).toBe(1);
-  // Exactly the venue, the two networks and the mode: no address, amount, hash or id. A simple request (no preflight).
-  expect(counted[0]!.body).toStrictEqual({venue: "near_intents", from: "tron:728126428", to: "eip155:8453", mode: "wallet"});
+  // The report (D41): the venue, networks, mode, tokens, amounts to 3 significant figures, a random report id — no
+  // address or hash. A simple request (no preflight).
+  const body = counted[0]!.body as Record<string, unknown>;
+  expect(Object.keys(body).sort()).toEqual(
+    ["amountIn", "expectedOut", "from", "id", "minOut", "mode", "slippageBps", "to", "tokenIn", "tokenOut", "venue", ...("usdIn" in body ? ["usdIn"] : [])].sort(),
+  );
+  expect(body).toMatchObject({venue: "near_intents", from: "tron:728126428", to: "eip155:8453", mode: "wallet", tokenIn: "USDT", id: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/)});
+  for (const k of ["amountIn", "expectedOut", "minOut"]) expect(String(body[k]).replace(/^0\.0*|\./g, "").replace(/0+$/, "").length, k).toBeLessThanOrEqual(3);
+  expect(JSON.stringify(body)).not.toContain(RECIPIENT);
   expect(counted[0]!.contentType).toMatch(/^text\/plain/);
   // The engine's handover and the tracker's polls send nothing more.
   await page.waitForTimeout(1_500);

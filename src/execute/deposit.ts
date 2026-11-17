@@ -12,6 +12,7 @@ import type {DepositTicket, IssueDepositInput} from "../contracts/execution";
 import {newRecord, recordSide, saveSwap} from "../activity";
 import {isAddressFor, QR_FALLBACK_FAMILIES, SIGNING_FAMILIES} from "../catalog";
 import {appRouter, quoteParams} from "../swap";
+import {usdOf} from "../swap/amount";
 import {refusal} from "./errors";
 import {same, SwapReviewMismatch} from "./gate";
 import {encodeSwapId} from "./ids";
@@ -94,6 +95,9 @@ export async function issueDeposit(input: IssueDepositInput, deps: DepositDeps =
         recipient: req.recipient,
         mode: "deposit",
         deposit: {address: q.depositAddress, memo: null, amount: sourceAmount.toString(), validUntilMs: q.validUntilMs},
+        // For the swap report (D41).
+        ...(usdOf(sourceAmount, from.decimals, from.priceUsd) !== undefined ? {usdIn: usdOf(sourceAmount, from.decimals, from.priceUsd)} : {}),
+        slippageBps: req.slippageBps,
       },
       now(),
     ),

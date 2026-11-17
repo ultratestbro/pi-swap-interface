@@ -22,6 +22,7 @@ export {
   markNotSent,
   newRecord,
   nextPollAt,
+  noteOutcome,
   noteSent,
   parseStored,
   pollFailed,

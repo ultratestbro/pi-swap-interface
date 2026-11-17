@@ -17,8 +17,8 @@
 import {useSyncExternalStore} from "react";
 import {createStore, get, update, type UseStore} from "idb-keyval";
 import type {SwapRecord} from "../contracts/activity";
-import {countSent} from "./counter";
-import {markInterrupted, markNotSent, noteSent, parseStored, prune, upsert, wasInterrupted} from "./inflight";
+import {countSent, newStatsId, reportOutcome} from "./counter";
+import {markInterrupted, markNotSent, noteOutcome, noteSent, parseStored, prune, upsert, wasInterrupted, type OutcomeReport} from "./inflight";
 
 const KEY = "cp0x-swaps-v1";
 const DB = "cp0x-activity";
@@ -108,6 +108,10 @@ export interface SwapStoreOptions {
   now?: () => number;
   /** Called once per record, after the write that first makes it read as sent (D36). Default: nothing. */
   onSent?: ((r: SwapRecord) => void) | null;
+  /** Called once per counted record and kind, after the write that makes it stuck or final (D41). Default: nothing. */
+  onOutcome?: ((r: SwapRecord, report: OutcomeReport) => void) | null;
+  /** The report id a counted record gets (D41). Default: counter newStatsId (random). */
+  statsId?: () => string;
 }
 
 /** One browsing context's view of the persisted swaps. The app uses the default instance (module functions below). */
@@ -117,6 +121,8 @@ export function createSwapStore(opts: SwapStoreOptions = {}) {
   const win = opts.win === undefined ? (typeof window !== "undefined" ? window : null) : opts.win;
   const now = opts.now ?? Date.now;
   const onSent = opts.onSent ?? null;
+  const onOutcome = opts.onOutcome ?? null;
+  const statsId = opts.statsId ?? newStatsId;
 
   let swaps: readonly SwapRecord[] = [];
   let loaded: Promise<void> | null = null;
@@ -141,14 +147,19 @@ export function createSwapStore(opts: SwapStoreOptions = {}) {
 
   const commit = (raw: StoreOp[]) => {
     if (!raw.length) return;
-    // Each op's record as it is stored: `counted` carried over, or set by the write that makes it read as sent.
+    // Each op's record as it is stored: `counted` carried over, or set by the write that makes it read as sent — with
+    // its report id (D41) — and `reported` set by the write that makes a counted swap stuck or final.
     const sent: SwapRecord[] = [];
+    const outcomes: [SwapRecord, OutcomeReport][] = [];
     let list: SwapRecord[] = [...swaps];
     const ops = raw.map((op) => {
       const prev = list.find((r) => r.id === (op.kind === "replace" ? op.oldId : op.record.id));
       const noted = noteSent(prev, op.record);
-      if (noted.sent) sent.push(noted.record);
-      const next = noted.record === op.record ? op : {...op, record: noted.record};
+      const counted = noted.sent ? {...noted.record, statsId: statsId()} : noted.record;
+      if (noted.sent) sent.push(counted);
+      const outcome = noteOutcome(counted);
+      if (outcome.report) outcomes.push([outcome.record, outcome.report]);
+      const next = outcome.record === op.record ? op : {...op, record: outcome.record};
       list = applyOp(list, next);
       return next;
     });
@@ -157,6 +168,7 @@ export function createSwapStore(opts: SwapStoreOptions = {}) {
     persist(ops);
     channel?.post({v: 1, ops});
     for (const r of sent) onSent?.(r);
+    for (const [r, report] of outcomes) onOutcome?.(r, report);
   };
 
   channel?.listen((data) => {
@@ -263,8 +275,9 @@ export function createSwapStore(opts: SwapStoreOptions = {}) {
 export type SwapStore = ReturnType<typeof createSwapStore>;
 
 let instance: SwapStore | null = null;
-/** The app's store, created on first use; a swap it notes as sent goes to the swap counter (D36: Standard mode only). */
-export const swapStore = (): SwapStore => (instance ??= createSwapStore({onSent: (r) => countSent(r)}));
+/** The app's store, created on first use; a swap it notes as sent, then stuck or ended, is reported (D36, D41: Standard only). */
+export const swapStore = (): SwapStore =>
+  (instance ??= createSwapStore({onSent: (r) => countSent(r), onOutcome: (r, report) => void reportOutcome(r, report)}));
 
 /** Read the persisted list once (the tracker calls it at startup). */
 export const loadSwaps = (): Promise<void> => swapStore().loadSwaps();

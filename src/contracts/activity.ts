@@ -99,6 +99,17 @@ export interface SwapRecord {
    * every mode, so switching to Standard later never counts an old swap.
    */
   counted?: true;
+  /**
+   * The swap report's id (D41): drawn at random by the write that counted the swap, sent with its report to cp0x's
+   * statistics and named again by its outcome. Not the swap's id, not the wallet's.
+   */
+  statsId?: string;
+  /** Which outcome report was handed over (D41): `stuck` (it may still end), then `final`. Never twice. */
+  reported?: "stuck" | "final";
+  /** The amount's value in USD by the page's prices when the swap was sent (D41); absent for an unpriced token. */
+  usdIn?: number;
+  /** The slippage the swap was sent with (D41). */
+  slippageBps?: number;
 }
 
 /** One side of a swap for newRecord (mobile inflight.ts Side). */
@@ -129,6 +140,8 @@ export interface NewRecordInput {
   maybeSent?: boolean;
   mode?: SwapRecord["mode"];
   deposit?: SwapRecord["deposit"];
+  usdIn?: number;
+  slippageBps?: number;
 }
 
 export interface StatusView {

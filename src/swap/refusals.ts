@@ -649,6 +649,20 @@ function fallbackLine(text: string): string {
  * `Swap2RefusalReason`; the router keeps it next to the text, `RouteSet.refusals` / `lastRefusals`). Worded as the
  * rules above word the same kind of refusal, never stronger than the reason says.
  */
+/**
+ * The SDK's safety refusals: a check that refused the route — a recipient or vault it couldn't verify, a node behind,
+ * the venue's own policy, a failed simulation — as against no route, a limit or an expired quote. Reported to the swap
+ * statistics (D41: activity/counter reportRefused, from a quote round and from execution).
+ */
+export const GATE_REASONS: ReadonlySet<Swap2RefusalReason> = new Set<Swap2RefusalReason>([
+  "recipient_unverifiable",
+  "recipient_mismatch",
+  "vault_mismatch",
+  "stale_node",
+  "policy_refused",
+  "simulation_failed",
+]);
+
 const BY_REASON: Readonly<Record<Swap2RefusalReason, {category: RefusalCategory; short: string; detail: string}>> = {
   rate_limited: {category: "busy", short: RETRY, detail: BUSY},
   upstream_unavailable: {category: "unavailable", short: "Unavailable right now — try later", detail: "The venue's service didn't give a usable answer just now."},

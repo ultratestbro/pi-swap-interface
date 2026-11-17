@@ -12,10 +12,12 @@ import type {Hex} from "viem";
 import type {ExecStage, SwapRecord} from "../contracts/activity";
 import type {EvmSourceSigner, ExecutionPhase, ExecutionPhaseDetail, StartSwapInput, TronSourceSigner} from "../contracts/execution";
 import {newRecord, recordSide, replaceSwap, saveSwap, setRunning, updateSwap, getSwaps, findSwap} from "../activity";
+import {reportRefused} from "../activity/counter";
 import {chainByCaip2Web, tronPost} from "../catalog";
+import {usdOf} from "../swap/amount";
 import {PERMIT2_VENUES} from "../swap/providerMeta";
 import {executeSwap, type ExecuteDeps} from "./execute";
-import {maybeSent, swapErrorText, swapFailureExpected} from "./errors";
+import {maybeSent, refusalReport, swapErrorText, swapFailureExpected} from "./errors";
 import {decodeSwapId, encodeSwapId} from "./ids";
 
 /** The native coin's symbol for error texts ("Not enough ETH…"). */
@@ -34,6 +36,7 @@ export function startSwap(input: StartSwapInput, deps: ExecuteDeps = {}): Promis
   const {from, to, reviewed, expectedOut, signer} = input;
   const localId = localIdNow();
   const accountId = `${signer.family}:${reviewed.refundAddress}`;
+  const usdIn = usdOf(reviewed.amountIn, from.decimals, from.priceUsd);
   const base = {
     accountId,
     provider: reviewed.provider,
@@ -44,6 +47,9 @@ export function startSwap(input: StartSwapInput, deps: ExecuteDeps = {}): Promis
     minOut: reviewed.minOut,
     recipient: reviewed.recipient,
     mode: "wallet" as const,
+    // For the swap report (D41): its value by the page's prices and its slippage.
+    ...(usdIn !== undefined ? {usdIn} : {}),
+    slippageBps: reviewed.slippageBps,
   };
   let started = false;
   // A Permit2 venue's token sale (0x, D38; the gate takes a permit from nothing else) signs its one-time Permit2
@@ -116,6 +122,9 @@ export function startSwap(input: StartSwapInput, deps: ExecuteDeps = {}): Promis
           return;
         }
         if (!swapFailureExpected(e)) console.warn("swap failed", {provider: reviewed.provider, error: e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)});
+        // A route the check refused, or the person declined, before anything was sent (D41).
+        const refused = refusalReport(e);
+        if (refused) reportRefused({venue: reviewed.provider, fromChain: from.caip2, toChain: to.caip2, ...refused});
         if (!started) {
           reject(e);
           return;
