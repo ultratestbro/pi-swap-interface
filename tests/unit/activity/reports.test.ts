@@ -1,10 +1,10 @@
-// The swap reports (D41): amounts to 3 significant figures, a report id drawn once, outcomes once per kind, refusals.
+// The swap reports (D41, D43): exact amounts and the two addresses, a report id drawn once, outcomes once per kind, refusals.
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {refusalOf, Swap2ExecutionError, withReason} from "@anywalletkit/protocol-swap2-core/errors";
 import type {SwapRecord} from "../../../src/contracts/activity";
 import type {PageConnection} from "../../../src/config";
 import {applyStatus, newRecord, noteOutcome} from "../../../src/activity";
-import {doneEvent, reportOutcome, reportRefused, reportSymbol, resetQuoteRefusals, roundUnits, roundUsd, sentEvent} from "../../../src/activity/counter";
+import {doneEvent, exactUnits, reportAddress, reportOutcome, reportRefused, reportSymbol, resetQuoteRefusals, sentEvent} from "../../../src/activity/counter";
 import {createSwapStore} from "../../../src/activity/store";
 import {refusalReport, WALLET_DECLINED_TEXT} from "../../../src/execute/errors";
 import {SwapGateRefusal, SwapReviewMismatch} from "../../../src/execute/gate";
@@ -52,16 +52,21 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe("rounding", () => {
-  it("base units to 3 significant figures, half up, exact", () => {
-    expect(roundUnits(1_234_567_890n, 6)).toBe("1230");
-    expect(roundUnits(274_123_456_789_012_345n, 18)).toBe("0.274");
-    expect(roundUnits(999_600n, 3)).toBe("1000");
-    expect(roundUnits(1_235n, 6)).toBe("0.00124");
-    expect(roundUnits(5n, 0)).toBe("5");
-    expect(roundUnits(0n, 6)).toBe("0");
-    expect(roundUsd(1234.56789)).toBe(1230);
-    expect(roundUsd(0.012345)).toBe(0.0123);
+describe("amounts and addresses", () => {
+  it("base units to the exact decimal (D43)", () => {
+    expect(exactUnits(1_234_567_890n, 6)).toBe("1234.56789");
+    expect(exactUnits(274_123_456_789_012_345n, 18)).toBe("0.274123456789012345");
+    expect(exactUnits(100_000_000_000n, 6)).toBe("100000");
+    expect(exactUnits(5n, 0)).toBe("5");
+    expect(exactUnits(0n, 6)).toBe("0");
+    expect(exactUnits(-1n, 6)).toBe("0");
+  });
+
+  it("an address as its chain spells it; anything cp0x would refuse is left out", () => {
+    for (const a of ["0x8ba1f109551bD432803012645Ac136ddd64DBA72", "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU", "0:6f5bc67986e06430961d9df00433926a4cd92e597ddd8aa6043645ac20bd1781", "alice.near", "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a"]) {
+      expect(reportAddress(a)).toBe(a);
+    }
+    for (const a of ["", "x", "<b>", "a b", "x".repeat(129)]) expect(reportAddress(a)).toBeUndefined();
   });
 
   it("symbols as cp0x takes them", () => {
@@ -74,8 +79,8 @@ describe("rounding", () => {
 });
 
 describe("the swap report (/sent)", () => {
-  it("a counted record's report: tokens, rounded amounts and value, slippage, its id — no address, hash or exact amount", () => {
-    const event = sentEvent(rec({statsId: ID}));
+  it("a counted record's report: tokens, exact amounts and value, slippage, both addresses, its id — no hash or swap id", () => {
+    const event = sentEvent(rec({statsId: ID, recipient: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"}));
     expect(event).toStrictEqual({
       id: ID,
       venue: "relay",
@@ -84,14 +89,25 @@ describe("the swap report (/sent)", () => {
       mode: "wallet",
       tokenIn: "USDC",
       tokenOut: "ETH",
-      amountIn: "1230",
-      expectedOut: "0.274",
+      amountIn: "1234.56789",
+      expectedOut: "0.274123456789012345",
       minOut: "0.273",
-      usdIn: 1230,
+      usdIn: 1234.56789,
       slippageBps: 30,
+      sender: "0x8ba1f109551bD432803012645Ac136ddd64DBA72",
+      recipient: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
     });
     const out = JSON.stringify(event);
-    for (const secret of ["0x8ba1", "0xh", "awk1", "1234567890", "1234.56"]) expect(out).not.toContain(secret);
+    for (const secret of ["0xh", "awk1"]) expect(out).not.toContain(secret);
+  });
+
+  it("a QR deposit names its refund address as the payer; an address cp0x would refuse is left out, not the report", () => {
+    const qr = sentEvent(rec({statsId: ID, mode: "deposit", accountId: "deposit:bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"}));
+    expect(qr).toMatchObject({mode: "deposit", sender: "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq", recipient: "0x8ba1f109551bD432803012645Ac136ddd64DBA72"});
+    const odd = sentEvent(rec({statsId: ID, accountId: "deposit:", recipient: "addr with spaces"}));
+    expect(odd).toMatchObject({id: ID, amountIn: "1234.56789"});
+    expect(odd).not.toHaveProperty("sender");
+    expect(odd).not.toHaveProperty("recipient");
   });
 
   it("an unpriced token has no value; a record from before report ids sends the old count", () => {
@@ -143,12 +159,12 @@ describe("the store: a report id once, outcomes once per kind", () => {
 describe("the outcome report (/done)", () => {
   const ended = (status: SwapRecord["status"], over: Partial<SwapRecord> = {}) => ({...rec({counted: true, statsId: ID, ...over}), status, updatedAt: T0 + 42_000});
 
-  it("delivered: what arrived, rounded, its distance from the expected amount in bps (exact), under the minimum or not", async () => {
+  it("delivered: what arrived, exact, its distance from the expected amount in bps, under the minimum or not", async () => {
     expect(await doneEvent(ended("completed"), "final", async () => 273_900_000_000_000_000n)).toEqual({
       id: ID,
       outcome: "done",
       durationS: 42,
-      actualOut: "0.274",
+      actualOut: "0.2739",
       diffBps: -8,
       belowMin: false,
     });
@@ -168,7 +184,7 @@ describe("the outcome report (/done)", () => {
 
   it("posted to /done on a Standard page only, after reading the delivery", async () => {
     await reportOutcome(ended("completed"), "final", deps(STANDARD, async () => 274_000_000_000_000_000n));
-    expect(posts()).toEqual([{url: `${BASE}/done`, body: {id: ID, outcome: "done", durationS: 42, actualOut: "0.274", diffBps: -4, belowMin: false}}]);
+    expect(posts()).toEqual([{url: `${BASE}/done`, body: {id: ID, outcome: "done", durationS: 42, actualOut: "0.274", diffBps: -4, belowMin: false}}]); // 274_000_000_000_000_000n is 0.274 exactly
     await reportOutcome(ended("completed"), "final", deps(PUBLIC, async () => 1n));
     await reportOutcome(ended("completed"), "final", {...deps(STANDARD, async () => 1n), demo: true});
     expect(fetchMock).toHaveBeenCalledOnce();

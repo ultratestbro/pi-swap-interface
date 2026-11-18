@@ -644,7 +644,7 @@ geo-blocking or screening; zero fee options everywhere.
   recipient, calldata and transaction in the browser exactly as in the other modes. The proxy never sees a wallet key
   and signs nothing; the wallet signs only after the in-page gate (D10). cp0x does see, in Standard, the quote
   requests and RPC calls it carries (amounts, addresses, the viewer's IP) — Settings says so — and, once per swap
-  sent, its report (D36, D41).
+  sent, its report (D36, D41, D43).
 - **Third parties.** Public/Custom: exactly the venues, RPCs (Custom: the viewer's own first), price APIs, (only
   while a Tron wallet is connected) the runtime `tronApi` hosts — publicnode, then TronGrid — for its balances and its
   payments' reference block, broadcast and receipt, TonAPI once a TON wallet is connected (balances, the jetton wallet
@@ -1123,7 +1123,7 @@ daily cron (its `docs/swap-web-proxy.md` §8): per-UTC-day counts of venue × di
   `referrerPolicy: "no-referrer"`, a 5 s timeout. The answer is never read and every error is swallowed: a 400, a
   429, a 503 or an API without the route changes nothing for anyone.
 - **Said where it applies.** Settings → Connection, under the mode, while Standard is picked: "Counts each swap you
-  send — no address." (`settings-standard-count`); its info panel and the README's
+  send." (`settings-standard-count`; "— no address" dropped with D43); its info panel and the README's
   privacy lines and modes table say the same.
 - **Tests.** `tests/unit/activity/counter.test.ts` (the exact body and request; never in Public, Custom, demo or a
   build without the API; once at the broadcast, not at the first step, the handover or a poll; a stop before it
@@ -1672,14 +1672,15 @@ Avalanche / Polygon, where the engine's cap is below or at it.
 **D41 — Swap reports in Standard mode (owner, 2026-11-17; widens D36).** The owner asked to see, per swap, which
 asset went to which, between which networks, how much was sent, what was expected and what actually arrived — in a
 swaps chat as each swap goes, and in the daily summary — plus the routes the SDK's check refused and the declines in
-the wallet. Amounts are kept to 3 significant figures (the owner's choice: volume and fill quality without amounts
-precise enough to find the transaction); no address, hash, time or free text is sent. The server half is cp0x-api's
+the wallet. Amounts were kept to 3 significant figures (the owner's choice then: volume and fill quality without amounts
+precise enough to find the transaction) and no address was sent — both changed by D43; no hash, time or free text is
+sent. The server half is cp0x-api's
 `POST /sent`, `/done` and `/refused` (its `docs/swap-web-proxy.md` §8): a Turso database of its own, the swaps chat,
 the summary.
 - **`/sent`** replaces D36's body for a record counted from now on: the store's write that counts the swap (`counted`)
   also draws its report id (`statsId`, 16 random bytes; not the swap's id, not the wallet's) and the report carries
   it with the venue, networks, mode, the two symbols (`reportSymbol`), `amountIn` / `expectedOut` / `minOut`
-  (`roundUnits`: base units to 3 significant figures, half up; `minOut` is the record's execution floor), the
+  (`roundUnits` then, base units to 3 significant figures; exact since D43 — `minOut` is the record's execution floor), the
   amount's value in USD by the page's prices at the review (`usdIn`, kept on the record by the runner and
   `issueDeposit`; absent for an unpriced token) and the slippage. A record counted before has no id and keeps D36's
   body. When it is sent is D36's rule, unchanged.
@@ -1690,7 +1691,7 @@ the summary.
   the record's claim or destination hash — for a swap on one network the swap itself; EVM: the token's Transfer logs
   to the recipient, or for the native coin the balance change at that block plus the gas when the recipient sent it;
   Solana: token balances before/after, or lamports plus the fee; Tron: TRC-20 Transfer logs; other networks not read)
-  and sends it rounded, with `diffBps` (against `expectedOut`) and `belowMin` (under `minOut`) worked out here from
+  and sends it (rounded then, exact since D43), with `diffBps` (against `expectedOut`) and `belowMin` (under `minOut`) worked out here from
   the exact amounts. Unreadable: the outcome alone.
 - **`/refused`**: the runner reports a failure `refusalReport` classifies — the person declining in the wallet
   (`wallet`), or a check refusing before signing (`gate`: a write the plan didn't arm `unarmed_write`, a review
@@ -1703,7 +1704,7 @@ the summary.
 - **Tests.** `tests/unit/activity/reports.test.ts` (rounding, the report, the id drawn once and carried, outcomes once
   per kind, the outcome's figures, refusal classes and the once-per-page rule), `received.test.ts` (each network's
   reading), `counter.test.ts` (D36's timing and dedupe, now with the richer body), e2e `standard.spec.ts` (one `/sent`
-  with exactly the report's keys, no recipient, ≤ 3 significant figures; none in Public).
+  with exactly the report's keys; none in Public; D43 since).
 
 **D42 — Unfinished swaps are tracked in a hidden tab too (owner, 2026-11-18).** The first live report (0x, ETH → USDC
 on Ethereum) was mined 3 s after the broadcast but read as completed ~2.5 min later: the tracker polled only while
@@ -1716,6 +1717,25 @@ waited for the return.
   minute after ~5 minutes hidden). Coming back still re-checks everything at once (`visibilitychange`).
 - **Unchanged.** Quote refreshes stay visible-only (useRoutes); one tab per browser polls (the Web Lock leader).
 - **Tests.** `tests/unit/activity/tracker.test.ts` (a hidden leader tab still polls a due swap on its tick).
+
+**D43 — Swap reports carry exact amounts and the two addresses (owner, 2026-11-18; changes D41).** The owner wants the
+swaps chat to show how good each fill really is and to check quotes against the real swaps: "давай мы не будем
+округлять суммы, потому что нам сейчас нужно отследить насколько выгодные свапы в алертах" and "навреное нужно
+добавить всё таки адрес откуда куда, пока чисто для анализа насколько хорошо квоты и реальные свапы работают". The
+first large Relay swaps (100 000 USDT → USDG) read "100 000" in the chat while 100 138 were sent.
+- **`/sent`**: `amountIn` / `expectedOut` / `minOut` exact (`exactUnits`: base units → the decimal, nothing dropped),
+  `usdIn` unrounded (absent when unpriced or past cp0x's 1e10), plus `sender` — the paying wallet, the address part of
+  `accountId`; for a QR deposit (`deposit:<refund>`) its refund address — and `recipient`. An address is sent only in
+  cp0x's spelling (`reportAddress`: letters, digits, `:._-`, 2–128 characters); anything else is left out, never the
+  report. Still no hash, swap id or time.
+- **`/done`**: `actualOut` exact.
+- **The server** (cp0x-api, `docs/swap-web-proxy.md` §8) takes both, stores them as sent and shows them in the swap's
+  message; it must be deployed first: until then its strict body check answers 400 to a report with an address.
+- **Said where it applies.** The Settings line, its info panel and the README no longer say "no address" or
+  "anonymous" (the owner's rule for these lines, 2026-11-18: drop what stopped being true, add nothing).
+- **Tests.** `reports.test.ts` (exact amounts, both addresses, a QR deposit's refund address, an odd address left
+  out), `counter.test.ts` (the runner's body), `settings.test.tsx` (the copy), e2e `standard.spec.ts` (the report's
+  keys, exact amounts, the two addresses).
 
 ## 5. Conventions
 

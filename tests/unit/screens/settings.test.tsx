@@ -64,7 +64,7 @@ describe("Settings → Connection", () => {
     expect(radios().map((r) => r.value)).toEqual(["standard", "public", "custom"]);
     expect(radios()[0]!.checked).toBe(true);
     // The swap counter (D36), said right under the mode.
-    expect(screen.getByTestId("settings-standard-count").textContent).toBe("Counts each swap you send — no address.");
+    expect(screen.getByTestId("settings-standard-count").textContent).toBe("Counts each swap you send.");
     // Fynd can be turned off here (it is asked only in Standard, through cp0x). No Standard runtime runs in this test,
     // so the note's status part isn't checked here (model.test.ts covers each line, standard.spec.ts the live ones).
     expect(screen.getByTestId("settings-venue-fynd-note").textContent).toMatch(/^Standard mode only — /);
@@ -75,7 +75,7 @@ describe("Settings → Connection", () => {
     expect(privacy).toMatch(/never sees your wallet keys and signs nothing/);
     expect(privacy).toMatch(/every transaction is still checked in this browser/);
     expect(privacy).toMatch(/Public and Custom never contact cp0x/);
-    expect(privacy).toMatch(/once per swap you send which venue and networks it used — no address or transaction/);
+    expect(privacy).toMatch(/once per swap you send which venue and networks it used — no transaction\./);
     // Choosing another mode says when it applies, and Public counts nothing.
     fireEvent.click(radios()[1]!);
     expect(screen.getByTestId("settings-connection").textContent).toMatch(/Applies after you save and reload/);

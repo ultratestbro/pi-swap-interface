@@ -24,7 +24,8 @@
  *   neither is asked at all.
  * - Public chosen in Settings never contacts cp0x, not even for health, and leaves LI.FI for the live quote.
  * - The swap counter (D36): a swap the wallet broadcasts (a TronLink payer through NEAR Intents, fakeTron.ts) posts
- *   exactly one `/sent` with no address, never again after a reload; in Public no swap posts anything.
+ *   exactly one `/sent` with exact amounts and both addresses (D43), never again after a reload; in Public no swap
+ *   posts anything.
  * Settings names what goes through cp0x each time.
  *
  * CORS: while routing is on, Playwright answers every preflight itself and echoes back whatever headers were asked
@@ -33,7 +34,7 @@
  * refuse is answered like the browser would see it — a network error — and fails the test (`net.unallowed`).
  */
 import {expect, test, type Page, type Request, type Route} from "@playwright/test";
-import {answerTronSwap, injectTronLink, newTronSeen, RECIPIENT, USDC_BASE, USDT_TRON, type TronSeen} from "./fakeTron";
+import {answerTronSwap, injectTronLink, newTronSeen, OWNER, RECIPIENT, USDC_BASE, USDT_TRON, type TronSeen} from "./fakeTron";
 import {E2E_CP0X_API, expectNoHorizontalScroll, isCp0xHost, watchPage} from "./helpers";
 
 /** The proxy's path prefix under the fake origin. */
@@ -652,7 +653,7 @@ async function sendTronSwap(page: Page, tron: TronSeen): Promise<void> {
   await expect(page.getByTestId("swap-status")).toBeVisible({timeout: 10_000});
 }
 
-test("a swap the wallet broadcasts is reported once: one POST /sent, amounts rounded, no address or hash, never again after a reload", async ({page, baseURL}) => {
+test("a swap the wallet broadcasts is reported once: one POST /sent, exact amounts and both addresses, no hash, never again after a reload", async ({page, baseURL}) => {
   test.setTimeout(120_000);
   const watch = watchPage(page);
   const origin = new URL(baseURL!).origin;
@@ -665,15 +666,24 @@ test("a swap the wallet broadcasts is reported once: one POST /sent, amounts rou
   await sendTronSwap(page, tron);
 
   await expect.poll(() => counted.length, {timeout: 10_000}).toBe(1);
-  // The report (D41): the venue, networks, mode, tokens, amounts to 3 significant figures, a random report id — no
-  // address or hash. A simple request (no preflight).
+  // The report (D41, D43): the venue, networks, mode, tokens, exact amounts, the paying wallet and the recipient, a
+  // random report id — no hash. A simple request (no preflight).
   const body = counted[0]!.body as Record<string, unknown>;
   expect(Object.keys(body).sort()).toEqual(
-    ["amountIn", "expectedOut", "from", "id", "minOut", "mode", "slippageBps", "to", "tokenIn", "tokenOut", "venue", ...("usdIn" in body ? ["usdIn"] : [])].sort(),
+    ["amountIn", "expectedOut", "from", "id", "minOut", "mode", "recipient", "sender", "slippageBps", "to", "tokenIn", "tokenOut", "venue", ...("usdIn" in body ? ["usdIn"] : [])].sort(),
   );
-  expect(body).toMatchObject({venue: "near_intents", from: "tron:728126428", to: "eip155:8453", mode: "wallet", tokenIn: "USDT", id: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/)});
-  for (const k of ["amountIn", "expectedOut", "minOut"]) expect(String(body[k]).replace(/^0\.0*|\./g, "").replace(/0+$/, "").length, k).toBeLessThanOrEqual(3);
-  expect(JSON.stringify(body)).not.toContain(RECIPIENT);
+  expect(body).toMatchObject({
+    venue: "near_intents",
+    from: "tron:728126428",
+    to: "eip155:8453",
+    mode: "wallet",
+    tokenIn: "USDT",
+    amountIn: "25",
+    sender: OWNER,
+    recipient: RECIPIENT,
+    id: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/),
+  });
+  for (const k of ["expectedOut", "minOut"]) expect(String(body[k]), k).toMatch(/^\d+(\.\d+)?$/);
   expect(counted[0]!.contentType).toMatch(/^text\/plain/);
   // The engine's handover and the tracker's polls send nothing more.
   await page.waitForTimeout(1_500);

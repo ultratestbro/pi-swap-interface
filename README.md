@@ -63,7 +63,7 @@ cp0x controls only this interface. What it guarantees:
   TON Connect's list server and analytics are never contacted: the list and its icons come with the page) — the
   hosted interface also its own host's page-view count — plus,
   in the hosted interface's Standard mode only, cp0x's proxy in place of the venues and RPCs it carries, and one
-  anonymous count per swap you send, no address, transaction or time. Public and Custom mode never contact a cp0x server, and a copy built without
+  count per swap you send, no transaction or time. Public and Custom mode never contact a cp0x server, and a copy built without
   `VITE_CP0X_API` contains no cp0x address at all.
 - Before your wallet is asked to sign, the page checks every transaction against the route you reviewed. A
   transaction that does not match is refused.
@@ -207,7 +207,7 @@ applies after a reload.
 
 | mode | where requests go | contacts cp0x |
 |---|---|---|
-| **Standard** (hosted build only, its default) | LI.FI, Relay, NEAR Intents, Jupiter, Symbiosis, Fynd, 0x and Across while cp0x holds a key for them, the RPCs cp0x serves, and THORChain's vault check go through cp0x's swap-web proxy, which adds cp0x's keys. Everything else goes direct, the NEAR RPC included, and so does Across's relayer fee quote (`app.across.to`, keyless). Fynd, 0x and Across exist only here. Each swap you send is counted once — no address. | yes, as a transport, plus the swap count |
+| **Standard** (hosted build only, its default) | LI.FI, Relay, NEAR Intents, Jupiter, Symbiosis, Fynd, 0x and Across while cp0x holds a key for them, the RPCs cp0x serves, and THORChain's vault check go through cp0x's swap-web proxy, which adds cp0x's keys. Everything else goes direct, the NEAR RPC included, and so does Across's relayer fee quote (`app.across.to`, keyless). Fynd, 0x and Across exist only here. Each swap you send is counted once. | yes, as a transport, plus the swap count |
 | **Public** | Keyless public endpoints, straight from your browser. | never |
 | **Custom** | Public, plus your own RPCs per EVM network and for Solana (tried first; the public ones stay as the fallback, unless you turn on "Use only my RPCs") and your own LI.FI, Relay, NEAR Intents (1Click JWT), Jupiter and Symbiosis (partner) keys. NEAR keeps the operator's `nearRpc`. | never |
 

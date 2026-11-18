@@ -1,14 +1,15 @@
 /**
- * The swap reports (ARCHITECTURE D36, owner 2026-11-13; widened by D41, owner 2026-11-17): POSTs to cp0x's swap-web
- * proxy (`<API>/api/v2/swap-web/…`) that feed cp0x's swap statistics — a message per swap in its swaps chat and a
- * daily summary.
+ * The swap reports (ARCHITECTURE D36, owner 2026-11-13; widened by D41, owner 2026-11-17, and D43, owner 2026-11-18):
+ * POSTs to cp0x's swap-web proxy (`<API>/api/v2/swap-web/…`) that feed cp0x's swap statistics — a message per swap in
+ * its swaps chat and a daily summary.
  * - `/sent`, once per swap this browser sends: the venue, the two networks' CAIP-2 ids, wallet | deposit, the two
- *   tokens' symbols, the amount in, expected and minimum out — amounts to 3 significant figures (roundUnits) — its
- *   value in USD by the page's prices (3 significant figures too), the slippage, and a random report id (`statsId`,
- *   drawn by the store's write that counted the swap: not the swap's id, not the wallet's). No address, hash or time.
+ *   tokens' symbols, the amount in, expected and minimum out — exact (D43) — its value in USD by the page's prices,
+ *   the slippage, the paying address (a QR deposit's: its refund address) and the recipient (D43), and a random
+ *   report id (`statsId`, drawn by the store's write that counted the swap: not the swap's id, not the wallet's).
+ *   No hash or time.
  * - `/done`, once it is stuck (it may still end) and once it ends: the outcome, and for a delivered swap what actually
- *   arrived (received.ts, rounded the same), how far that is from the expected amount in bps and whether it fell
- *   under the minimum — both worked out here from the exact amounts — and how long it took.
+ *   arrived (received.ts, exact), how far that is from the expected amount in bps and whether it fell under the
+ *   minimum, and how long it took.
  * - `/refused`, for a route refused before signing: the SDK's check (`gate`, with its reason code — never free text)
  *   or the person declining in the wallet (`wallet`). A route refused while quoting is reported once per page.
  * - Only on a Standard page: a build with VITE_CP0X_API, the Standard mode, not demo (pageConnection's plan). Public,
@@ -45,6 +46,8 @@ export interface SentEvent extends LegacySentEvent {
   minOut: string;
   usdIn?: number;
   slippageBps?: number;
+  sender?: string;
+  recipient?: string;
 }
 
 export interface DoneEvent {
@@ -65,8 +68,6 @@ export interface RefusedEvent {
 }
 
 export const SENT_TIMEOUT_MS = 5_000;
-/** Significant figures every amount keeps (D41). */
-export const SIG_FIGS = 3;
 
 /** A report id: 16 random bytes, base64url (22 characters). */
 export function newStatsId(): string {
@@ -77,19 +78,14 @@ export function newStatsId(): string {
     .replace(/=+$/, "");
 }
 
-/** Base units → a decimal string kept to 3 significant figures, half up: 1234567890n at 6 decimals → "1230". */
-export function roundUnits(value: bigint, decimals: number): string {
-  if (value <= 0n) return "0";
-  const extra = value.toString().length - SIG_FIGS;
-  if (extra > 0) {
-    const unit = 10n ** BigInt(extra);
-    value = (value / unit + (value % unit >= unit / 2n ? 1n : 0n)) * unit;
-  }
-  return unitsToDecimal(value.toString(), decimals);
-}
+/** Base units → the exact decimal string (D43): 1234567890n at 6 decimals → "1234.56789". */
+export const exactUnits = (value: bigint, decimals: number): string => unitsToDecimal((value > 0n ? value : 0n).toString(), decimals);
 
-/** A USD figure to 3 significant figures. */
-export const roundUsd = (v: number): number => Number(v.toPrecision(SIG_FIGS));
+/** An address as cp0x takes it (its chain's spelling: letters, digits, `:._-`, 2–128); anything else is left out. */
+export const reportAddress = (a: string): string | undefined => (/^[A-Za-z0-9:._-]{2,128}$/.test(a) ? a : undefined);
+
+/** Who paid: the wallet of `evm:0x…`, or a QR deposit's refund address (`deposit:<refund>`). */
+const payer = (r: SwapRecord): string => r.accountId.slice(r.accountId.indexOf(":") + 1);
 
 /** A token symbol as cp0x takes it (letters, digits, `.$_+-₮`, ≤ 16): an imported token's odd symbol is trimmed. */
 export const reportSymbol = (s: string): string => s.replace(/[^\p{L}\p{N}.$_+\-₮]/gu, "").slice(0, 16) || "token";
@@ -109,6 +105,8 @@ function routeOf(venue: string, fromChain: string, toChain: string): {venue: str
   return {venue, from: from.caip2, to: to.caip2};
 }
 
+const pick = <K extends string>(k: K, v: string | undefined): Partial<Record<K, string>> => (v === undefined ? {} : ({[k]: v} as Record<K, string>));
+
 /** What is sent for `r`: its report, or the old count for a record from before report ids; null for an unlisted one. */
 export function sentEvent(r: SwapRecord): SentEvent | LegacySentEvent | null {
   const route = routeOf(r.provider, r.fromChain, r.toChain);
@@ -120,11 +118,13 @@ export function sentEvent(r: SwapRecord): SentEvent | LegacySentEvent | null {
     ...base,
     tokenIn: reportSymbol(r.fromSymbol),
     tokenOut: reportSymbol(r.toSymbol),
-    amountIn: roundUnits(BigInt(r.amountIn), r.fromDecimals),
-    expectedOut: roundUnits(BigInt(r.expectedOut), r.toDecimals),
-    minOut: roundUnits(BigInt(r.minOut), r.toDecimals),
-    ...(r.usdIn !== undefined && r.usdIn > 0 ? {usdIn: roundUsd(r.usdIn)} : {}),
+    amountIn: exactUnits(BigInt(r.amountIn), r.fromDecimals),
+    expectedOut: exactUnits(BigInt(r.expectedOut), r.toDecimals),
+    minOut: exactUnits(BigInt(r.minOut), r.toDecimals),
+    ...(r.usdIn !== undefined && r.usdIn > 0 && r.usdIn <= 1e10 ? {usdIn: r.usdIn} : {}),
     ...(r.slippageBps !== undefined ? {slippageBps: Math.round(r.slippageBps)} : {}),
+    ...pick("sender", reportAddress(payer(r))),
+    ...pick("recipient", reportAddress(r.recipient)),
   };
 }
 
@@ -180,7 +180,7 @@ export async function doneEvent(r: SwapRecord, report: OutcomeReport, received: 
   const diff = expected > 0n ? Number(((got - expected) * 10_000n) / expected) : null;
   return {
     ...event,
-    actualOut: roundUnits(got, r.toDecimals),
+    actualOut: exactUnits(got, r.toDecimals),
     ...(diff !== null ? {diffBps: Math.min(1_000_000, Math.max(-10_000, diff))} : {}),
     belowMin: got < BigInt(r.minOut),
   };

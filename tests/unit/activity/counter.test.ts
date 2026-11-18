@@ -95,7 +95,7 @@ describe("what is sent", () => {
     expect(init.headers).toEqual({"content-type": "text/plain;charset=UTF-8"});
     expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(SENT_TIMEOUT_MS).toBe(5_000);
-    // No address, amount, hash or id anywhere in what goes out.
+    // The old count: no address, amount, hash or id anywhere in what goes out.
     const out = `${url} ${String(init.body)}`;
     for (const secret of ["0x8ba1", "TXYZ", "25000000", "0xh", "awk1"]) expect(out).not.toContain(secret);
   });
@@ -246,6 +246,8 @@ describe("when: once per swap, at the moment it reads as sent", () => {
         expectedOut: "0.000000000000000001",
         minOut: "0.000000000000000001",
         slippageBps: 50,
+        sender: "0xme",
+        recipient: "0xme",
       },
     ]);
     expect(getSwaps().find((r) => r.localId === id)?.statsId).toBe((bodies()[0] as {id: string}).id);
