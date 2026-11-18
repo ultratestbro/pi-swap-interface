@@ -152,7 +152,7 @@ QR payer instead (BTC, ZEC…, TON without a TON wallet): ports.execute.issueDep
 ### 3.5 Track
 
 ```
-activity tracker (leader tab via navigator.locks "cp0x-swap-tracker"): duePolls every 5 s while visible, all on visibilitychange
+activity tracker (leader tab via navigator.locks "cp0x-swap-tracker"): duePolls every 5 s, hidden too (D42), all on visibilitychange
   → swap.swapStatus(trackId ?? id, fromChain) → applyStatus | pollFailed → store (IndexedDB) → BroadcastChannel → every tab
   → settle: invalidate react-query ["bal"]
   → a QR deposit first seen (depositSeen): `counted` → Standard only: one POST <API>/api/v2/swap-web/sent (D36)
@@ -1704,6 +1704,18 @@ the summary.
   per kind, the outcome's figures, refusal classes and the once-per-page rule), `received.test.ts` (each network's
   reading), `counter.test.ts` (D36's timing and dedupe, now with the richer body), e2e `standard.spec.ts` (one `/sent`
   with exactly the report's keys, no recipient, ≤ 3 significant figures; none in Public).
+
+**D42 — Unfinished swaps are tracked in a hidden tab too (owner, 2026-11-18).** The first live report (0x, ETH → USDC
+on Ethereum) was mined 3 s after the broadcast but read as completed ~2.5 min later: the tracker polled only while
+the tab was visible (the mobile app's semantics, ported as `appActive`), and the person had switched to another app
+(Chrome on macOS hides a fully covered window). The status, the swap's message in the swaps chat and its duration all
+waited for the return.
+- **Rule.** The tracker's 5 s tick runs whether or not the tab is visible; inflight.ts's schedule (10 s fresh → 30 s
+  after 10 min → 2 min after 2 h, failures backing off) still decides what is due, and only unfinished swaps ever
+  are, so a tab with none asks nothing. The browser throttles a hidden tab's timers on its own (Chrome: at most once a
+  minute after ~5 minutes hidden). Coming back still re-checks everything at once (`visibilitychange`).
+- **Unchanged.** Quote refreshes stay visible-only (useRoutes); one tab per browser polls (the Web Lock leader).
+- **Tests.** `tests/unit/activity/tracker.test.ts` (a hidden leader tab still polls a due swap on its tick).
 
 ## 5. Conventions
 

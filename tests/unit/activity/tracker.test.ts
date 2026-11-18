@@ -110,6 +110,28 @@ describe("useSwapTracker / useActivity / useSwap", () => {
     unmount();
   });
 
+  it("a hidden tab still polls a due swap on its tick, so it ends on time (D42)", async () => {
+    vi.useFakeTimers({shouldAdvanceTime: true});
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    try {
+      await loadSwaps();
+      saveSwap(rec("awk1.lifi.hidden", {createdAt: Date.now()}));
+      status.fn.mockResolvedValue({status: "pending", transactions: []});
+      const qc = new QueryClient();
+      const wrapper = ({children}: {children: ReactNode}) => createElement(QueryClientProvider, {client: qc}, children);
+      const {unmount} = renderHook(() => activityPort.useSwapTracker(), {wrapper});
+      // Mount checks everything once; the swap is still pending.
+      await waitFor(() => expect(status.fn).toHaveBeenCalledWith("awk1.lifi.hidden", "eip155:1"));
+      status.fn.mockResolvedValue({status: "completed", transactions: []});
+      await vi.advanceTimersByTimeAsync(15_000);
+      await waitFor(() => expect(getSwaps().find((r) => r.id === "awk1.lifi.hidden")?.status).toBe("completed"));
+      unmount();
+    } finally {
+      visibility.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it("with Web Locks only the lock holder polls; the next tab takes over when it unmounts", async () => {
     await loadSwaps();
     saveSwap(rec("awk1.lifi.lead", {createdAt: Date.now()}));

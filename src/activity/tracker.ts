@@ -1,7 +1,8 @@
 /**
  * Follows every unfinished swap until it lands (mobile lib/swap/tracker.ts, web: ui-port.md §4.8): loads the
  * persisted list, polls `getSwap2Status` on the schedule inflight.ts sets (10 s fresh → 2 min old, backing off on
- * errors) while the tab is visible, re-checks everything when the tab comes back, and refreshes balances
+ * errors) — a hidden tab too (D42: the browser slows its timers, to once a minute after a few minutes), so a swap
+ * ends on time while the person looks elsewhere — re-checks everything when the tab comes back, and refreshes balances
  * (react-query `["bal"]`) when a swap's status moves. One tab per browser polls — the holder of the Web Lock
  * `cp0x-swap-tracker`; the others render what BroadcastChannel brings. Without Web Locks every tab polls.
  * There is no backend: incidents go to the console only.
@@ -103,9 +104,8 @@ export function useSwapTracker(): void {
     } else {
       void run(true);
     }
-    const timer = setInterval(() => {
-      if (appActive()) void run();
-    }, TICK_MS);
+    // Hidden too (D42): only unfinished swaps are due, so an idle tab asks nothing.
+    const timer = setInterval(() => void run(), TICK_MS);
     const onVisible = () => {
       if (appActive()) void run(true);
     };
