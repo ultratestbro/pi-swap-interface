@@ -24,7 +24,7 @@
  *   neither is asked at all.
  * - Public chosen in Settings never contacts cp0x, not even for health, and leaves LI.FI for the live quote.
  * - The swap counter (D36): a swap the wallet broadcasts (a TronLink payer through NEAR Intents, fakeTron.ts) posts
- *   exactly one `/sent` with venue and networks only, never again after a reload; in Public no swap posts anything.
+ *   exactly one `/sent` with no address, never again after a reload; in Public no swap posts anything.
  * Settings names what goes through cp0x each time.
  *
  * CORS: while routing is on, Playwright answers every preflight itself and echoes back whatever headers were asked

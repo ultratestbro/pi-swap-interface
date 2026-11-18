@@ -644,7 +644,7 @@ geo-blocking or screening; zero fee options everywhere.
   recipient, calldata and transaction in the browser exactly as in the other modes. The proxy never sees a wallet key
   and signs nothing; the wallet signs only after the in-page gate (D10). cp0x does see, in Standard, the quote
   requests and RPC calls it carries (amounts, addresses, the viewer's IP) — Settings says so — and, once per swap
-  sent, which venue and networks it used, nothing more (D36).
+  sent, its report (D36, D41).
 - **Third parties.** Public/Custom: exactly the venues, RPCs (Custom: the viewer's own first), price APIs, (only
   while a Tron wallet is connected) the runtime `tronApi` hosts — publicnode, then TronGrid — for its balances and its
   payments' reference block, broadcast and receipt, TonAPI once a TON wallet is connected (balances, the jetton wallet
@@ -1123,7 +1123,7 @@ daily cron (its `docs/swap-web-proxy.md` §8): per-UTC-day counts of venue × di
   `referrerPolicy: "no-referrer"`, a 5 s timeout. The answer is never read and every error is swallowed: a 400, a
   429, a 503 or an API without the route changes nothing for anyone.
 - **Said where it applies.** Settings → Connection, under the mode, while Standard is picked: "Counts each swap you
-  send — venue and networks only, no address or amount." (`settings-standard-count`); its info panel and the README's
+  send — no address." (`settings-standard-count`); its info panel and the README's
   privacy lines and modes table say the same.
 - **Tests.** `tests/unit/activity/counter.test.ts` (the exact body and request; never in Public, Custom, demo or a
   build without the API; once at the broadcast, not at the first step, the handover or a poll; a stop before it

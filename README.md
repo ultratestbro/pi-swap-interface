@@ -42,7 +42,7 @@ your browser still checks every quote and transaction (see [Connection modes](#c
   Vercel Web Analytics (no cookies; the page's path only, never the `#` part; off with Do Not Track or Global
   Privacy Control); IPFS, `npx`, Docker and self-hosted copies have no analytics at all. Logos are bundled, never
   hotlinked. Only the hosted interface's Standard mode calls a cp0x server, and only to carry quote requests and RPC
-  calls and to count each swap you send (the venue and the two networks, nothing else); Public and Custom mode, and
+  calls and to count each swap you send; Public and Custom mode, and
   every copy built without `VITE_CP0X_API`, never do. Your swap history stays in your browser.
 - **Self-custodial.** Your keys stay in your wallet. The page asks the wallet to sign a transaction only after it
   has checked that the transaction matches the route you reviewed (see [Security model](#security-model)).
@@ -63,8 +63,7 @@ cp0x controls only this interface. What it guarantees:
   TON Connect's list server and analytics are never contacted: the list and its icons come with the page) — the
   hosted interface also its own host's page-view count — plus,
   in the hosted interface's Standard mode only, cp0x's proxy in place of the venues and RPCs it carries, and one
-  anonymous count per swap you send: the venue and the two networks (say `near_intents`, Tron → Base, wallet), no
-  address, amount, transaction or time. Public and Custom mode never contact a cp0x server, and a copy built without
+  anonymous count per swap you send, no address, transaction or time. Public and Custom mode never contact a cp0x server, and a copy built without
   `VITE_CP0X_API` contains no cp0x address at all.
 - Before your wallet is asked to sign, the page checks every transaction against the route you reviewed. A
   transaction that does not match is refused.
@@ -208,7 +207,7 @@ applies after a reload.
 
 | mode | where requests go | contacts cp0x |
 |---|---|---|
-| **Standard** (hosted build only, its default) | LI.FI, Relay, NEAR Intents, Jupiter, Symbiosis, Fynd, 0x and Across while cp0x holds a key for them, the RPCs cp0x serves, and THORChain's vault check go through cp0x's swap-web proxy, which adds cp0x's keys. Everything else goes direct, the NEAR RPC included, and so does Across's relayer fee quote (`app.across.to`, keyless). Fynd, 0x and Across exist only here. Each swap you send is counted once — the venue and the two networks only, no address or amount. | yes, as a transport, plus the swap count |
+| **Standard** (hosted build only, its default) | LI.FI, Relay, NEAR Intents, Jupiter, Symbiosis, Fynd, 0x and Across while cp0x holds a key for them, the RPCs cp0x serves, and THORChain's vault check go through cp0x's swap-web proxy, which adds cp0x's keys. Everything else goes direct, the NEAR RPC included, and so does Across's relayer fee quote (`app.across.to`, keyless). Fynd, 0x and Across exist only here. Each swap you send is counted once — no address. | yes, as a transport, plus the swap count |
 | **Public** | Keyless public endpoints, straight from your browser. | never |
 | **Custom** | Public, plus your own RPCs per EVM network and for Solana (tried first; the public ones stay as the fallback, unless you turn on "Use only my RPCs") and your own LI.FI, Relay, NEAR Intents (1Click JWT), Jupiter and Symbiosis (partner) keys. NEAR keeps the operator's `nearRpc`. | never |
 

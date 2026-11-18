@@ -22,7 +22,7 @@ const MODE_TEXT: Readonly<Record<ConnectionMode, string>> = {
 };
 
 /** Standard's swap counter (D36), said where the mode is picked. */
-const STANDARD_COUNT = "Counts each swap you send — venue and networks only, no address or amount.";
+const STANDARD_COUNT = "Counts each swap you send — no address.";
 
 /** The Custom key fields, labelled with the venue's own word for its key. */
 const KEY_FIELDS: readonly {field: keyof VenueKeys; label: string}[] = [
@@ -155,7 +155,7 @@ export function ConnectionSection({
           ) : null}
           <Text as="p" variant="meta" color="var(--dim)" data-testid="settings-connection-privacy">
             {standard
-              ? "Standard sends quote requests and RPC calls through cp0x's server, which adds cp0x's API keys, and tells it once per swap you send which venue and networks it used — no address, amount or transaction. It never sees your wallet keys and signs nothing; every transaction is still checked in this browser. Public and Custom never contact cp0x. The NEAR RPC is asked directly in every mode."
+              ? "Standard sends quote requests and RPC calls through cp0x's server, which adds cp0x's API keys, and tells it once per swap you send which venue and networks it used — no address or transaction. It never sees your wallet keys and signs nothing; every transaction is still checked in this browser. Public and Custom never contact cp0x. The NEAR RPC is asked directly in every mode."
               : "This copy of the app has no Standard mode and never contacts cp0x."}
           </Text>
         </div>
