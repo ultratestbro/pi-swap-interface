@@ -55,6 +55,18 @@ function tabs(clock = {now: T0}) {
 
 afterEach(() => vi.useRealTimers());
 
+describe("a record's route (D47)", () => {
+  it("keeps a venue's routeId through storage; a malformed one is dropped, the record kept", () => {
+    const fast = rec("awk1.cctp.a", {provider: "cctp", routeId: "fast"});
+    const [back] = parseStored(JSON.stringify([fast], (_k, v: unknown) => (typeof v === "bigint" ? v.toString() : v)));
+    expect(back).toMatchObject({id: "awk1.cctp.a", routeId: "fast"});
+    const bad = parseStored(JSON.stringify([{...fast, amountIn: "1", expectedOut: "1", minOut: "1", routeId: "a b"}]));
+    expect(bad).toHaveLength(1);
+    expect("routeId" in bad[0]!).toBe(false);
+    expect("routeId" in rec("awk1.lifi.x")).toBe(false);
+  });
+});
+
 describe("swap store", () => {
   it("persists the JSON string under cp0x-swaps-v1 and loads it back in a new tab", async () => {
     const {make, kv} = tabs();

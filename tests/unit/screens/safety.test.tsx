@@ -101,7 +101,7 @@ describe("preview prices before a wallet (D7)", () => {
     history.replaceState(null, "", `/#/?demoWallets=none&pay=${ARB_USDC}&receive=${BASE_USDC}&amount=250`);
     resetDemoState();
     render(wrap(<SwapScreen />));
-    const row = await screen.findByTestId("swap-route-cctp", {}, SLOW);
+    const row = await screen.findByTestId("swap-route-cctp-fast", {}, SLOW);
     expect(row.textContent).toContain("Preview");
     expect(row.textContent).toContain("≈");
     expect(screen.queryByTestId("swap-min-received")).toBeNull();
@@ -125,11 +125,11 @@ describe("preview prices before a wallet (D7)", () => {
     history.replaceState(null, "", `/#/?demoWallets=none&pay=${ARB_USDC}&receive=${BASE_USDC}&amount=250`);
     resetDemoState();
     render(wrap(<SwapScreen />));
-    await screen.findByTestId("swap-route-cctp", {}, SLOW);
+    await screen.findByTestId("swap-route-cctp-fast", {}, SLOW);
     fireEvent.click(cta());
     fireEvent.click(await screen.findByTestId("swap-connect-io.metamask"));
     await waitFor(() => expect(cta().textContent).toMatch(/^Review via /), SLOW);
-    expect(screen.getByTestId("swap-route-cctp").textContent).not.toContain("Preview");
+    expect(screen.getByTestId("swap-route-cctp-fast").textContent).not.toContain("Preview");
     expect(screen.getByTestId("swap-min-received")).toBeTruthy();
   });
 

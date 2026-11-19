@@ -26,7 +26,7 @@ export interface DepositDeps {
 
 /** A live deposit address held to the reviewed route, saved as a tracked record before it is returned. */
 export async function issueDeposit(input: IssueDepositInput, deps: DepositDeps = {}): Promise<DepositTicket> {
-  const {req, provider, minOut} = input;
+  const {req, provider, routeId, minOut} = input;
   const {from, to} = req;
   const now = deps.now ?? Date.now;
   // Preview prices (D7) carry no addresses of the user's: never a deposit address. The type already forbids it.
@@ -41,9 +41,10 @@ export async function issueDeposit(input: IssueDepositInput, deps: DepositDeps =
   if (minOut <= 0n) throw new SwapReviewMismatch("the review has no minimum to hold the route to");
 
   const router = deps.router ? deps.router(provider) : appRouter().only(provider);
-  const params = {...quoteParams(req), dry: false, minAmountOut: minOut.toString()};
+  // The reviewed route of a venue with several (D47), asked by its routeId: never the venue's default in its place.
+  const params = {...quoteParams(req), dry: false, minAmountOut: minOut.toString(), ...(routeId !== undefined ? {routeId} : {})};
   const set = await router.getQuotes(params, {requireImmediateExecution: true});
-  const q = set?.quotes.find((x) => x.provider === provider) ?? null;
+  const q = set?.quotes.find((x) => x.provider === provider && x.routeId === routeId) ?? null;
   if (!q) {
     const detail = router.lastRejections.join("; ");
     throw new Swap2QuoteError(`swap2: no route available for the requested pair${detail ? ` :: ${detail}` : ""}`);
@@ -87,6 +88,7 @@ export async function issueDeposit(input: IssueDepositInput, deps: DepositDeps =
         id,
         accountId: `deposit:${req.refundAddress}`,
         provider: q.provider,
+        ...(routeId !== undefined ? {routeId} : {}),
         from: recordSide(from),
         to: recordSide(to),
         amountIn: sourceAmount,

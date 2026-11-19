@@ -11,6 +11,8 @@ import type {QuoteRequest, WebRoute} from "./routes";
 /** Copied from mobile lib/swap/gate.ts (756b115): the route the user confirmed on the review. */
 export interface ReviewedSwap {
   provider: string;
+  /** The venue's route the review showed (D47: CCTP "fast" | "standard"); the engine executes exactly it. Absent: the venue has one. */
+  routeId?: string;
   fromChain: string;
   /** Source token contract; null = native. */
   fromContract: string | null;
@@ -174,6 +176,8 @@ export interface StartSwapInput {
 export interface IssueDepositInput {
   req: QuoteRequest;
   provider: string;
+  /** The venue's route the review showed (D47), when it has several. */
+  routeId?: string;
   /** executionFloor(route.minDestAmount) — the minimum the review showed. */
   minOut: bigint;
 }

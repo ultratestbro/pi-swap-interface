@@ -408,9 +408,9 @@ describe("a slippage change keeps the screen's shape (D32)", () => {
 describe("review", () => {
   it("shows the execution floor as 'Minimum received'; confirming keeps the review until the swap is broadcast", async () => {
     renderScreen(`#/?pay=${ARB_USDC}&receive=${BASE_USDC}&amount=250`);
-    await waitFor(() => expect(cta().textContent).toBe("Review via Circle CCTP"), SLOW);
+    await waitFor(() => expect(cta().textContent).toBe("Review via Circle CCTP · Fast"), SLOW);
     const summaryMin = screen.getByTestId("swap-min-received").textContent;
-    const rowLabel = screen.getByTestId("swap-route-cctp").getAttribute("aria-label")!;
+    const rowLabel = screen.getByTestId("swap-route-cctp-fast").getAttribute("aria-label")!;
     fireEvent.click(cta());
     const sheet = await screen.findByTestId("swap-review-body");
     const min = within(sheet).getByTestId("swap-review-min");

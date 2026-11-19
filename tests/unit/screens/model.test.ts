@@ -25,7 +25,7 @@ import {
 import {agoLabel, plainUnits} from "../../../src/screens/labels";
 import {sceneFrom, scenePreset} from "../../../src/screens/scenes";
 import {addCustomRpc, connectionStatusText, removeCustomRpc, standardOnlyNote, urlLines} from "../../../src/screens/settings/store";
-import {routesKey, providerName as venueName} from "../../../src/swap";
+import {routeName, routesKey, providerName as venueName} from "../../../src/swap";
 import {parseSlippage, slippageText} from "../../../src/screens/form/FormParts";
 import {depositUri} from "../../../src/screens/review/DepositPanel";
 
@@ -579,6 +579,33 @@ describe("the list as shown while it is re-quoted (D32)", () => {
     // The same with nothing streamed before the failure (the lazy provider load, a final view that threw).
     const early = foldShownList(foldShownList(foldShownList(null, live(50), port(base)), live(100), port(null, true)), live(100), port(null, false, {error: "boom"}));
     expect(heldRoutes(early, routesKey(live(100)))).toEqual(["cctp", "near_intents", "relay"]);
+  });
+
+  it("a venue's several routes (D47: CCTP Fast and Standard) are rows of their own, held and replaced each by its routeKey", () => {
+    const fast = {...cctp, routeId: "fast"};
+    const standard = {...cctp, routeId: "standard", minDestAmount: 250_000_000n, etaSeconds: 1080, tags: [] as WebRoute["tags"]};
+    const two = round([fast, standard, relay], []);
+    const keys = (x: ShownList) => x.snapshot!.routes.map((r) => (r.routeId ? `${r.provider}/${r.routeId}` : r.provider));
+    let shown = foldShownList(null, live(50), port(two));
+    expect(keys(shown)).toEqual(["cctp/fast", "cctp/standard", "relay"]);
+    // New terms: every row held until its venue answers.
+    shown = foldShownList(shown, live(100), port(round([], two.asked), true));
+    expect(heldRoutes(shown, routesKey(live(100)))).toEqual(["cctp/fast", "cctp/standard", "relay"]);
+    // CCTP answers with both routes: each replaces its own row in place; Relay's stays held.
+    const fast1 = at(fast, 249_900_000n);
+    const standard1 = at(standard, 250_000_000n);
+    shown = foldShownList(shown, live(100), port(round([standard1, fast1], two.asked.filter((p) => p !== "cctp")), true));
+    expect(keys(shown)).toEqual(["cctp/fast", "cctp/standard", "relay"]);
+    expect(shown.snapshot!.routes[0]!.minDestAmount).toBe(249_900_000n);
+    expect(shown.snapshot!.routes[1]!.minDestAmount).toBe(250_000_000n);
+    expect(heldRoutes(shown, routesKey(live(100)))).toEqual(["relay"]);
+    expect(heldAs(heldRoutes(shown, routesKey(live(100))), "cctp/fast", true)).toBeUndefined();
+    // Next time CCTP answers with Fast alone: the Standard row leaves rather than stand in for it.
+    shown = foldShownList(shown, live(50), port(round([], two.asked), true));
+    shown = foldShownList(shown, live(50), port(round([at(fast, 249_800_000n)], two.asked.filter((p) => p !== "cctp")), true));
+    expect(keys(shown)).toEqual(["cctp/fast", "relay"]);
+    // The CTA names the route.
+    expect(ctaState({missing: null, from, balanceProblem: null, routesLoading: false, chosen: standard, providerName: routeName})).toMatchObject({label: "Review via Circle CCTP · Standard"});
   });
 
   it("refusal rows keep their order on screen while the venues answer, whatever the answer order", () => {

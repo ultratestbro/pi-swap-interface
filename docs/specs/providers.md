@@ -84,29 +84,30 @@ and `batch.sh`.
 ## 1. Packages and import paths
 
 ```jsonc
-// package.json — exact pins (re-synced on every AWK bump; last 2026-11-17)
+// package.json — exact pins (re-synced on every AWK bump; last 2026-11-20)
 "dependencies": {
   "@anywalletkit/core": "0.9.0",                       // peer of every provider package
-  "@anywalletkit/protocol-swap2-core": "0.15.0",       // refusal reasons (0.12.0), Permit2 transfers (0.13.0), QuoteParams.sender (0.14.0), etaSeconds may be null (0.15.0)
-  "@anywalletkit/protocol-swap2-router": "0.7.0",      // RouteSet.refusals (0.6.0), keeps ownGasEstimate (0.6.1), nullable fastest (0.7.0)
+  "@anywalletkit/protocol-swap2-core": "0.16.0",       // refusal reasons (0.12.0), Permit2 transfers (0.13.0), QuoteParams.sender (0.14.0), etaSeconds may be null (0.15.0), re-quote after a failed dry run + Permit2 allowances kept + the revert named (0.16.0)
+  "@anywalletkit/protocol-swap2-router": "0.7.2",      // RouteSet.refusals (0.6.0), keeps ownGasEstimate (0.6.1), nullable fastest + routes per provider (0.7.0)
   "@anywalletkit/swap2-assets": "0.3.0",
-  "@anywalletkit/protocol-swap2-near-intents": "0.3.8",
-  "@anywalletkit/protocol-swap2-lifi": "0.8.4",            // EVM → Solana checked (§4.2)
-  "@anywalletkit/protocol-swap2-thorchain": "0.4.4",       // any ActiveVault confirms (§4.3)
-  "@anywalletkit/protocol-swap2-cctp": "0.5.8",
-  "@anywalletkit/protocol-swap2-usdt0": "0.5.4",           // Legacy Mesh into TON and Tron (§4.5)
-  "@anywalletkit/protocol-swap2-chainflip": "0.4.10",
-  "@anywalletkit/protocol-swap2-relay": "0.1.5",           // its fee itemized only when priced on the source chain
-  "@anywalletkit/protocol-swap2-uniswap": "0.4.8",
-  "@anywalletkit/protocol-swap2-curve": "0.1.7",     // added 2026-11-12 (§4.17)
-  "@anywalletkit/protocol-swap2-fynd": "0.3.0",      // added 2026-11-12, Standard only (§4.14); TychoRouterV3 redeployed 2026-11-16 + Arc, Elysium (0.3.0)
-  "@anywalletkit/protocol-swap2-wrap": "0.4.5",
-  "@anywalletkit/protocol-swap2-jupiter": "0.3.11",
-  "@anywalletkit/protocol-swap2-symbiosis": "0.1.5",   // default on since 2026-11-12
-  "@anywalletkit/protocol-swap2-balancer": "0.3.10",    // default on since 2026-11-12
-  "@anywalletkit/protocol-swap2-omniston": "0.5.10",    // default on since 2026-11-12 (lazy chunk); rev2 TON minter since 0.5.5
-  "@anywalletkit/protocol-swap2-0x": "0.1.2",          // added 2026-11-15, Standard only (§4.18)
-  "@anywalletkit/protocol-swap2-across": "0.1.1",      // added 2026-11-15, Standard only (§4.19)
+  "@anywalletkit/protocol-swap2-near-intents": "0.3.10",
+  "@anywalletkit/protocol-swap2-lifi": "0.8.6",            // EVM → Solana checked (§4.2)
+  "@anywalletkit/protocol-swap2-thorchain": "0.4.6",       // any ActiveVault confirms (§4.3)
+  "@anywalletkit/protocol-swap2-cctp": "0.6.0",            // two routes, routeId "fast" / "standard" (D47)
+  "@anywalletkit/protocol-swap2-usdt0": "0.5.6",           // Legacy Mesh into TON and Tron (§4.5)
+  "@anywalletkit/protocol-swap2-chainflip": "0.4.12",
+  "@anywalletkit/protocol-swap2-relay": "0.1.7",           // its fee itemized only when priced on the source chain
+  "@anywalletkit/protocol-swap2-uniswap": "0.4.10",
+  "@anywalletkit/protocol-swap2-curve": "0.1.9",     // added 2026-11-12 (§4.17)
+  "@anywalletkit/protocol-swap2-fynd": "0.3.2",      // added 2026-11-12, Standard only (§4.14); TychoRouterV3 redeployed 2026-11-16 + Arc, Elysium (0.3.0)
+  "@anywalletkit/protocol-swap2-wrap": "0.4.7",
+  "@anywalletkit/protocol-swap2-jupiter": "0.3.13",
+  "@anywalletkit/protocol-swap2-symbiosis": "0.1.7",   // default on since 2026-11-12
+  "@anywalletkit/protocol-swap2-balancer": "0.3.12",    // default on since 2026-11-12
+  "@anywalletkit/protocol-swap2-omniston": "0.5.12",    // default on since 2026-11-12 (lazy chunk); rev2 TON minter since 0.5.5
+  "@anywalletkit/protocol-swap2-0x": "0.1.4",          // added 2026-11-15, Standard only (§4.18)
+  "@anywalletkit/protocol-swap2-across": "0.1.3",      // added 2026-11-15, Standard only (§4.19)
+  "@anywalletkit/protocol-swap2-stargate": "0.1.2",    // added 2026-11-17 (§4.20)
   "buffer": "6.0.3",                                   // only for the Omniston chunk's global polyfill
   "viem": "2.57.10"                                    // the version cp0x-elysium resolves; dedupe with wagmi
 }

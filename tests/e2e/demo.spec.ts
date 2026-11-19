@@ -248,6 +248,23 @@ test("review sheet opens with the guaranteed minimum and fits without scrolling"
   await shot(page, info, "review");
 });
 
+test("CCTP's two routes (D47): Fast and Standard are rows of their own, and the one picked is the one reviewed", async ({page}, info) => {
+  await page.goto("./#/?demo=1&pay=arbitrum:0xaf88d065e77c8cc2239327c5edb3a432268e5831&receive=base:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&amount=250");
+  await routesSettled(page);
+  // Fast ranks best: Standard pays out a little more (no Circle fee) but takes ~18 minutes — within the tie band.
+  await expect(page.getByTestId("swap-review")).toHaveText("Review via Circle CCTP · Fast");
+  if (isPhone(info)) await page.getByTestId("swap-more-routes").click();
+  const list = isPhone(info) ? page.getByTestId("swap-route-sheet") : page;
+  await expect(list.getByTestId("swap-route-cctp-fast")).toContainText("Circle CCTP · Fast");
+  await expect(list.getByTestId("swap-route-cctp-standard")).toContainText("Circle CCTP · Standard");
+  await list.getByTestId("swap-route-cctp-standard").click();
+  if (isPhone(info) && (await page.getByTestId("swap-route-sheet").isVisible())) await page.keyboard.press("Escape");
+  await expect(page.getByTestId("swap-review")).toHaveText("Review via Circle CCTP · Standard");
+  await page.getByTestId("swap-review").click();
+  await expect(page.getByTestId("swap-review-route")).toContainText("Circle CCTP · Standard");
+  await expectNoHorizontalScroll(page);
+});
+
 test("the heavier review — an approval and another recipient — still fits at 1280×900, Confirm in view once confirmed", async ({page}, info) => {
   test.skip(info.project.name !== "desktop", "one desktop height");
   await page.setViewportSize({width: 1280, height: 900});

@@ -61,8 +61,8 @@ const reviewed: ReviewedSwap = {
   nativeFee: 0n,
 };
 
-/** An in-process LI.FI-shaped venue that records what it was asked. */
-function venue(): CrossChainProvider & {asked: QuoteParams[]} {
+/** An in-process LI.FI-shaped venue that records what it was asked; `routeOf` names the route each quote is of (D47). */
+function venue(routeOf?: (params: QuoteParams) => string): CrossChainProvider & {asked: QuoteParams[]} {
   const asked: QuoteParams[] = [];
   return {
     name: "lifi",
@@ -74,6 +74,7 @@ function venue(): CrossChainProvider & {asked: QuoteParams[]} {
       asked.push(params);
       return {
         provider: "lifi",
+        ...(routeOf ? {routeId: routeOf(params)} : {}),
         intentId: "lifi:8453:8453",
         depositAddress: "",
         depositMemo: null,
@@ -92,7 +93,7 @@ function venue(): CrossChainProvider & {asked: QuoteParams[]} {
   };
 }
 
-function rig(o: {from?: SwapToken; to?: SwapToken; r?: ReviewedSwap; decimals?: number} = {}) {
+function rig(o: {from?: SwapToken; to?: SwapToken; r?: ReviewedSwap; decimals?: number; routeOf?: (params: QuoteParams) => string} = {}) {
   const sends: {to?: string; data?: string; value?: bigint}[] = [];
   const wallet = {
     getAddresses: async () => [ME],
@@ -112,7 +113,7 @@ function rig(o: {from?: SwapToken; to?: SwapToken; r?: ReviewedSwap; decimals?: 
     simulateTransaction: async () => ({ok: true, gas: 50_000n, returnData: "0x"}),
   };
   const signer: EvmSourceSigner = {family: "evm", wallet, pub: pub as EvmSourceSigner["pub"], chain: base, rpcUrls: [], owner: ME, transport: "injected"};
-  const v = venue();
+  const v = venue(o.routeOf);
   const router = new CrossChainRouter([v]);
   const run = () => executeSwap({from: o.from ?? FROM, to: o.to ?? TO, reviewed: o.r ?? reviewed, signer}, {router: () => router, evmReads: () => reads});
   return {run, sends, venue: v, tokenInfo};
@@ -169,11 +170,30 @@ describe("executeSwap into an imported destination", () => {
   });
 });
 
+describe("a venue's reviewed route (D47)", () => {
+  it("every quote of the execution asks the reviewed routeId, and the swap goes out", async () => {
+    const {run, sends, venue: v} = rig({r: {...reviewed, routeId: "standard"}, routeOf: (p) => p.routeId ?? "fast"});
+    await run();
+    expect(v.asked.length).toBeGreaterThan(0);
+    expect(v.asked.every((p) => p.routeId === "standard")).toBe(true);
+    expect(sends).toHaveLength(2);
+  });
+  it("a quote of another route is refused before anything is sent (the router already; the gate behind it, gate.test)", async () => {
+    const {run, sends} = rig({r: {...reviewed, routeId: "standard"}, routeOf: () => "fast"});
+    await expect(run()).rejects.toThrow(/no route available|route moved/);
+    expect(sends).toHaveLength(0);
+  });
+});
+
 describe("engineConfig", () => {
   const base0 = {fromChain: "eip155:8453", router: new CrossChainRouter([]), reviewExecution: () => {}};
   it("allows unlisted tokens only for an execution that has one", () => {
     expect("allowUnlistedTokens" in engineConfig(base0)).toBe(false);
     expect(engineConfig({...base0, unlisted: true}).allowUnlistedTokens).toBe(true);
     expect(Object.keys(engineConfig({...base0, unlisted: true}))).not.toContain("accountChain");
+  });
+  it("carries the reviewed routeId of a venue with several routes (D47), and none otherwise", () => {
+    expect(engineConfig({...base0, routeId: "standard"}).routeId).toBe("standard");
+    expect("routeId" in engineConfig(base0)).toBe(false);
   });
 });

@@ -16,7 +16,7 @@ import type {Ref} from "react";
 import type {SwapToken} from "../../contracts/domain";
 import type {RouteRejection, WebRoute} from "../../contracts/routes";
 import {formatAmount, formatUsd} from "../../catalog";
-import {etaLabel, gasBound, providerName, routeFloor, venueTrustText} from "../../swap";
+import {etaLabel, gasBound, providerName, routeFloor, routeKey, routeName, venueTrustText} from "../../swap";
 import {Badge, CopyButton, Icon, ProviderLogo, Spinner, Text, VenueBadge, useBreakpoint} from "../../ui";
 import type {Held, NotForPair} from "../form/model";
 import s from "./Routes.module.css";
@@ -67,7 +67,9 @@ export function routeMeta(r: WebRoute): string {
 export const PREVIEW_TAG_TEXT = "Priced for a sample address — your own quote loads once your wallet or address is in, and can differ slightly";
 
 export function RouteRow({route, to, payChainName, selected, tabbable, trustLine, preview, held, onSelect, ref}: RouteRowProps) {
-  const name = providerName(route.provider);
+  // "Circle CCTP · Standard": a venue's routes each by name (D47); the trust badge speaks of the venue.
+  const name = routeName(route.provider, route.routeId);
+  const venue = providerName(route.provider);
   // The expected amount, as the receive card shows it, and under it the minimum the swap enforces (the execution
   // floor), the same number the summary and the review show — not the venue's own minimum, a margin above it.
   const out = formatAmount(route.destAmount.toString(), to.decimals);
@@ -81,12 +83,13 @@ export function RouteRow({route, to, payChainName, selected, tabbable, trustLine
       tabIndex={tabbable ? 0 : -1}
       aria-label={`${name}, ${preview ? "preview, " : ""}about ${out} ${to.symbol}, at least ${min} ${to.symbol}${etaPart(route.etaSeconds) ? `, ${etaPart(route.etaSeconds)}` : ""}${held ? `, ${held}` : ""}`}
       aria-busy={held === "updating" || undefined}
-      data-testid={`swap-route-${route.provider}`}
+      data-testid={`swap-route-${route.routeId === undefined ? route.provider : `${route.provider}-${route.routeId}`}`}
       data-provider={route.provider}
+      data-route={routeKey(route)}
       className={held ? `${s.row} ${s.updating}` : s.row}
       onClick={onSelect}
     >
-      <ProviderLogo provider={route.provider} size={32} name={name} />
+      <ProviderLogo provider={route.provider} size={32} name={venue} />
       <span className={s.middle}>
         <span className={s.line1}>
           <Text variant="listTitle" lines={1} className={s.name}>
@@ -94,7 +97,7 @@ export function RouteRow({route, to, payChainName, selected, tabbable, trustLine
           </Text>
           {route.tags.includes("best") ? <Badge kind="best" /> : null}
           {route.tags.includes("fastest") ? <Badge kind="fastest" /> : null}
-          <VenueBadge trust={route.trust} providerName={name} chainName={payChainName} />
+          <VenueBadge trust={route.trust} providerName={venue} chainName={payChainName} />
           {preview ? (
             <Badge kind="warning" title={PREVIEW_TAG_TEXT}>
               Preview

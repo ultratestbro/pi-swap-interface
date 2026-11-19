@@ -8,6 +8,8 @@ import type {Execution, WebRoute} from "../contracts/routes";
 import type {QuoteGasLike} from "./gas";
 import {executionFloor, floorToleranceBps, FLOOR_TOLERANCE_BPS} from "./math";
 import {toRouteView, type QuoteLike} from "./routes";
+
+export {routeKey} from "./routeKey";
 import {venueTrust} from "./venues";
 
 /**
@@ -64,7 +66,7 @@ function tonSwapSteps(q: QuoteLike): string[] | undefined {
  * `slippageBps`: the setting it was quoted at, which sets its execution margin (floorBps).
  */
 export function toWebRoute(
-  q: QuoteLike & Partial<Pick<Quote, "depositMemo">>,
+  q: QuoteLike & Partial<Pick<Quote, "depositMemo" | "routeId">>,
   source?: {chain: string; isToken: boolean},
   gasUsd?: (q: QuoteGasLike) => number,
   native?: {usd: number; decimals: number},
@@ -76,6 +78,7 @@ export function toWebRoute(
   const steps = tonSwapSteps(q);
   return {
     ...view,
+    ...(q.routeId !== undefined ? {routeId: q.routeId} : {}),
     execution: executionOf(q),
     hasMemo: typeof q.depositMemo === "string" && q.depositMemo !== "",
     trust: venueTrust(q.provider),

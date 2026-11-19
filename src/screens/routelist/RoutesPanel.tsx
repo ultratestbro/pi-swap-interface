@@ -16,7 +16,7 @@
 import {useRef, useState, type KeyboardEvent, type ReactNode} from "react";
 import type {SwapToken} from "../../contracts/domain";
 import type {RefusalCategory, RouteRejection, RoutesState} from "../../contracts/routes";
-import {providerName} from "../../swap";
+import {providerName, routeKey} from "../../swap";
 import {Button, Card, Icon, IconButton, Sheet, SheetHeader, Skeleton, Spinner, Text} from "../../ui";
 import {plural} from "../labels";
 import {useNow} from "../useNow";
@@ -155,8 +155,10 @@ export interface RouteListProps {
   loading: boolean;
   to: SwapToken;
   payChainName: string;
+  /** The chosen route's routeKey. */
   chosen: string | null;
-  onSelect(provider: string): void;
+  /** A route picked, by routeKey (D47: "cctp/fast"). */
+  onSelect(key: string): void;
   /** Enter on a route = the CTA. */
   onSubmit(): void;
   /** The "Didn't quote" group starts open (demo scene, no-route state). */
@@ -202,11 +204,12 @@ export function RouteList({model, loading, to, payChainName, chosen, onSelect, o
     const step = e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : 0;
     if (!step || empty) return;
     e.preventDefault();
-    const i = Math.max(0, routes.findIndex((r) => r.provider === chosen));
+    const i = Math.max(0, routes.findIndex((r) => routeKey(r) === chosen));
     const next = routes[(i + step + routes.length) % routes.length]!;
-    onSelect(next.provider);
-    // provider ids are plain identifiers ([a-z0-9_]), safe inside a quoted attribute selector
-    group.current?.querySelector<HTMLElement>(`[data-provider="${next.provider}"]`)?.focus();
+    onSelect(routeKey(next));
+    // By the row's own data-route, not a selector: a routeId is the venue's string (printable ASCII, quotes included).
+    const key = routeKey(next);
+    [...(group.current?.querySelectorAll<HTMLElement>("[data-route]") ?? [])].find((el) => el.dataset.route === key)?.focus();
   };
 
   return (
@@ -219,20 +222,23 @@ export function RouteList({model, loading, to, payChainName, chosen, onSelect, o
       ) : null}
       {routes.length ? (
         <div ref={group} role="radiogroup" aria-label="Routes" className={s.list} onKeyDown={onKeyDown}>
-          {routes.map((r, i) => (
-            <RouteRow
-              key={r.provider}
-              route={r}
-              to={to}
-              payChainName={payChainName}
-              selected={r.provider === chosen}
-              tabbable={chosen ? r.provider === chosen : i === 0}
-              trustLine={trustLine}
-              preview={preview}
-              held={heldAs(held, r.provider, loading)}
-              onSelect={() => onSelect(r.provider)}
-            />
-          ))}
+          {routes.map((r, i) => {
+            const k = routeKey(r);
+            return (
+              <RouteRow
+                key={k}
+                route={r}
+                to={to}
+                payChainName={payChainName}
+                selected={k === chosen}
+                tabbable={chosen ? k === chosen : i === 0}
+                trustLine={trustLine}
+                preview={preview}
+                held={heldAs(held, k, loading)}
+                onSelect={() => onSelect(k)}
+              />
+            );
+          })}
         </div>
       ) : null}
       {quoting.length ? (
@@ -271,8 +277,9 @@ export interface RoutesPanelProps {
   model: RouteListModel;
   from: SwapToken | undefined;
   to: SwapToken | undefined;
+  /** The chosen route's routeKey. */
   chosen: string | null;
-  onSelect(provider: string): void;
+  onSelect(key: string): void;
   onSubmit(): void;
   refusedOpen?: boolean;
   /** Phone: the route sheet (controlled, so a demo scene can open it). */
@@ -285,7 +292,7 @@ export function RoutesPanel(p: RoutesPanelProps) {
   const now = useNow();
   const {state, model, to, from} = p;
   const status = routesStatus(p.hint === null, state, model, providerName, now);
-  const chosenRoute = model.routes.find((r) => r.provider === p.chosen);
+  const chosenRoute = model.routes.find((r) => routeKey(r) === p.chosen);
   const more = model.routes.length - (chosenRoute ? 1 : 0);
   const quoting = stillQuoting(model).length;
   const moreLabel =
@@ -315,7 +322,7 @@ export function RoutesPanel(p: RoutesPanelProps) {
               selected
               tabbable
               preview={preview}
-              held={heldAs(model.held, chosenRoute.provider, state.loading)}
+              held={heldAs(model.held, routeKey(chosenRoute), state.loading)}
               onSelect={() => p.onSheet?.(true)}
             />
           </div>

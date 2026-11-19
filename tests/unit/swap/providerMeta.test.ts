@@ -4,7 +4,7 @@ import {AUDITED_OMNISTON_EVM_ORDER_PROTOCOLS} from "@anywalletkit/protocol-swap2
 import {CF_VAULTS} from "@anywalletkit/protocol-swap2-chainflip/config";
 import {DEFAULT_ON_PROVIDERS, STANDARD_ONLY_PROVIDERS} from "../../../src/swap/providers";
 import {ZEROEX_CHAINS, ZEROEX_PERMIT2} from "@anywalletkit/protocol-swap2-0x/chains";
-import {OMNISTON_ORDER_PROTOCOL, PERMIT2_VENUES, PROVIDER_NAMES, TWO_PHASE, orderSpender, providerName, venueScope} from "../../../src/swap/providerMeta";
+import {OMNISTON_ORDER_PROTOCOL, PERMIT2_VENUES, PROVIDER_NAMES, TWO_PHASE, orderSpender, providerName, routeName, venueScope} from "../../../src/swap/providerMeta";
 import {VENUE_TRUST, venueTrustText} from "../../../src/swap/venues";
 
 describe("Omniston order protocols", () => {
@@ -49,6 +49,14 @@ describe("names and venue facts", () => {
     expect(providerName("across")).toBe("Across");
     expect(providerName("mystery")).toBe("mystery");
   });
+  it("names a venue's routes (D47): CCTP's Fast and Standard; a venue's only route, or one it doesn't name, reads as the venue", () => {
+    expect(routeName("cctp", "fast")).toBe("Circle CCTP · Fast");
+    expect(routeName("cctp", "standard")).toBe("Circle CCTP · Standard");
+    expect(routeName("cctp")).toBe("Circle CCTP");
+    expect(routeName("stargate", "taxi")).toBe("Stargate");
+    expect(routeName("cctp", "toString")).toBe("Circle CCTP");
+  });
+
   it("only CCTP needs a claim on arrival", () => {
     expect([...TWO_PHASE]).toEqual(["cctp"]);
   });

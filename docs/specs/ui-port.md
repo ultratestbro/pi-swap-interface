@@ -5,9 +5,10 @@ for that commit. Paths starting with `apps/mobile/` and `packages/shared/` are u
 the installed copies under `~/cp0x-elysium/node_modules/.pnpm/@anywalletkit+*/node_modules/@anywalletkit/*`
 (router 0.5.4, core 0.10.3, swap2-assets 0.3.0, lifi 0.7.0, relay 0.1.0, symbiosis 0.1.0, near-intents 0.3.3,
 thorchain 0.3.5, chainflip 0.4.5, cctp 0.5.3, usdt0 0.4.4, omniston 0.5.5, uniswap 0.4.3, balancer 0.3.5, wrap 0.4.0,
-fynd 0.2.8, jupiter 0.3.6; `@anywalletkit/core` 0.8.0). This repo now pins (2026-11-17) router 0.7.0, core 0.15.0,
-lifi 0.8.4, relay 0.1.5, symbiosis 0.1.5, near-intents 0.3.8, thorchain 0.4.4, chainflip 0.4.10, cctp 0.5.8, usdt0
-0.5.4, omniston 0.5.10, uniswap 0.4.8, balancer 0.3.10, curve 0.1.7, wrap 0.4.5, fynd 0.3.0, jupiter 0.3.11,
+fynd 0.2.8, jupiter 0.3.6; `@anywalletkit/core` 0.8.0). This repo now pins (2026-11-20) router 0.7.2, core 0.16.0,
+lifi 0.8.6, relay 0.1.7, symbiosis 0.1.7, near-intents 0.3.10, thorchain 0.4.6, chainflip 0.4.12, cctp 0.6.0, usdt0
+0.5.6, omniston 0.5.12, uniswap 0.4.10, balancer 0.3.12, curve 0.1.9, wrap 0.4.7, fynd 0.3.2, jupiter 0.3.13,
+0x 0.1.4, across 0.1.3, stargate 0.1.2,
 wallet-solana 0.6.3; what that changed for the UI is in the refusal table (§4.2: every module now classifies its
 refusals, swap2-core 0.12.0, and a text the table doesn't know is worded by that reason) and the "Not for this pair"
 lines (§5.5).
@@ -197,7 +198,7 @@ pair quotes in parallel, dry; routes appear as each answers; refresh every 30 s)
 hands the picked route to the review in memory (`setSwapDraft`). Quotes need no funds.
 
 State (L97-143): `picked: Pair|null` (frozen once balances load, L109-111 — a portfolio refresh must not swap the
-token under the user), `text` (amount field), `selected` provider, `sheet: "pay"|"receive"|null`, `toOther`,
+token under the user), `text` (amount field), `selected` route (web: its routeKey, `cctp/fast`, D47), `sheet: "pay"|"receive"|null`, `toOther`,
 `recipientText`. Derived: `amountIn = parseUnits(text, from.decimals)`, `slippageBps = autoSlippageBps(from.symbol,
 to.symbol)`, `problem = balanceProblem(amountIn, balance)`, `recipientCheck = swapRecipient(...)`,
 `recipientIsContract` (EVM `eth_getCode` ≠ "0x", react-query, staleTime 300 s, L128-135), `req` (null until amount>0
@@ -560,7 +561,7 @@ export interface RouteView {
 toRouteView(q, source?: {chain; isToken}, gasUsd?: (q: QuoteGasLike) => number): RouteView   // L69-93
 orderRoutes(routes)      // best first, then relativeValue, then larger min, then faster      L96-104
 tagRoutes(routes)        // tags for a non-auction list (requote)                            L111-122
-keepSelection(routes, selected): string | null   // keep the user's pick if still listed, else best  L125-128
+keepSelection(routes, selected): string | null   // keep the user's pick if still listed, else best  L125-128 (web: by routeKey, D47)
 friendlyReason(provider, reason, pay?: PaySide); parseRejections(rejections, pay?)            L169-188
 isStale(route, now?, marginMs = 5_000)                                                         L191-193
 ```

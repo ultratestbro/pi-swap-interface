@@ -1822,6 +1822,33 @@ free sources only ("ключ возьми от vaulty", "по адресу де�
   address, the header links). Checked live on 2026-11-20 against a real wallet in Public mode (Chromium): 13 networks
   in 7 s.
 
+**D47 — A venue's several routes: CCTP Fast and Standard (owner, 2026-11-20).** CCTP 0.6.0 (swap2-core 0.16, router
+0.7.2) quotes two routes for one pair: Fast Transfer (Circle's fee, under a minute) and Standard (no fee; it waits for
+the source's finality — about 15–19 minutes from Ethereum and the L2s, hours from Linea). The owner: "у cctp теперь
+есть 2 режима, нужно добавить" — both offered, the user picks.
+- **A route is its venue and its routeId.** `WebRoute.routeId` ("fast", "standard"; Stargate names its one Taxi route
+  "taxi"), and `routeKey(route)` = `cctp/fast` (the venue alone without one) is what the list selects, keeps
+  (`keepSelection`) and holds while re-quoted (D32's fold and `held` go by route); each route is a row of its own,
+  named by `routeName` ("Circle CCTP · Standard"; a venue's only route reads as the venue), and so in the CTA, the
+  summary, the review and the swap's status.
+- **Quoting.** The router asks a venue's `getQuotes` in a dry round without a routeId and holds each of its quotes to
+  a routeId. `delegate` forwards it; the round's observer wraps it like `getQuote` (skips, back-offs, the rate-limit
+  watch, the settled row); a wrapper of `getQuote` alone drops it, so nothing reaches the venue around a gap, gate or
+  cool-down. CCTP lists Standard next to Fast only when it pays out more. Ranking stays the router's: within its tie
+  band (5 bps) the faster wins, so Fast is the default where Circle's fee is about 1 bp.
+- **The reviewed route, exactly.** The review re-quotes `{provider, routeId}` (`requoteRoute`: the router then calls
+  `getQuote` with that routeId — never the venue's list, whose best, the free Standard, would replace a picked Fast);
+  `ReviewedSwap.routeId` goes into the engine config (`RouterSwap2Config.routeId`: every quote of the execution, the
+  re-quote after an approval included, asks that route; the router already refuses a quote of another), and
+  checkPlanBrowser refuses a plan whose routeId isn't the reviewed one. A QR deposit asks its routeId the same way.
+  Records keep `routeId` (to show; tracking is by venue). Swap statistics stay by venue (the server's body is strict).
+- **Demo**: CCTP lists both (Fast 1.5 bps, 45 s; Standard free, 18 min), ranked with the router's tie band.
+- **Tests.** `tests/unit/swap/engine.test.ts` (a round lists each route; the review re-quotes exactly the reviewed
+  one; a route no longer offered is gone, not replaced), `providerWrappers.test.ts` (getQuotes forwarded, never past a
+  getQuote wrapper), `routes.test.ts` (selection by key), `screens/model.test.ts` (the fold by route),
+  `execute/gate.test.ts` and `execute/imported.test.ts` (the plan and every quote of the execution are the reviewed
+  route), `activity/store.test.ts` (records keep it), e2e `demo.spec.ts` (both rows; Standard picked is reviewed).
+
 ## 5. Conventions
 
 - **TypeScript**: strict, `noUncheckedIndexedAccess`, `verbatimModuleSyntax` (use `import type`). Named exports

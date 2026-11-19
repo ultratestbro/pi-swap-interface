@@ -36,14 +36,14 @@ export {
 } from "./engine";
 
 // ── names / venue facts ──
-export {LISTED_ONLY_VENUES, PERMIT2_VENUES, PROVIDER_NAMES, TWO_PHASE, orderSpender, providerName, venueScope, type ScopeSide} from "./providerMeta";
+export {LISTED_ONLY_VENUES, PERMIT2_VENUES, PROVIDER_NAMES, TWO_PHASE, orderSpender, providerName, routeName, venueScope, type ScopeSide} from "./providerMeta";
 export {sourceParams} from "./source";
 export {FYND_LICENSE_URL, VENUE_TRUST, fyndRouterNotice, venueTrust, venueTrustText} from "./venues";
 
 // ── route list ──
 export {friendlyReason, isStale, keepSelection, orderRoutes, parseRejections, tagRoutes, toRouteView, type QuoteLike} from "./routes";
 export {classifyRefusal, redactRaw, type ClassifiedRefusal} from "./refusals";
-export {executionOf, routeFloor, toWebRoute} from "./webRoute";
+export {executionOf, routeFloor, routeKey, toWebRoute} from "./webRoute";
 export {DEBOUNCE_MS, PREVIEW_DEBOUNCE_MS, PREVIEW_STALE_MS, REFRESH_MS, createUseRoutes, routesKey, type QuoteRoutesFn, type UseRoutesOptions} from "./useRoutes";
 // Only the predicate leaves the module: the sample addresses stay inside the engine's preview round (D7).
 export {canPreview} from "./preview";

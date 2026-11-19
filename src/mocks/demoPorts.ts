@@ -244,6 +244,8 @@ interface Venue {
   hasMemo?: boolean;
   /** Answers with this refusal (in the app's words, src/mocks DEMO_REFUSALS) instead of a quote, or null to quote. */
   refuses?: (req: Priced) => Omit<RouteRejection, "provider"> | null;
+  /** Its several routes (D47: CCTP's Fast and Standard), each its own row with its own cost and ETA. */
+  routes?: readonly {routeId: string; costBps: number; eta: number}[];
 }
 
 /** What a demo price depends on: a live request and a preview alike. */
@@ -273,7 +275,22 @@ const VENUES: readonly Venue[] = [
   // No WETH among the demo tokens: listed under "Not for this pair" everywhere.
   {provider: "wrap", serves: () => false, costBps: 0, slipBps: 0, eta: 12, delayMs: 200, trust: "contracts", execution: "calldata"},
   {provider: "usdt0", serves: (a, b) => cross(a, b) && evm(a) && evm(b) && a.symbol.startsWith("USDT") && b.symbol.startsWith("USDT"), costBps: 2, slipBps: 0, eta: 60, delayMs: 400, trust: "contracts", execution: "calldata"},
-  {provider: "cctp", serves: (a, b) => cross(a, b) && evm(a) && evm(b) && a.symbol === "USDC" && b.symbol === "USDC", costBps: 1.5, slipBps: 0, eta: 45, delayMs: 300, trust: "contracts", execution: "calldata", spender: "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d"},
+  // Fast Transfer (Circle's fee, under a minute) and Standard (no fee, the source's finality: about 18 minutes from an L2).
+  {
+    provider: "cctp",
+    serves: (a, b) => cross(a, b) && evm(a) && evm(b) && a.symbol === "USDC" && b.symbol === "USDC",
+    costBps: 1.5,
+    slipBps: 0,
+    eta: 45,
+    delayMs: 300,
+    trust: "contracts",
+    execution: "calldata",
+    spender: "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d",
+    routes: [
+      {routeId: "fast", costBps: 1.5, eta: 45},
+      {routeId: "standard", costBps: 0, eta: 1080},
+    ],
+  },
   {provider: "thorchain", serves: (a, b) => cross(a, b) && a.family === "btc" && evm(b), costBps: 25, slipBps: 100, eta: 900, delayMs: 900, trust: "own-node", execution: "deposit", hasMemo: true},
   {
     provider: "chainflip",
@@ -324,7 +341,9 @@ const VENUES: readonly Venue[] = [
 
 const priceOf = (x: SwapToken, prices: PriceMap) => x.priceUsd ?? prices[x.symbol] ?? prices[x.catalogSymbol];
 
-function quoteOf(v: Venue, req: Priced, prices: PriceMap, now: number): WebRoute {
+function quoteOf(venue: Venue, req: Priced, prices: PriceMap, now: number, routeId?: string): WebRoute {
+  const route = routeId !== undefined ? venue.routes?.find((x) => x.routeId === routeId) : undefined;
+  const v = route ? {...venue, costBps: route.costBps, eta: route.eta} : venue;
   const {from, to, amountIn} = req;
   const pIn = priceOf(from, prices) ?? 1;
   const pOut = priceOf(to, prices) ?? 1;
@@ -336,6 +355,7 @@ function quoteOf(v: Venue, req: Priced, prices: PriceMap, now: number): WebRoute
   const gasUsd = evm(from) ? 0.02 + (v.spender && from.contract ? 0.01 : 0) : null;
   return {
     provider: v.provider,
+    ...(route ? {routeId: route.routeId} : {}),
     sourceAmount: amountIn,
     destAmount: dest,
     minDestAmount: min,
@@ -355,12 +375,19 @@ function quoteOf(v: Venue, req: Priced, prices: PriceMap, now: number): WebRoute
   };
 }
 
-/** Ranked like the auction: relativeValue vs the best minimum, "best" = top value, "fastest" = lowest eta when another route. */
+/** The router's tie band (gas.ts ROUTER_RANKING): routes this close to the best minimum are the same price. */
+const DEMO_TIE_BAND = 0.0005;
+
+/**
+ * Ranked like the auction: relativeValue vs the best minimum, "best" = top value — the faster among those within the
+ * tie band (CCTP's Fast over its free Standard, D47) — "fastest" = lowest eta when another route.
+ */
 function rank(routes: WebRoute[]): WebRoute[] {
   if (!routes.length) return routes;
   const top = routes.reduce((m, r) => (r.minDestAmount > m ? r.minDestAmount : m), 0n);
   const scored = routes.map((r) => ({...r, relativeValue: top > 0n ? Number((r.minDestAmount * 10_000n) / top) / 10_000 : 0, tags: [] as WebRoute["tags"]}));
-  scored.sort((a, b) => b.relativeValue - a.relativeValue || a.etaSeconds - b.etaSeconds);
+  const tier = (r: WebRoute) => (r.relativeValue >= 1 - DEMO_TIE_BAND ? 1 : r.relativeValue);
+  scored.sort((a, b) => tier(b) - tier(a) || a.etaSeconds - b.etaSeconds || b.relativeValue - a.relativeValue);
   const fastest = scored.reduce((f, r) => (r.etaSeconds < f.etaSeconds ? r : f));
   scored[0]!.tags = ["best"];
   if (fastest !== scored[0] && scored.length > 1) fastest.tags = ["fastest"];
@@ -427,6 +454,7 @@ function useDemoRoutes(r: RoutesRequest | null, prices: PriceMap): RoutesState &
               pending = pending.filter((p) => p !== v.provider);
               const refusal = skip ?? v.refuses?.(req);
               if (refusal) rejections.push({provider: v.provider, ...refusal});
+              else if (v.routes) routes.push(...v.routes.map((x) => quoteOf(v, req, prices, now, x.routeId)));
               else routes.push(quoteOf(v, req, prices, now));
               const done = pending.length === 0;
               setSlot({
@@ -464,7 +492,8 @@ function useDemoRequote(draft: SwapDraft | null, prices: PriceMap): RequoteState
     if (!draft) return;
     const t = setTimeout(() => {
       const v = VENUES.find((x) => x.provider === draft.route.provider);
-      const route = v && !v.refuses?.(draft.req) ? {...quoteOf(v, draft.req, prices, Date.now()), tags: draft.route.tags} : {...draft.route, validUntilMs: Date.now() + 60_000};
+      const route =
+        v && !v.refuses?.(draft.req) ? {...quoteOf(v, draft.req, prices, Date.now(), draft.route.routeId), tags: draft.route.tags} : {...draft.route, validUntilMs: Date.now() + 60_000};
       setFresh({for: draft, route});
     }, 600);
     const every = setInterval(() => setTick((x) => x + 1), 30_000);

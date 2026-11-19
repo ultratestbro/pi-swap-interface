@@ -34,13 +34,13 @@ Pin exact versions (this repo's `package.json`, re-synced on every AWK bump; las
 | package | version | used for |
 |---|---|---|
 | `@anywalletkit/core` | 0.9.0 | `externalSigner`, `UserRejectedError`, `TokenInfo`, `Swap2Options`… (peer of everything) |
-| `@anywalletkit/protocol-swap2-core` | 0.15.0 | engine, types, errors (refusal reasons), `validQuote`, Permit2 (`/util`: `PERMIT2_ADDRESS`, `PERMIT2_TRANSFER_TYPES`, `appendPermit2Signature`) |
-| `@anywalletkit/protocol-swap2-router` | 0.7.0 | `CrossChainRouter` (+ `lastRefusals`), `RouterSwap2Protocol`, `usdValue` |
+| `@anywalletkit/protocol-swap2-core` | 0.16.0 | engine, types, errors (refusal reasons), `validQuote`, Permit2 (`/util`: `PERMIT2_ADDRESS`, `PERMIT2_TRANSFER_TYPES`, `appendPermit2Signature`) |
+| `@anywalletkit/protocol-swap2-router` | 0.7.2 | `CrossChainRouter` (+ `lastRefusals`), `RouterSwap2Protocol` (`routeId`: the reviewed route of a provider, D47), `usdValue` |
 | `@anywalletkit/swap2-assets` | 0.3.0 | catalog (`ccAsset`, `ccAssetByToken`, `CC_SOURCE_CHAINS`) |
 | `@anywalletkit/tx-preview-evm` | 0.5.1 | dependency of the engine (`decodeCall`) |
 | `@anywalletkit/wallet-evm` | 0.8.1 | `WalletAccountReadOnlyEvm` (reads, quotes, simulation) |
 | `@anywalletkit/wallet-solana` | 0.6.3 | `WalletAccountSolana`, `serializedGuardFromExecution` |
-| provider modules | lifi 0.8.4, relay 0.1.5, symbiosis 0.1.5, near-intents 0.3.8, chainflip 0.4.10, cctp 0.5.8, thorchain 0.4.4, usdt0 0.5.4, uniswap 0.4.8, curve 0.1.7, wrap 0.4.5, balancer 0.3.10, fynd 0.3.0, 0x 0.1.2 and across 0.1.1 (Standard only), jupiter 0.3.11, omniston 0.5.10 (2026-11-17: dependency bumps, plus fynd's redeployed TychoRouterV3 and Arc / Elysium; swap2-core 0.15 lets `etaSeconds` be `null`, read as an unknown ETA like 0) | the providers spec covers these |
+| provider modules | lifi 0.8.6, relay 0.1.7, symbiosis 0.1.7, near-intents 0.3.10, chainflip 0.4.12, cctp 0.6.0, thorchain 0.4.6, usdt0 0.5.6, uniswap 0.4.10, curve 0.1.9, wrap 0.4.7, balancer 0.3.12, fynd 0.3.2, 0x 0.1.4 and across 0.1.3 (Standard only), jupiter 0.3.13, omniston 0.5.12, stargate 0.1.2 (2026-11-20: CCTP lists Fast and Standard as two routes, D47; swap2-core 0.16 re-quotes once after a failed dry run and keeps a Permit2 allowance) | the providers spec covers these |
 | `viem` | one version, `2.57.x` (the version mobile resolves) | swap2-core needs `^2.45.0`. Dedupe with wagmi (`pnpm.overrides`) |
 
 Exact imports. These are the subpath exports in each `package.json`:
@@ -253,6 +253,11 @@ export async function requoteRoute(req: QuoteRequest, provider: string, prices?:
   return {route: null, reason: parseRejections(router.lastRejections, req.from)[0]?.reason ?? "no route right now"};
 }
 ```
+
+The web's `requoteRoute` takes the route (`{provider, routeId}`, D47): a venue with several routes (CCTP's Fast and
+Standard) is asked for the reviewed one by its routeId — the router then calls `getQuote` with it — and the quote is
+found by venue and routeId, never the venue's best in its place. The execution carries the same routeId
+(`RouterSwap2Config.routeId`) and checkPlanBrowser refuses a plan of another.
 
 With real providers, `providersFor` and `providerServesRoute` (`M/swap/providers.ts:217-255`) are not needed for routing. Each provider's own `supportsRoute` decides. Keep `PROVIDER_NAMES`, `TWO_PHASE` and `orderSpender` (`providers.ts:35-101`) for the UI.
 

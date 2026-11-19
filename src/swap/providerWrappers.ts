@@ -30,6 +30,9 @@ export function delegate(p: CrossChainProvider, overrides: Partial<Omit<CrossCha
     trackIntent: p.trackIntent.bind(p),
   };
   const optional: Partial<CrossChainProvider> = {
+    // core 0.16: a venue's several routes for a list (CCTP Fast and Standard, D47). The router asks it in dry rounds
+    // without a routeId and then holds every quote of the venue to a routeId — getQuote's included.
+    getQuotes: p.getQuotes?.bind(p),
     preflightDeposit: p.preflightDeposit?.bind(p),
     notifyDeposit: p.notifyDeposit?.bind(p),
     registerSignedOrder: p.registerSignedOrder?.bind(p),
@@ -53,6 +56,8 @@ export function delegate(p: CrossChainProvider, overrides: Partial<Omit<CrossCha
   };
   // Only members the original has: `"x" in provider` must agree with the original (the engine checks some by presence).
   for (const [k, v] of Object.entries(optional)) if (v !== undefined) Object.assign(out, {[k]: v});
+  // A wrapper of getQuote alone (a gap, a gate, a cool-down) drops getQuotes: the router would ask the venue past it.
+  if (overrides.getQuote && !("getQuotes" in overrides)) delete out.getQuotes;
   return Object.assign(out, overrides);
 }
 

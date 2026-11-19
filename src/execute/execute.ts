@@ -7,7 +7,9 @@
  *   - EVM smart-contract accounts are refused; the wallet's account must be the reviewed refund address (EVM,
  *     Solana, Tron, TON; NEAR: the account the wallet still lists);
  *   - a Tron wallet only signs: its account builds, checks and broadcasts the transfer (accounts/tron.ts);
- *   - the engine gets the GATED account only, `router: appRouter().only(provider)`, `reviewExecution` = checkPlanBrowser
+ *   - the engine gets the GATED account only, `router: appRouter().only(provider)` and the reviewed `routeId` of a venue
+ *     with several routes (D47: every quote of the execution, re-quotes included, asks exactly that route; the gate
+ *     refuses a plan of another), `reviewExecution` = checkPlanBrowser
  *     → planWrites → arm (re-armed on a requoted plan), and never `accountChain` / `skipAccountChainCheck` (the live
  *     wallet chain is the identity the engine checks) — engineConfig below is the only place the config is built;
  *   - a TON payer's engine also gets `decodeTonBody` and `tonGasCeiling` (D35): the decoder keeps the exact BoC of a
@@ -98,6 +100,8 @@ export function engineConfig(o: {
   reviewExecution: (plan: Swap2ExecutionPlan) => void | Promise<void>;
   onExecutionPhase?: (phase: ExecutionPhase, detail?: ExecutionPhaseDetail) => void;
   decodeTonBody?: (boc: string) => TonBody;
+  /** The reviewed route of a venue with several (D47): the router asks the venue for exactly it, never its default. */
+  routeId?: string;
   /**
    * A side is a token imported by its address (D39): swap2-core 0.14.0's `allowUnlistedTokens`, set for that execution
    * only — a catalog pair runs with exactly the config it always had. The engine then reads the source's decimals with
@@ -111,6 +115,7 @@ export function engineConfig(o: {
     reviewExecution: o.reviewExecution,
     onExecutionPhase: (phase, detail) => o.onExecutionPhase?.(phase, detail),
     nativeFeeCeiling,
+    ...(o.routeId !== undefined ? {routeId: o.routeId} : {}),
     ...(o.decodeTonBody ? {decodeTonBody: o.decodeTonBody, tonGasCeiling: TON_BODY_GAS} : {}),
     ...(o.unlisted ? {allowUnlistedTokens: true} : {}),
   };
@@ -230,6 +235,7 @@ export async function executeSwap(input: ExecuteSwapInput, deps: ExecuteDeps = {
       engineConfig({
         fromChain: reviewed.fromChain,
         router,
+        ...(reviewed.routeId !== undefined ? {routeId: reviewed.routeId} : {}),
         reviewExecution: arm,
         ...(input.onPhase ? {onExecutionPhase: input.onPhase} : {}),
         ...(tonBody ? {decodeTonBody: tonBody.decodeTonBody} : {}),

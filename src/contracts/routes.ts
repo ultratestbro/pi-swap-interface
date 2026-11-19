@@ -49,6 +49,12 @@ export type VenueTrust = "contracts" | "own-node" | "provider-api";
 
 /** A route as the web shows it. Built next to toRouteView: execution = txRequest ? "calldata" : "deposit". */
 export interface WebRoute extends RouteView {
+  /**
+   * The route within its venue when the venue offers several (D47): CCTP's "fast" and "standard" (core 0.16 `routeId`;
+   * Stargate names its one Taxi route "taxi"). Absent for a venue with one route. A route is `routeKey(route)` on
+   * screen, and the review and the swap ask the venue for exactly this route, never its default.
+   */
+  routeId?: string;
   execution: Execution;
   /** depositMemo is non-empty — QR-only payers can't attach one (BTC OP_RETURN), so the row shows as refused for them. */
   hasMemo: boolean;
@@ -70,6 +76,9 @@ export interface WebRoute extends RouteView {
    */
   floorBps?: number;
 }
+
+/** Which route: its venue, and its route within the venue when it offers several (D47). */
+export type RoutePick = Pick<WebRoute, "provider" | "routeId">;
 
 /** The token being paid, for minimums a venue states in its base units (mobile routes.ts PaySide). */
 export interface PaySide {

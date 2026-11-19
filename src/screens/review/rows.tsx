@@ -10,7 +10,7 @@ import type {SwapToken} from "../../contracts/domain";
 import type {QuoteRequest, WebRoute} from "../../contracts/routes";
 import type {ReviewRow} from "../../contracts/ui";
 import {formatUsd, shortAddress} from "../../catalog";
-import {FLOOR_TOLERANCE_BPS, PERMIT2_VENUES, TWO_PHASE, etaLabel, formatRate, gasBound, impliedSlippagePct, providerName, rate, routeFloor, usdOf} from "../../swap";
+import {FLOOR_TOLERANCE_BPS, PERMIT2_VENUES, TWO_PHASE, etaLabel, formatRate, gasBound, impliedSlippagePct, providerName, rate, routeFloor, routeName, usdOf} from "../../swap";
 import {ProviderLogo, VenueBadge, venueTrustText} from "../../ui";
 import {bpsLabel} from "../form/FormParts";
 import {amountText} from "../labels";
@@ -45,6 +45,8 @@ export function reviewRows({req, route, from, to, native, slippage}: ReviewRowsI
   const cross = from.caip2 !== to.caip2;
   const name = providerName(route.provider);
   const eta = etaLabel(route.etaSeconds);
+  // The route by its name ("Circle CCTP · Standard", D47); the trust badge and its text speak of the venue.
+  const title = routeName(route.provider, route.routeId);
   const routeNote = [eta === "—" ? null : eta, TWO_PHASE.has(route.provider) && cross ? "claim on arrival" : null].filter(Boolean).join(" · ");
   return [
     {k: "You pay", v: amountText(req.amountIn, from.decimals, from.symbol), ...(payUsd !== undefined ? {note: formatUsd(payUsd)} : {}), testId: "swap-review-pay"},
@@ -65,7 +67,7 @@ export function reviewRows({req, route, from, to, native, slippage}: ReviewRowsI
     {k: "Rate", v: r !== null ? `1 ${from.symbol} = ${formatRate(r)} ${to.symbol}` : "—"},
     {
       k: "Route",
-      v: name,
+      v: title,
       icon: <ProviderLogo provider={route.provider} size={18} />,
       // Who quoted it (contracts, a node, the venue's API) is the badge; what that means, its tooltip on hover and the
       // row's info mark — the badge itself isn't focusable, and touch has no hover.

@@ -171,6 +171,8 @@ export function ReviewSheet({open, draft, tokens, wallets, slippage, onClose, on
     const minOut = routeFloor(route);
     const reviewed: ReviewedSwap = {
       provider: route.provider,
+      // The route the review showed, of a venue with several (D47): the engine executes exactly it.
+      ...(route.routeId !== undefined ? {routeId: route.routeId} : {}),
       fromChain: from.caip2,
       fromContract: from.contract,
       amountIn: req.amountIn,
@@ -220,7 +222,7 @@ export function ReviewSheet({open, draft, tokens, wallets, slippage, onClose, on
     const held = route;
     setPhase({step: "issuing", route: held, ...(renewFrom ? {ticket: renewFrom} : {})});
     try {
-      const ticket = await ports.execute.issueDeposit({req, provider: held.provider, minOut: routeFloor(held)});
+      const ticket = await ports.execute.issueDeposit({req, provider: held.provider, ...(held.routeId !== undefined ? {routeId: held.routeId} : {}), minOut: routeFloor(held)});
       setPhase({step: "deposit", route: held, ticket: auto === "expired" && !renewFrom ? {...ticket, validUntilMs: Date.now() - 1} : ticket});
     } catch (e) {
       setPhase({step: "error", title: "No deposit address", message: swapErrorText(e, from.symbol)});

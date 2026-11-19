@@ -15,65 +15,65 @@ importers:
         specifier: 0.6.1
         version: 0.6.1(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-0x':
-        specifier: 0.1.2
-        version: 0.1.2(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.1.4
+        version: 0.1.4(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-across':
-        specifier: 0.1.1
-        version: 0.1.1(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.1.3
+        version: 0.1.3(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-balancer':
+        specifier: 0.3.12
+        version: 0.3.12(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-cctp':
+        specifier: 0.6.0
+        version: 0.6.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-chainflip':
+        specifier: 0.4.12
+        version: 0.4.12(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core':
+        specifier: 0.16.0
+        version: 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-curve':
+        specifier: 0.1.9
+        version: 0.1.9(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-fynd':
+        specifier: 0.3.2
+        version: 0.3.2(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-jupiter':
+        specifier: 0.3.13
+        version: 0.3.13(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-lifi':
+        specifier: 0.8.6
+        version: 0.8.6(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-near-intents':
         specifier: 0.3.10
         version: 0.3.10(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
-      '@anywalletkit/protocol-swap2-cctp':
-        specifier: 0.5.8
-        version: 0.5.8(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
-      '@anywalletkit/protocol-swap2-chainflip':
-        specifier: 0.4.10
-        version: 0.4.10(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
-      '@anywalletkit/protocol-swap2-core':
-        specifier: 0.15.0
-        version: 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
-      '@anywalletkit/protocol-swap2-curve':
+      '@anywalletkit/protocol-swap2-omniston':
+        specifier: 0.5.12
+        version: 0.5.12(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-relay':
         specifier: 0.1.7
         version: 0.1.7(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
-      '@anywalletkit/protocol-swap2-fynd':
-        specifier: 0.3.0
-        version: 0.3.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
-      '@anywalletkit/protocol-swap2-jupiter':
-        specifier: 0.3.11
-        version: 0.3.11(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
-      '@anywalletkit/protocol-swap2-lifi':
-        specifier: 0.8.4
-        version: 0.8.4(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
-      '@anywalletkit/protocol-swap2-near-intents':
-        specifier: 0.3.8
-        version: 0.3.8(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
-      '@anywalletkit/protocol-swap2-omniston':
-        specifier: 0.5.10
-        version: 0.5.10(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
-      '@anywalletkit/protocol-swap2-relay':
-        specifier: 0.1.5
-        version: 0.1.5(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-router':
-        specifier: 0.7.0
-        version: 0.7.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.7.2
+        version: 0.7.2(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-stargate':
-        specifier: 0.1.0
-        version: 0.1.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.1.2
+        version: 0.1.2(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-symbiosis':
-        specifier: 0.1.5
-        version: 0.1.5(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.1.7
+        version: 0.1.7(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-thorchain':
-        specifier: 0.4.4
-        version: 0.4.4(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.4.6
+        version: 0.4.6(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-uniswap':
-        specifier: 0.4.8
-        version: 0.4.8(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.4.10
+        version: 0.4.10(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-usdt0':
-        specifier: 0.5.4
-        version: 0.5.4(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.5.6
+        version: 0.5.6(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-wrap':
-        specifier: 0.4.5
-        version: 0.4.5(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.4.7
+        version: 0.4.7(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets':
         specifier: 0.3.0
         version: 0.3.0
@@ -217,122 +217,122 @@ packages:
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-0x@0.1.2':
-    resolution: {integrity: sha512-fecfyP30ahQwWpq36rCcKP2YJxjJ3vL9QEJYOLiRW6cOv+hu2dOELuWExuSYR8IzQNgPP1UNdNxwd3GzVl2NTw==}
+  '@anywalletkit/protocol-swap2-0x@0.1.4':
+    resolution: {integrity: sha512-a9DY7khI0vPhWaYWxorxYmA32YCndymPUAPPTxud4uHi/7nRPeRwaRXSpcX6SoeRtxh75mmn33x4DXUgonX4Hw==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-across@0.1.1':
-    resolution: {integrity: sha512-qm1/jkWp55FGQzvHNUXPvaLesgLFnEoEEbzk71Mk2cHA2zMXxxsVKj4SeXy2oL9GO18EHPL8HnFKs9BTM1rnFw==}
+  '@anywalletkit/protocol-swap2-across@0.1.3':
+    resolution: {integrity: sha512-VbfgyPkERbt3lZtLGmACQfrQXLER6fDqaUySMGEUm28Xv6gUFql4nkkQgFQVSCaq5Wkxw+78COHPFMWldgkaDA==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-balancer@0.3.10':
-    resolution: {integrity: sha512-D4du9nzajGOqNoJ2lngH8wmoO/W/O4IT/nbKQhQFiRNlZeXstopcm04p4CKpG8KIqpGUigVEMoJtcrSHUn4Kxw==}
+  '@anywalletkit/protocol-swap2-balancer@0.3.12':
+    resolution: {integrity: sha512-Sskz1tdNpyEUd+0E5DE1/efMJhTX6ElKqJOyaUdzEDs2Pe6bZuHCHsFa+1SqVBeWaUezN1wk477nfiRUCt04ew==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-cctp@0.5.8':
-    resolution: {integrity: sha512-j3iOSUbC65P7fsgARF3nbJauawfFi/ayu/XTjJhrtL4KriTwf2nmhhMJDNWSjrm+UahKd8W0hZHJcS6R0h5OeA==}
+  '@anywalletkit/protocol-swap2-cctp@0.6.0':
+    resolution: {integrity: sha512-2QIUF/JTZLmuCBjfSR22kQeiYd+H30LMVLXwvx26pU1j3QycZU6UGd71BEb2omPbgOhFFeXWTTfv9pRPPVPnqw==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-chainflip@0.4.10':
-    resolution: {integrity: sha512-/ljZsSGBCb8/VVePShFk5p8MVkyew0OZmeL/T/wxCiHQlaD3JgTEZP7rFP4Xr6YSu+COneIFBykz+K/wm/V2Dg==}
+  '@anywalletkit/protocol-swap2-chainflip@0.4.12':
+    resolution: {integrity: sha512-IPb7nz2XEH3xQLqCnPeivXCcIr7Ae9SFSKOBUUnbNlc/UW/2+F2w3iEl8WpgZ+9q1C5yct1o8ltktXBTIhg45A==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-core@0.15.0':
-    resolution: {integrity: sha512-Txo8UB0c+CD52FUwuupXS7RHZfYI3tjc7vNFuOp8tHyA+O0QLkox8dOD5cmWRQ5ooH2F7mpuYk3U3RdkgxCeeg==}
+  '@anywalletkit/protocol-swap2-core@0.16.0':
+    resolution: {integrity: sha512-rAq0yZ7yWqFSwOq7kgt951YJ6ZjOR73PUOSaRRQcaGjZD/m6rct1o31mF3sti4bupOyum4CiyWS8I7ztey0waw==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-curve@0.1.7':
-    resolution: {integrity: sha512-9MxOi+iAHn88aUoo8fEhemJKISRhmUyswtZzYxmOHxmPQH1DmnPPU1iUGfPVPblEH6PDHn0OAOyYVOhG3DKxjg==}
+  '@anywalletkit/protocol-swap2-curve@0.1.9':
+    resolution: {integrity: sha512-onVzSK0u/PxfbhK9CS+zTwh1aIFLVYxV534v85Z9GNU+cKzx9GXBxHWfiYbEn5zcDV+2sPxUHHNX3pCw+a5HIA==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-fynd@0.3.0':
-    resolution: {integrity: sha512-EWXnkQCYWT1+YeFviMl1aIzjC7/A41r7bkZKrDhqCckeBod4P3LtSJ5xsvJlBRrSBR21YuUl32bvO2mo6WOcMQ==}
+  '@anywalletkit/protocol-swap2-fynd@0.3.2':
+    resolution: {integrity: sha512-Sgkxc6L4yuq569nhKu/t4BSyLSjkDn5C+J9V/ahFFyaDtEFj36AIppn9yY6wdyIO4BEHHrWzuSAVqeuimEGX6A==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-jupiter@0.3.11':
-    resolution: {integrity: sha512-BKUt5W7NpmzFIujhICA9dZ8zpz7C7VYnGY4lIdTnuANkJiC2KAfOAjFR06WNB33zwotqEv3YyzFZA08TiifynA==}
+  '@anywalletkit/protocol-swap2-jupiter@0.3.13':
+    resolution: {integrity: sha512-MGDIDTeYyN6TLe/mmgFJZV9clq+0wSh8v8d9/DEQDsxB0MKulFN6cpgkBRBuEwjxRM5X0fqEngh5Nym9o/3SzQ==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-lifi@0.8.4':
-    resolution: {integrity: sha512-Oex2XOU3q2AdrZ4JcbXqhwwpHzuREGrGD3gEKGh09EfA8T9c+rWXjfBSlwYEpZ+uMI3GEYGRkZU5KSEPmABnow==}
+  '@anywalletkit/protocol-swap2-lifi@0.8.6':
+    resolution: {integrity: sha512-zjahm0AzFJYrcrObqYAlyNEDYXuDBvZo/o8PlT/094u0EscDJeCFkiTjOsMP3vxob2LtcW1+xtYwPLeegJN66Q==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-near-intents@0.3.8':
-    resolution: {integrity: sha512-795CFmwZ5sZ1M1zakH3SaXKpue4tPexrTosckwZiesGhvZKK3/CkMQc1qzwGQJYsZhTYgn01bRz6zFv623Zuzg==}
+  '@anywalletkit/protocol-swap2-near-intents@0.3.10':
+    resolution: {integrity: sha512-ICoIlRpL3WsVP4nlyvRAqewRaWFBb554aZbBtUk22+aoqxYwHHgmubWBziDc3AwoHOZc2uIGsNZtfjYoYAgpag==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-omniston@0.5.10':
-    resolution: {integrity: sha512-Ppi4PofTpx2G6KByERLSwuefMfORoDVmCcRVIIRijUhHEAbFfhIIcQbb3gUeYgq9bCiJbXZ1+ZXCnrJP7RhY+A==}
+  '@anywalletkit/protocol-swap2-omniston@0.5.12':
+    resolution: {integrity: sha512-5vPonHKBXxeERfyiWQkk3V8+fqfy5itr6aIjgsSBd+XXywNZgdHwvUEkP+MxFcq/xhX4gysfdczIADKO3vnlWg==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-relay@0.1.5':
-    resolution: {integrity: sha512-8kzcktLx5Xo1jP9Rngoeuv6ewpJ8bc7NYLV+Qk94O9NpF/dS5jXFu1HzdWUIHaNtlg7sduMmFkXEJ0506uGPMQ==}
+  '@anywalletkit/protocol-swap2-relay@0.1.7':
+    resolution: {integrity: sha512-DuFFjqJPiEH5Mx/Rm5NmFC8f87B3DUR5yEVAPnnz6Eg+TcvemSh8ZeGmDpAcP5i4B3Yo9ijhEaXdc46m5jsVyA==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-router@0.7.0':
-    resolution: {integrity: sha512-Qb0d1uIJh+SlueRRbgQcNrMmDJU+N/pH2GcVihR6kJ3H39w5+fmE7IIGgTs3qJR5qwPxWWSNC5t1DLTxt67/OA==}
+  '@anywalletkit/protocol-swap2-router@0.7.2':
+    resolution: {integrity: sha512-IrgaKJ6xCuNGTSYIWi+LCRfuJLGtwd/0zWNR7BXCdHb/Mawj82rNCPPY+cbFHKh4HvXsu2nwRAzSBccWKwvYNg==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-stargate@0.1.0':
-    resolution: {integrity: sha512-nZf2qmBH6doxnc9cecHhknpN+Z0TKtpT9JyCFlptTkvdhOA/PRYoui8yRPfSmUEN3gJ0vOH/ZDKtNchq30hqgw==}
+  '@anywalletkit/protocol-swap2-stargate@0.1.2':
+    resolution: {integrity: sha512-QoNtWxy4EWBZ8mhbfM6pBC+sMKZVKSZK2aRGEnKmmx1kdWyK76hdXD4zV940T5G59L7+4Q4NyJ5JUqywPNUzJA==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-symbiosis@0.1.5':
-    resolution: {integrity: sha512-ytDBQ9/LpEcnyHAZQWWgH82EQPcHWChRe7bu4EXr9eVkpTN6oB6ewxZ8Xmen/JMnQeryOwvUKBVUx8nCGGpTqg==}
+  '@anywalletkit/protocol-swap2-symbiosis@0.1.7':
+    resolution: {integrity: sha512-DeOV5QAb7HQ5XacqC/nyRuYtPlAVh4IaJotktCxEwZ1YNOIecwdzBYQm4f0g1zhH+RKbKqDSVLSH/0gEN1qOBA==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-thorchain@0.4.4':
-    resolution: {integrity: sha512-YI/7V+3i2tzJGn/9wu/WwzYKQl5Y+SrR7/JtFy3iW473MTMNjVlq2ESdlUU3Xn32T+Ng88KooWe28vqZwuZrlA==}
+  '@anywalletkit/protocol-swap2-thorchain@0.4.6':
+    resolution: {integrity: sha512-InYFAoRPToLMNf2a5R2/2j/NI5C1YxwSW5fMOio3Xmxfj0QrXkXHS/gSgIdqFQrrWoEOkyEw/ZCRhYNGop3uHw==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-uniswap@0.4.8':
-    resolution: {integrity: sha512-/eWlL3RWSEQBhZ9ODP1KgHgpuUi9oxqai4v0ZsNH4RYE1z8kHYKLvqifcn6+6QRndAUWKB2wlORoo0FZGB5F5Q==}
+  '@anywalletkit/protocol-swap2-uniswap@0.4.10':
+    resolution: {integrity: sha512-UOHA3QDX3DYvSyWCbyR0cvSsqYYorwUPcYZCu/KzsccgHXu80gLiD70NX1boG6GK1znfwwjNZGfyvJ6X7ZA+7Q==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-usdt0@0.5.4':
-    resolution: {integrity: sha512-2hX+/5pmmJNv+z0ayDTyWETRfM9yfYPUK0Qmcff+Cy5ED0qxIyoZ9T2+hSLWhhIj1yoyUT0KItlwDHZC56OuMw==}
+  '@anywalletkit/protocol-swap2-usdt0@0.5.6':
+    resolution: {integrity: sha512-/zYiJGffpUa06OrbQB0N+oVJSvoGl71WXRfGwLAaB30dBgf5N4XTZ7p1nZuFnqNx8Jz2x/vQ8kAG+KNfEZxTVA==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-wrap@0.4.5':
-    resolution: {integrity: sha512-VjdqLo1ne934r5JyLRPUyzqkfJYfjtLd7ie8ricZESqgpgeUF3Wrr1XJT/CWGTB73GOFa4h0Ue89O1iEeyJtAQ==}
+  '@anywalletkit/protocol-swap2-wrap@0.4.7':
+    resolution: {integrity: sha512-a9ghEV3t72A5ADmSKGFXVk0XIt07VHyL/U8VCbCn3xOGdSfjOrD0gzneyb8dzulSVS8yN0csiNds18jiP2Bndw==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
@@ -3337,10 +3337,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-0x@0.1.2(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-0x@0.1.4(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
     transitivePeerDependencies:
       - bufferutil
@@ -3348,10 +3348,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-across@0.1.1(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-across@0.1.3(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
     transitivePeerDependencies:
@@ -3360,10 +3360,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-balancer@0.3.10(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-balancer@0.3.12(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
     transitivePeerDependencies:
@@ -3372,10 +3372,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-cctp@0.5.8(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-cctp@0.6.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
     transitivePeerDependencies:
@@ -3384,10 +3384,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-chainflip@0.4.10(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-chainflip@0.4.12(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@noble/hashes': 2.4.0
       '@scure/base': 2.4.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
@@ -3397,7 +3397,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-core@0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-core@0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
       '@anywalletkit/swap2-assets': 0.3.0
@@ -3409,10 +3409,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-curve@0.1.7(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-curve@0.1.9(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
     transitivePeerDependencies:
@@ -3421,10 +3421,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-fynd@0.3.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-fynd@0.3.2(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
     transitivePeerDependencies:
@@ -3433,10 +3433,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-jupiter@0.3.11(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-jupiter@0.3.13(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       '@scure/base': 2.4.0
       '@solana/kit': 8.6.0(typescript@5.9.3)
@@ -3447,10 +3447,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-lifi@0.8.4(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-lifi@0.8.6(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       '@noble/curves': 2.4.0
       '@noble/hashes': 2.4.0
@@ -3460,10 +3460,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-near-intents@0.3.8(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-near-intents@0.3.10(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
     transitivePeerDependencies:
       - bufferutil
@@ -3471,10 +3471,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-omniston@0.5.10(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-omniston@0.5.12(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       '@ston-fi/omniston-sdk': 0.8.12
       '@ton/core': 0.63.1(@ton/crypto@3.3.0)
@@ -3487,10 +3487,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-relay@0.1.5(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-relay@0.1.7(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       '@noble/curves': 2.4.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
@@ -3500,10 +3500,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-router@0.7.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-router@0.7.2(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
     transitivePeerDependencies:
       - bufferutil
@@ -3511,10 +3511,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-stargate@0.1.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-stargate@0.1.2(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
     transitivePeerDependencies:
@@ -3523,10 +3523,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-symbiosis@0.1.5(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-symbiosis@0.1.7(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       '@noble/hashes': 2.4.0
       '@scure/base': 2.4.0
@@ -3537,10 +3537,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-thorchain@0.4.4(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-thorchain@0.4.6(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
     transitivePeerDependencies:
@@ -3549,10 +3549,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-uniswap@0.4.8(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-uniswap@0.4.10(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
     transitivePeerDependencies:
@@ -3561,10 +3561,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-usdt0@0.5.4(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-usdt0@0.5.6(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       '@scure/base': 2.4.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
@@ -3574,10 +3574,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-wrap@0.4.5(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-wrap@0.4.7(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
-      '@anywalletkit/protocol-swap2-core': 0.15.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-core': 0.16.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/swap2-assets': 0.3.0
       viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
     transitivePeerDependencies:

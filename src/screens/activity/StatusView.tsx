@@ -12,7 +12,7 @@ import type {ReviewRow} from "../../contracts/ui";
 import type {WalletFamily, WalletsApi} from "../../contracts/wallets";
 import {usePorts} from "../../config";
 import {chainByCaip2Web, formatAmount, shortAddress, txUrl} from "../../catalog";
-import {providerName} from "../../swap";
+import {routeName} from "../../swap";
 import {isFinal, isLocalId, isUntrackedMaybeSent, statusView, swapSteps} from "../../activity";
 import {swapErrorText} from "../../execute";
 import {Button, LinkButton, ProviderLogo, SheetHeader, SwapSteps, Tag, Text, TxReviewCard} from "../../ui";
@@ -142,7 +142,7 @@ export function StatusView({id, wallets, onClose, onBack, onTryAgain, onConnect}
       testId: "swap-status-receive",
       ...imported(r.toImportedContract),
     },
-    {k: "Route", v: providerName(r.provider), icon: <ProviderLogo provider={r.provider} size={18} />},
+    {k: "Route", v: routeName(r.provider, r.routeId), icon: <ProviderLogo provider={r.provider} size={18} />},
     {k: "To", v: shortAddress(r.recipient, 8, 6)},
     ...(r.sourceHash ? [{k: "Source tx", v: shortAddress(r.sourceHash, 8, 6), color: "var(--accent)"}] : []),
     ...(destHash ? [{k: destLabel, v: shortAddress(destHash, 8, 6), color: "var(--accent)"}] : []),

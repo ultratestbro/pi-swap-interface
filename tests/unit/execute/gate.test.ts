@@ -153,6 +153,13 @@ describe("checkPlanBrowser: the browser's checks on top", () => {
   it("accepts the reviewed CCTP route with the package's pins", () => {
     expect(checkPlanBrowser(plan(), reviewed, cctp)).toBeNull();
   });
+  it("the plan is the venue's route the review showed (D47): Standard for a reviewed Fast, or back, is refused", () => {
+    const fast = {...reviewed, routeId: "fast"};
+    expect(checkPlanBrowser(plan({routeId: "fast"}), fast, cctp)).toBeNull();
+    expect(checkPlanBrowser(plan({routeId: "standard"}), fast, cctp)).toMatch(/route moved to standard from fast/);
+    expect(checkPlanBrowser(plan(), fast, cctp)).toMatch(/route moved/);
+    expect(checkPlanBrowser(plan({routeId: "fast"}), reviewed, cctp)).toMatch(/route moved to fast/);
+  });
   it("a payload must suit the chain family", () => {
     expect(checkPlanBrowser(plan({approvals: [], source: {kind: "serialized", serializedTx: "AQID"}}), reviewed, cctp)).toMatch(/provider-built transaction/);
     const sol = {...reviewed, fromChain: "solana:mainnet", fromContract: null, approvalSpender: null};

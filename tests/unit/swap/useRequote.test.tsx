@@ -40,7 +40,7 @@ describe("useRequote", () => {
     const requote = vi.fn<RequoteRouteFn>(() => new Promise((r) => (resolve = r)));
     const {result} = renderHook(() => createUseRequote(requote)(draft, {}), {wrapper: wrapper()});
     expect(result.current).toMatchObject({route: draft.route, gone: null, failed: false, loading: true});
-    await waitFor(() => expect(requote).toHaveBeenCalledWith(draft.req, "cctp", {}));
+    await waitFor(() => expect(requote).toHaveBeenCalledWith(draft.req, {provider: "cctp"}, {}));
     resolve({route: route("cctp", 4_999_500n), reason: null});
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.route?.minDestAmount).toBe(4_999_500n);

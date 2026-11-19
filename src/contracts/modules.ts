@@ -25,7 +25,7 @@ import type {
   TokenAddress,
 } from "./domain";
 import type {ActivityPort, CatalogPort, ExecutePort, SwapPort, WalletsPort} from "./ports";
-import type {PaySide, QuoteRequest, RouteRejection, RouteSnapshot, RoutesRequest, RouteView, VenueTrust, WebRoute} from "./routes";
+import type {PaySide, QuoteRequest, RoutePick, RouteRejection, RouteSnapshot, RoutesRequest, RouteView, VenueTrust, WebRoute} from "./routes";
 import type {
   AssetIconProps,
   Breakpoint,
@@ -145,12 +145,16 @@ export interface SwapModule {
   quoteRoutes(r: RoutesRequest, onUpdate: (s: RouteSnapshot) => void, prices?: Readonly<Record<string, number>>): Promise<RouteSnapshot | null>;
   /** Both families have a preview placeholder (EVM, Solana, Bitcoin, TON, Tron, Zcash; not NEAR): previews can be priced. */
   canPreview(fromFamily: Family, toFamily: Family): boolean;
-  requoteRoute(req: QuoteRequest, provider: string, prices?: Readonly<Record<string, number>>): Promise<{route: WebRoute | null; reason: string | null}>;
+  requoteRoute(req: QuoteRequest, route: RoutePick, prices?: Readonly<Record<string, number>>): Promise<{route: WebRoute | null; reason: string | null}>;
   /** getSwap2Status over appRouter's providers (no account), plus the venue's "deposit arrived" the SDK drops (D36). */
   swapStatus(id: string, fromChain: string): Promise<{status: SwapStatus; transactions: {hash: string; type?: string}[]; depositReceived?: true}>;
   // ── display names / venue facts ──
   PROVIDER_NAMES: Readonly<Record<string, string>>;
   providerName(p: string): string;
+  /** A route's name: "Circle CCTP · Standard" for a venue's named route (D47), else the venue's. */
+  routeName(provider: string, routeId?: string): string;
+  /** A route's identity: "cctp/fast", or the venue for a route without a routeId (D47). */
+  routeKey(r: RoutePick): string;
   /** Delivery needs a claim on the destination chain: cctp. */
   TWO_PHASE: ReadonlySet<string>;
   VENUE_TRUST: Readonly<Record<string, VenueTrust>>;
@@ -167,7 +171,8 @@ export interface SwapModule {
   /** Everything about a request that changes its quotes, mode first: useRoutes' key, and what a route on screen was quoted for (D32). */
   routesKey(r: RoutesRequest): string;
   orderRoutes<R extends RouteView>(routes: readonly R[]): R[];
-  keepSelection(routes: readonly RouteView[], selected: string | null): string | null;
+  /** The selected route's key (routeKey) while it is still listed, else the best one's. */
+  keepSelection(routes: readonly Pick<WebRoute, "provider" | "routeId" | "tags">[], selected: string | null): string | null;
   isStale(route: Pick<RouteView, "validUntilMs">, now?: number, marginMs?: number): boolean;
   friendlyReason(provider: string, reason: string, pay?: PaySide): string;
   /**

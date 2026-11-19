@@ -178,6 +178,13 @@ describe("swapIncident", () => {
     expect(swapIncident(rec(), rec({stuckReported: true}), T0 + 46 * 60_000)).toBeNull();
     expect(swapIncident(deposit(), deposit(), T0 + 46 * 60_000)).toBeNull();
   });
+  it("CCTP's Standard route waits for the source's finality (up to 32 h from Linea, D47): stuck only past 36 h", () => {
+    const standard = rec({provider: "cctp", routeId: "standard"});
+    expect(swapIncident(standard, standard, T0 + 20 * 60 * 60_000)).toBeNull();
+    expect(swapIncident(standard, standard, T0 + 37 * 60 * 60_000)).toBe("stuck");
+    const fast = rec({provider: "cctp", routeId: "fast"});
+    expect(swapIncident(fast, fast, T0 + 46 * 60_000)).toBe("stuck");
+  });
 });
 
 describe("list", () => {

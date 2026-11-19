@@ -10,10 +10,11 @@
  */
 import type {Swap2Refusal} from "@anywalletkit/protocol-swap2-core/errors";
 import type {RankedQuote} from "@anywalletkit/protocol-swap2-router/router";
-import type {PaySide, RouteRejection, RouteView} from "../contracts/routes";
+import type {PaySide, RouteRejection, RouteView, WebRoute} from "../contracts/routes";
 import type {QuoteGasLike} from "./gas";
 import {orderSpender} from "./providerMeta";
 import {classifyRefusal} from "./refusals";
+import {routeKey} from "./routeKey";
 
 // web: the shapes live in src/contracts/routes.ts (copied verbatim from this file there).
 export type {PaySide, RouteFee, RouteTag, RouteView} from "../contracts/routes";
@@ -99,10 +100,14 @@ export function tagRoutes<R extends RouteView>(routes: readonly R[]): R[] {
   }));
 }
 
-/** The route the user had selected, if it is still in the new list; else the best one. */
-export function keepSelection(routes: readonly RouteView[], selected: string | null): string | null {
-  if (selected && routes.some((r) => r.provider === selected)) return selected;
-  return routes.find((r) => r.tags.includes("best"))?.provider ?? routes[0]?.provider ?? null;
+/**
+ * The route the user had selected, if it is still in the new list; else the best one.
+ * web: by routeKey (D47: a venue may list several routes, CCTP's Fast and Standard), not by venue.
+ */
+export function keepSelection(routes: readonly Pick<WebRoute, "provider" | "routeId" | "tags">[], selected: string | null): string | null {
+  if (selected && routes.some((r) => routeKey(r) === selected)) return selected;
+  const pick = routes.find((r) => r.tags.includes("best")) ?? routes[0];
+  return pick ? routeKey(pick) : null;
 }
 
 /** A venue's refusal as the user reads it: the short line of classifyRefusal (refusals.ts), e.g. for the review's "gone". */

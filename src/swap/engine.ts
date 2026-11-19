@@ -22,7 +22,7 @@ import {usdValue} from "@anywalletkit/protocol-swap2-router/value";
 import type {Swap2Refusal, Swap2RefusalInfo} from "@anywalletkit/protocol-swap2-core/errors";
 import type {CrossChainProvider, Quote, QuoteParams} from "@anywalletkit/protocol-swap2-core/types";
 import type {SwapStatus} from "../contracts/activity";
-import type {QuoteRequest, RouteSnapshot, RoutesRequest, WebRoute} from "../contracts/routes";
+import type {QuoteRequest, RoutePick, RouteSnapshot, RoutesRequest, WebRoute} from "../contracts/routes";
 import {destTokenId, publicClient} from "../catalog";
 import {getRuntimeConfig, keyedOnly, proxySettled, proxyVenueLive} from "../config";
 import {chainByCaip2} from "../shared";
@@ -184,8 +184,11 @@ export interface QuoteEngine {
    * requests are aborted. The snapshot carries the round's mode.
    */
   quoteRoutes(r: RoutesRequest, onUpdate: (s: RouteSnapshot) => void, prices?: Prices, signal?: AbortSignal): Promise<RouteSnapshot | null>;
-  /** The one route under review, re-quoted dry (25 s solo window). route null = the venue no longer routes it, with why. */
-  requoteRoute(req: QuoteRequest, provider: string, prices?: Prices): Promise<{route: WebRoute | null; reason: string | null}>;
+  /**
+   * The one route under review, re-quoted dry (25 s solo window): its venue alone, and of a venue with several routes
+   * exactly the reviewed one (D47). route null = the venue no longer routes it, with why.
+   */
+  requoteRoute(req: QuoteRequest, route: RoutePick, prices?: Prices): Promise<{route: WebRoute | null; reason: string | null}>;
   /** `depositReceived`: the venue has seen a QR deposit arrive while the swap is still pending (D36). */
   swapStatus(id: string, fromChain: string): Promise<{status: SwapStatus; transactions: {hash: string; type?: string}[]; depositReceived?: true}>;
 }
@@ -279,12 +282,19 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
     const shown = (w: WebRoute): WebRoute =>
       unknownEta.has(w.provider) ? {...w, ...(sameChain ? {} : {etaSeconds: 0}), tags: w.tags.filter((t) => t !== "fastest")} : w;
     // The router's classified refusals (router 0.6.0): the same texts as its rejections, each with the venue's reason.
+    // One refusal row per venue, and none for a venue that quoted: router 0.7.2 rejects each bad candidate of a venue's
+    // several routes on its own (D47), and a venue with a route on screen hasn't refused the pair.
+    const onePerVenue = (rows: RouteSnapshot["rejections"], quoted: ReadonlySet<string>) =>
+      rows.filter((x, i) => !(x.provider && quoted.has(x.provider)) && (!x.provider || rows.findIndex((y) => y.provider === x.provider) === i));
     const view = (quotes: RouteSet["quotes"], pending: string[], refusals: readonly Swap2Refusal[]): RouteSnapshot => ({
       mode,
       routes: orderRoutes(quotes.map((q) => shown(toWebRoute(q, source, gas, native, req.slippageBps)))),
       pending,
-      rejections: parseRejections(scrub ? refusals.map((x) => ({message: scrub(x.message), ...(x.reason ? {reason: x.reason} : {})})) : refusals, req.from).map((x) =>
-        skipped.has(x.provider) ? {...x, skipped: true as const} : x,
+      rejections: onePerVenue(
+        parseRejections(scrub ? refusals.map((x) => ({message: scrub(x.message), ...(x.reason ? {reason: x.reason} : {})})) : refusals, req.from).map((x) =>
+          skipped.has(x.provider) ? {...x, skipped: true as const} : x,
+        ),
+        new Set(quotes.map((q) => q.provider)),
       ),
       asked,
       venues,
@@ -305,61 +315,67 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
       if (done || !live() || !rounder) return;
       publish(view(latest, asked.filter((n) => !settled.has(n)), rounder.lastRefusals));
     };
-    const observed = providers.map((p) =>
-      delegate(p, {
-        getQuote: (qp, s) => {
-          const settle = () =>
-            queueMicrotask(() => {
-              settled.add(p.name);
-              emit();
-            });
-          const skip = (r.mode === "preview" ? previewSkip(p.name, r.req, viaProxy) : null) ?? backoff.refusal(p.name);
-          const watch = limitedBy(p.name);
-          let call: Promise<Quote | null>;
-          if (skip) {
-            skipped.add(p.name);
-            qp.onRefusal?.(skip);
-            call = Promise.resolve(null);
-          } else {
-            // Spreading the router's frozen per-venue params keeps its onRefusal recorder; ours reads it first.
-            const own: QuoteParams = {
-              ...qp,
-              ...(r.mode === "preview" ? previewAddressing(p.name, r.req) : {}),
-              // The venue's classification (swap2-core 0.12.0) goes on with its text: the router files both.
-              onRefusal: (reason: string, info?: Swap2RefusalInfo) => {
-                watch(reason);
-                // A safety check refused the venue's route (a router it doesn't know, a vault it can't verify): once
-                // per page and check to the swap statistics (D41). Not from previews: they quote with sample addresses.
-                if (r.mode !== "preview" && info?.reason && GATE_REASONS.has(info.reason)) {
-                  reportRefused({venue: p.name, fromChain: r.req.from.caip2, toChain: r.req.to.caip2, kind: "gate", code: gateCode(info.reason, reason), once: true});
-                }
-                qp.onRefusal?.(reason, info);
-              },
-            };
-            // A preview call to LI.FI or Fynd (asked only through cp0x's proxy) gets a signal of its own, marked so the
-            // routing never sends it keyless from an unused or stopped slot; round.signal, every venue's, stays unmarked.
-            const keyed = r.mode === "preview" && deps.proxy && KEYED_PREVIEW_VENUES.has(p.name) ? deps.proxy : null;
-            const sig = s || keyed ? anySignal(s ? [s, round.signal] : [round.signal]) : round.signal;
-            try {
-              call = p.getQuote(own, keyed ? keyed.keyedOnly(sig) : sig);
-            } catch (e) {
-              call = Promise.reject(e);
-            }
-            void call.then(
-              (q) => q && backoff.quoted(p.name),
-              (e: unknown) => watch(e instanceof Error ? e.message : String(e)),
-            );
+    const observed = providers.map((p) => {
+      // The venue's answer in this round, whether the router asks getQuote or — a venue with several routes, in a dry
+      // round (D47: CCTP's Fast and Standard) — getQuotes: one of the two, once per venue and round.
+      const ask = (qp: QuoteParams, s: AbortSignal | undefined, send: (own: QuoteParams, sig: AbortSignal) => Promise<Quote[]>): Promise<Quote[]> => {
+        const settle = () =>
+          queueMicrotask(() => {
+            settled.add(p.name);
+            emit();
+          });
+        const skip = (r.mode === "preview" ? previewSkip(p.name, r.req, viaProxy) : null) ?? backoff.refusal(p.name);
+        const watch = limitedBy(p.name);
+        let call: Promise<Quote[]>;
+        if (skip) {
+          skipped.add(p.name);
+          qp.onRefusal?.(skip);
+          call = Promise.resolve([]);
+        } else {
+          // Spreading the router's frozen per-venue params keeps its onRefusal recorder; ours reads it first.
+          const own: QuoteParams = {
+            ...qp,
+            ...(r.mode === "preview" ? previewAddressing(p.name, r.req) : {}),
+            // The venue's classification (swap2-core 0.12.0) goes on with its text: the router files both.
+            onRefusal: (reason: string, info?: Swap2RefusalInfo) => {
+              watch(reason);
+              // A safety check refused the venue's route (a router it doesn't know, a vault it can't verify): once
+              // per page and check to the swap statistics (D41). Not from previews: they quote with sample addresses.
+              if (r.mode !== "preview" && info?.reason && GATE_REASONS.has(info.reason)) {
+                reportRefused({venue: p.name, fromChain: r.req.from.caip2, toChain: r.req.to.caip2, kind: "gate", code: gateCode(info.reason, reason), once: true});
+              }
+              qp.onRefusal?.(reason, info);
+            },
+          };
+          // A preview call to LI.FI or Fynd (asked only through cp0x's proxy) gets a signal of its own, marked so the
+          // routing never sends it keyless from an unused or stopped slot; round.signal, every venue's, stays unmarked.
+          const keyed = r.mode === "preview" && deps.proxy && KEYED_PREVIEW_VENUES.has(p.name) ? deps.proxy : null;
+          const sig = s || keyed ? anySignal(s ? [s, round.signal] : [round.signal]) : round.signal;
+          try {
+            call = send(own, keyed ? keyed.keyedOnly(sig) : sig);
+          } catch (e) {
+            call = Promise.reject(e);
           }
-          if (s) s.addEventListener("abort", settle, {once: true});
-          else void call.finally(settle).catch(() => {});
-          return untilAborted(call, round.signal).then((q) => {
-            if (!q || (q.etaSeconds ?? 0) > 0) return q;
+          void call.then(
+            (qs) => qs.length > 0 && backoff.quoted(p.name),
+            (e: unknown) => watch(e instanceof Error ? e.message : String(e)),
+          );
+        }
+        if (s) s.addEventListener("abort", settle, {once: true});
+        else void call.finally(settle).catch(() => {});
+        return untilAborted(call, round.signal).then((qs) =>
+          (qs ?? []).map((q) => {
+            if ((q.etaSeconds ?? 0) > 0) return q;
             unknownEta.add(p.name);
             return {...q, etaSeconds: etaForRanking(sameChain)};
-          });
-        },
-      }),
-    );
+          }),
+        );
+      };
+      return delegate(p, {
+        getQuote: (qp, s) => ask(qp, s, (own, sig) => p.getQuote(own, sig).then((q) => (q ? [q] : []))).then((qs) => qs[0] ?? null),
+        ...(p.getQuotes ? {getQuotes: (qp: QuoteParams, s?: AbortSignal) => ask(qp, s, (own, sig) => p.getQuotes!(own, sig))} : {}),
+      });
+    });
     rounder = new CrossChainRouter(observed, {...ROUTER_RANKING, ...(valueUsd ? {valueUsd} : {})});
     try {
       const set = await rounder.getQuotes(params, {onUpdate: (s) => void (latest = s.quotes)});
@@ -372,14 +388,17 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
     }
   }
 
-  async function requoteRoute(req: QuoteRequest, provider: string, prices?: Prices): Promise<{route: WebRoute | null; reason: string | null}> {
+  async function requoteRoute(req: QuoteRequest, picked: RoutePick, prices?: Prices): Promise<{route: WebRoute | null; reason: string | null}> {
+    const {provider, routeId} = picked;
     const all = router();
     if (!all.hasProvider(provider)) return {route: null, reason: "Not available in this browser right now"};
     const one = all.only(provider);
     const gas = await sourceGas(req, prices);
     const native = sourceNative(req, prices);
-    const set = await one.getQuotes(quoteParams(req));
-    const q = set?.quotes.find((x) => x.provider === provider);
+    // A venue with several routes is asked for the reviewed one by its routeId (the router then calls getQuote with
+    // it): never its list, whose best — CCTP's Standard, free — would replace the Fast the user picked (D47).
+    const set = await one.getQuotes(routeId !== undefined ? {...quoteParams(req), routeId} : quoteParams(req));
+    const q = set?.quotes.find((x) => x.provider === provider && x.routeId === routeId);
     if (q) return {route: tagRoutes([toWebRoute(q, {chain: req.from.caip2, isToken: req.from.contract !== null}, gas, native, req.slippageBps)])[0]!, reason: null};
     return {route: null, reason: parseRejections(one.lastRefusals, req.from)[0]?.reason ?? "No route right now"};
   }

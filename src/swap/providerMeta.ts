@@ -37,6 +37,20 @@ export const PROVIDER_NAMES: Readonly<Record<string, string>> = {
 export const providerName = (p: string): string => PROVIDER_NAMES[p] ?? p;
 
 /**
+ * The routes of a venue that offers several, by name (D47): CCTP's Fast Transfer (Circle's fee, minutes) and Standard
+ * (no fee, waits for the source's finality). Stargate's one route ("taxi") isn't named: a venue's only route reads as
+ * the venue.
+ */
+const ROUTE_NAMES: Readonly<Record<string, Readonly<Record<string, string>>>> = {cctp: {fast: "Fast", standard: "Standard"}};
+
+/** A route's display name: "Circle CCTP · Standard"; a route not named above reads as its venue ("Stargate"). */
+export function routeName(provider: string, routeId?: string): string {
+  const names = Object.hasOwn(ROUTE_NAMES, provider) ? ROUTE_NAMES[provider]! : undefined;
+  const route = routeId !== undefined && names && Object.hasOwn(names, routeId) ? names[routeId] : undefined;
+  return route ? `${providerName(provider)} · ${route}` : providerName(provider);
+}
+
+/**
  * Delivery needs a claim transaction on the destination (the review says "claim
  * on arrival"). Not `!!provider.buildClaim`: usdt0 has one only to retry a
  * reverted delivery.

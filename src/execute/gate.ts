@@ -409,6 +409,8 @@ const evmChainId = (caip2: string): number | null => (caip2.startsWith("eip155:"
 export function checkPlanBrowser(plan: Swap2ExecutionPlan, r: ReviewedSwap, venue?: VenueRule, tron?: TronRule, tonBody?: TonBodyCheck): string | null {
   const base = checkPlan(plan, r);
   if (base) return base;
+  // The venue's route the review showed (D47): CCTP's Standard for Fast (or back) is another delivery and fee.
+  if (plan.routeId !== r.routeId) return `the route moved to ${plan.routeId ?? "the venue's default"} from ${r.routeId ?? "the venue's default"}`;
   const ns = plan.fromChain.split(":")[0];
   const s = plan.source;
   if (s.kind === "serialized" && ns !== "solana") return "a provider-built transaction on a network that doesn't take one";

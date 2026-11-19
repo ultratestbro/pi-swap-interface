@@ -17,7 +17,7 @@ import type {SwapDraft} from "../contracts/execution";
 import type {RoutesRequest} from "../contracts/routes";
 import type {WalletFamily} from "../contracts/wallets";
 import {isDemo, readHash, savedOverrides, setHashQuery, useHashRoute, usePorts} from "../config";
-import {keepSelection, providerName} from "../swap";
+import {keepSelection, routeKey, routeName} from "../swap";
 import {useBreakpoint} from "../ui";
 import {ActivityDrawer} from "./activity/ActivityDrawer";
 import {RecipientBox, RefundBox} from "./form/AddressBoxes";
@@ -125,10 +125,10 @@ export function SwapApp({scene}: {scene: Scene | null}) {
     [routes.snapshot, form.from, form.to, form.missing, routes.held],
   );
   const chosenKey = keepSelection(model.routes, form.selected);
-  const chosen = model.routes.find((r) => r.provider === chosenKey);
+  const chosen = model.routes.find((r) => routeKey(r) === chosenKey);
   // Quoted for the previous slippage or address: shown dimmed, never reviewed, until its venue answers the new terms;
   // "updating" while the round runs, "outdated" once it is over without that answer (a failed round: the CTA retries).
-  const chosenHeldAs = heldAs(model.held, chosen?.provider, routes.loading);
+  const chosenHeldAs = heldAs(model.held, chosen ? routeKey(chosen) : undefined, routes.loading);
   const chosenHeld = chosenHeldAs !== undefined;
   const cta = ctaState({
     missing: form.missing,
@@ -139,7 +139,7 @@ export function SwapApp({scene}: {scene: Scene | null}) {
     chosen,
     preview: previewList,
     held: chosenHeld,
-    providerName,
+    providerName: routeName,
   });
 
   // Back online: ask again at once instead of leaving "can't reach" up until the next 30 s refresh.

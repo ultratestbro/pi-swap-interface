@@ -1,5 +1,5 @@
 import {describe, expect, it, vi} from "vitest";
-import type {CrossChainProvider} from "@anywalletkit/protocol-swap2-core/types";
+import type {CrossChainProvider, Quote, QuoteParams} from "@anywalletkit/protocol-swap2-core/types";
 import {DEFAULT_RUNTIME_CONFIG} from "../../../src/config/defaults";
 import type {QuoteRequest, RouteSnapshot, RoutesRequest} from "../../../src/contracts/routes";
 import {LAZY_WAIT_MS, createQuoteEngine, eligibleProviders, quoteParams} from "../../../src/swap/engine";
@@ -225,7 +225,7 @@ describe("quoteRoutes", () => {
     const v = venue("v", {min: "1"});
     const engine = engineOver([v]);
     await engine.quoteRoutes(live(), () => {});
-    await engine.requoteRoute(request(), "v");
+    await engine.requoteRoute(request(), {provider: "v"});
     expect(v.quotes).toBe(2);
     expect(v.closed).toBe(0);
   });
@@ -277,20 +277,112 @@ describe("a provider still loading (Omniston's lazy chunk)", () => {
 
 describe("requoteRoute", () => {
   it("returns the fresh route, untagged (one route)", async () => {
-    const res = await engineOver([venue("cctp", {min: "4999230", eta: 45})]).requoteRoute(request(), "cctp");
+    const res = await engineOver([venue("cctp", {min: "4999230", eta: 45})]).requoteRoute(request(), {provider: "cctp"});
     expect(res.reason).toBeNull();
     expect(res.route).toMatchObject({provider: "cctp", minDestAmount: 4_999_230n, tags: [], trust: "contracts", execution: "calldata"});
   });
   it("a venue that no longer routes it: no route, its reason", async () => {
-    const res = await engineOver([venue("near_intents", {refuse: "1Click 400: minimum swap amount is $10 [dry=true a->b amount=1]"})]).requoteRoute(request(), "near_intents");
+    const res = await engineOver([venue("near_intents", {refuse: "1Click 400: minimum swap amount is $10 [dry=true a->b amount=1]"})]).requoteRoute(request(), {provider: "near_intents"});
     expect(res).toEqual({route: null, reason: "Minimum $10 right now"});
   });
   it("a venue that no longer routes it, for a reason only its classification names", async () => {
-    const res = await engineOver([venue("near_intents", {refuse: "an odd new text 4242", refuseReason: "chain_halted"})]).requoteRoute(request(), "near_intents");
+    const res = await engineOver([venue("near_intents", {refuse: "an odd new text 4242", refuseReason: "chain_halted"})]).requoteRoute(request(), {provider: "near_intents"});
     expect(res).toEqual({route: null, reason: "Paused on this network for now"});
   });
   it("a venue that isn't built here", async () => {
-    expect(await engineOver([venue("lifi", {min: "1"})]).requoteRoute(request(), "relay")).toEqual({route: null, reason: "Not available in this browser right now"});
+    expect(await engineOver([venue("lifi", {min: "1"})]).requoteRoute(request(), {provider: "relay"})).toEqual({route: null, reason: "Not available in this browser right now"});
+  });
+});
+
+/**
+ * A venue with several routes (D47, CCTP 0.6.0): getQuotes lists them in a dry round without a routeId; getQuote with
+ * a routeId answers that route alone, without one its default (the first). Every call is recorded.
+ */
+function routesVenue(name: string, routes: Record<string, {min: string; eta: number}>) {
+  const calls: {method: "getQuote" | "getQuotes"; routeId?: string}[] = [];
+  const ids = Object.keys(routes);
+  const quoteOf = (params: QuoteParams, routeId: string): Quote => ({
+    provider: name,
+    routeId,
+    intentId: `dry:${name}:${routeId}`,
+    depositAddress: "",
+    depositMemo: null,
+    txRequest: {to: "0x00000000000000000000000000000000000000aa", data: "0x", value: "0"},
+    sourceAmount: params.amountIn,
+    destAmount: routes[routeId]!.min,
+    minDestAmount: routes[routeId]!.min,
+    feeUsd: 0,
+    etaSeconds: routes[routeId]!.eta,
+    reliability: 0.9,
+    validUntilMs: Date.now() + 60_000,
+  });
+  const v: CrossChainProvider & {calls: typeof calls} = {
+    name,
+    calls,
+    enabled: () => true,
+    supportsRoute: () => true,
+    getQuote: async (params) => {
+      calls.push({method: "getQuote", ...(params.routeId !== undefined ? {routeId: params.routeId} : {})});
+      const id = params.routeId ?? ids[0]!;
+      return ids.includes(id) ? quoteOf(params, id) : null;
+    },
+    getQuotes: async (params) => {
+      calls.push({method: "getQuotes"});
+      return (params.routeId !== undefined ? [params.routeId] : ids).filter((id) => ids.includes(id)).map((id) => quoteOf(params, id));
+    },
+    buildDeposit: async () => {
+      throw new Error("not built in tests");
+    },
+    trackIntent: async () => ({state: "pending"}),
+  };
+  return v;
+}
+
+describe("a venue with several routes (D47: CCTP Fast and Standard)", () => {
+  // Standard pays out more (no Circle fee) but takes 18 minutes: within the tie band, Fast ranks best.
+  const cctp = () => routesVenue("cctp", {fast: {min: "4999230", eta: 45}, standard: {min: "5000000", eta: 1080}});
+
+  it("a round lists each route with its routeId, asked through getQuotes", async () => {
+    const v = cctp();
+    const final = await engineOver([v, venue("relay", {min: "4990000", eta: 5})]).quoteRoutes(live(), () => {});
+    expect(final!.routes.filter((r) => r.provider === "cctp").map((r) => r.routeId).sort()).toEqual(["fast", "standard"]);
+    expect(final!.routes.find((r) => r.provider === "relay")!.routeId).toBeUndefined();
+    expect(v.calls).toEqual([{method: "getQuotes"}]);
+  });
+
+  it("the review re-quotes exactly the reviewed route — Fast stays Fast though Standard pays more", async () => {
+    const v = cctp();
+    const res = await engineOver([v]).requoteRoute(request(), {provider: "cctp", routeId: "fast"});
+    expect(res.route).toMatchObject({provider: "cctp", routeId: "fast", minDestAmount: 4_999_230n, etaSeconds: 45});
+    expect(v.calls).toEqual([{method: "getQuote", routeId: "fast"}]);
+    const std = await engineOver([cctp()]).requoteRoute(request(), {provider: "cctp", routeId: "standard"});
+    expect(std.route).toMatchObject({routeId: "standard", minDestAmount: 5_000_000n});
+  });
+
+  it("one refusal row per venue, and none for a venue that quoted (the router rejects each bad candidate on its own)", async () => {
+    const twice = routesVenue("cctp", {fast: {min: "4999230", eta: 45}});
+    twice.getQuotes = async (params) => {
+      const q = (await twice.getQuote({...params, routeId: "fast"}))!;
+      return [q, {...q}];
+    };
+    const both = await engineOver([twice]).quoteRoutes(live(), () => {});
+    expect(both!.routes).toEqual([]);
+    expect(both!.rejections.filter((x) => x.provider === "cctp")).toHaveLength(1);
+    const half = routesVenue("cctp", {fast: {min: "4999230", eta: 45}});
+    half.getQuotes = async (params) => {
+      const q = (await half.getQuote({...params, routeId: "fast"}))!;
+      const {routeId: _drop, ...bare} = q;
+      return [q, bare];
+    };
+    const one = await engineOver([half]).quoteRoutes(live(), () => {});
+    expect(one!.routes.map((r) => r.routeId)).toEqual(["fast"]);
+    expect(one!.rejections).toEqual([]);
+  });
+
+  it("a route the venue no longer offers is gone, never replaced by its other one", async () => {
+    const fastOnly = routesVenue("cctp", {fast: {min: "4999230", eta: 45}});
+    const res = await engineOver([fastOnly]).requoteRoute(request(), {provider: "cctp", routeId: "standard"});
+    expect(res.route).toBeNull();
   });
 });
 

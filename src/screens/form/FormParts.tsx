@@ -8,7 +8,7 @@ import {useState} from "react";
 import type {SwapToken} from "../../contracts/domain";
 import type {WebRoute} from "../../contracts/routes";
 import {formatAmount} from "../../catalog";
-import {FLOOR_TOLERANCE_BPS, formatRate, providerName, rate, routeFloor} from "../../swap";
+import {FLOOR_TOLERANCE_BPS, formatRate, rate, routeFloor, routeName} from "../../swap";
 import {Button, Field, Icon, ProviderLogo, Sheet, SheetHeader, Spinner, Text, TxReviewCard} from "../../ui";
 import type {CtaState, Held} from "./model";
 import s from "./Form.module.css";
@@ -145,7 +145,7 @@ export function SummaryCard({from, to, amountIn, route, slippage, preview, held}
         {k: "Rate", v: r !== null ? `1 ${from.symbol} = ${formatRate(r)} ${to.symbol}` : "—", ...wait},
         {
           k: "Route",
-          v: `${providerName(route.provider)}${cross ? ` · ${from.chainName} → ${to.chainName}` : ""}`,
+          v: `${routeName(route.provider, route.routeId)}${cross ? ` · ${from.chainName} → ${to.chainName}` : ""}`,
           icon: <ProviderLogo provider={route.provider} size={18} />,
         },
         {k: "Slippage", v: slippage},

@@ -187,8 +187,12 @@ export function applyStatus(
 /** A failed poll: counted, so the interval backs off. */
 export const pollFailed = (r: SwapRecord, now = Date.now()): SwapRecord => ({...r, checkedAt: now, failures: r.failures + 1});
 
-/** Past this, an unfinished swap is worth a look (every venue routed here delivers well within it). */
+/**
+ * Past this, an unfinished swap is worth a look (every venue routed here delivers well within it) — but CCTP's
+ * Standard route (D47), which waits for the source's finality: up to 32 h from Linea; its own bound is STANDARD_STUCK_MS.
+ */
 export const STUCK_MS = 45 * 60_000;
+const STANDARD_STUCK_MS = 36 * 60 * 60_000;
 
 /** What deserves a console note after a poll: a swap that just ended badly, or one still undelivered past STUCK_MS (once). */
 export function swapIncident(prev: SwapRecord, next: SwapRecord, now = Date.now()): "ended" | "stuck" | null {
@@ -199,7 +203,7 @@ export function swapIncident(prev: SwapRecord, next: SwapRecord, now = Date.now(
     next.status !== "action-required" &&
     !(next.mode === "deposit" && !next.sourceHash) &&
     !next.stuckReported &&
-    now - next.createdAt > STUCK_MS
+    now - next.createdAt > (next.provider === "cctp" && next.routeId === "standard" ? STANDARD_STUCK_MS : STUCK_MS)
   )
     return "stuck";
   return null;
@@ -247,6 +251,8 @@ export function parseStored(raw: string | null | undefined): SwapRecord[] {
       id: t.id,
       accountId: t.accountId,
       provider: s(t.provider) ? t.provider : "",
+      // A venue's route (D47): only ever a name to show, read as the router holds it (printable ASCII).
+      ...(s(t.routeId) && /^[\x21-\x7e]{1,64}$/.test(t.routeId) ? {routeId: t.routeId} : {}),
       fromChain: t.fromChain,
       fromSlug: s(t.fromSlug) ? t.fromSlug : "",
       toChain: t.toChain,
@@ -340,6 +346,7 @@ export function newRecord(x: NewRecordInput, now = Date.now()): SwapRecord {
     id: x.id,
     accountId: x.accountId,
     provider: x.provider,
+    ...(x.routeId !== undefined ? {routeId: x.routeId} : {}),
     fromChain: x.from.caip2,
     fromSlug: x.from.chain,
     toChain: x.to.caip2,

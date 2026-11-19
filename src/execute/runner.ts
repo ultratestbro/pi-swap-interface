@@ -40,6 +40,7 @@ export function startSwap(input: StartSwapInput, deps: ExecuteDeps = {}): Promis
   const base = {
     accountId,
     provider: reviewed.provider,
+    ...(reviewed.routeId !== undefined ? {routeId: reviewed.routeId} : {}),
     from: recordSide(from),
     to: recordSide(to),
     amountIn: reviewed.amountIn,

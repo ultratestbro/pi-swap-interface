@@ -91,6 +91,16 @@ describe("keepSelection", () => {
     expect(keepSelection(list, null)).toBe("cctp");
     expect(keepSelection([], null)).toBeNull();
   });
+  it("a venue's several routes are picked and kept each by its routeKey (D47)", () => {
+    const routes = [
+      {...toRouteView(q("cctp", "2", 45, {tags: ["best"]})), routeId: "fast"},
+      {...toRouteView(q("cctp", "3", 1080)), routeId: "standard"},
+    ];
+    expect(keepSelection(routes, "cctp/standard")).toBe("cctp/standard");
+    expect(keepSelection(routes, null)).toBe("cctp/fast");
+    // A pick made before the venue named its routes isn't one of them: the best route.
+    expect(keepSelection(routes, "cctp")).toBe("cctp/fast");
+  });
 });
 
 describe("parseRejections", () => {

@@ -12,7 +12,7 @@ import type {RecipientCheck, SwapRecipient, SwapToken} from "../../contracts/dom
 import type {PreviewRequest, QuoteRequest, RouteRejection, RouteSnapshot, RoutesRequest, RoutesState, WebRoute} from "../../contracts/routes";
 import type {WalletFamily} from "../../contracts/wallets";
 import {omnistonSwapRouteSigned, tonCallSigned} from "../../execute";
-import {canPreview, routesKey, venueScope} from "../../swap";
+import {canPreview, routeKey, routesKey, venueScope} from "../../swap";
 import {FAMILY_LABEL, agoLabel, plural, walletFamilyOf} from "../labels";
 
 /** What still stops a quote request, in the order the user meets it. */
@@ -140,7 +140,8 @@ export interface CtaInput {
   preview?: boolean;
   /** The chosen route was quoted for other terms (slippage, an address) and its venue hasn't answered the new ones (D32). */
   held?: boolean;
-  providerName(p: string): string;
+  /** A route's display name (routeName: "Circle CCTP · Fast", D47). */
+  providerName(p: string, routeId?: string): string;
 }
 
 /**
@@ -173,7 +174,7 @@ export function ctaState(x: CtaInput): CtaState {
       ? {label: "Updating quote…", enabled: false, action: "none", state: "updating"}
       : {label: "Couldn't update quote — try again", enabled: true, action: "refresh", state: "retry"};
   if (x.from?.payMode === "deposit") return {label: "Get deposit address", enabled: true, action: "review", state: "deposit"};
-  return {label: `Review via ${x.providerName(x.chosen.provider)}`, enabled: true, action: "review", state: "review"};
+  return {label: `Review via ${x.providerName(x.chosen.provider, x.chosen.routeId)}`, enabled: true, action: "review", state: "review"};
 }
 
 /** An enabled venue that isn't asked for this pair, with its scope in one line ("Same-network swaps only"). */
@@ -200,7 +201,7 @@ export interface RouteListModel {
   notForPair: NotForPair[];
   /** "4 of 10 venues serve this pair", or null before a snapshot names the venues. */
   coverage: string | null;
-  /** Routes on screen quoted for other terms, waiting for their venue's new answer (D32): dimmed (heldAs), never reviewed. */
+  /** Routes on screen quoted for other terms, waiting for their venue's new answer (D32): dimmed (heldAs), never reviewed. By routeKey. */
   held: string[];
 }
 
@@ -335,7 +336,7 @@ export function routeListModel(
   const coverage = coverageLine(snapshot);
   const rejections = snapshot.rejections.filter((x) => x.category !== "deferred");
   const deferred = snapshot.rejections.filter((x) => x.category === "deferred").map((x) => ({...x, reason: copy.reason}));
-  const heldOf = (routes: readonly WebRoute[]) => routes.filter((r) => held.includes(r.provider)).map((r) => r.provider);
+  const heldOf = (routes: readonly WebRoute[]) => routes.map(routeKey).filter((k) => held.includes(k));
   const lists = {pending: snapshot.pending, deferred, deferredTitle: copy.title, notForPair, coverage};
   const tonWallet = from?.payMode === "wallet" && from.family === "ton";
   if (from?.payMode !== "deposit" && !tonWallet)
@@ -344,8 +345,10 @@ export function routeListModel(
   const payer: RouteRejection[] = [];
   for (const r of snapshot.routes) {
     const why = tonWallet ? tonWalletRefusal(r, from, to) : qrRefusal(r, from!.chainName);
-    if (why) payer.push(why);
-    else routes.push(r);
+    // One row per venue: its routes (D47) are refused for the same reason.
+    if (why) {
+      if (!payer.some((x) => x.provider === why.provider)) payer.push(why);
+    } else routes.push(r);
   }
   return {
     ...lists,
@@ -364,9 +367,9 @@ export function routeListModel(
  */
 export type Held = "updating" | "outdated";
 
-/** `provider`'s held state on screen: undefined when its route on screen was quoted for the request's own terms. */
-export function heldAs(held: readonly string[], provider: string | undefined, loading: boolean): Held | undefined {
-  if (provider === undefined || !held.includes(provider)) return undefined;
+/** A route's held state on screen (`key`: its routeKey): undefined when it was quoted for the request's own terms. */
+export function heldAs(held: readonly string[], key: string | undefined, loading: boolean): Held | undefined {
+  if (key === undefined || !held.includes(key)) return undefined;
   return loading ? "updating" : "outdated";
 }
 
@@ -434,7 +437,7 @@ export interface ShownList {
   /** listKey of the request this list is shown for. */
   list: string;
   snapshot: RouteSnapshot | null;
-  /** provider → the routesKey its route on screen was quoted for; any other than the request's own is held. */
+  /** A route on screen (routeKey) → the routesKey it was quoted for; any other than the request's own is held. */
   quotedFor: Readonly<Record<string, string>>;
   /** When the list last finished a round (the port's, or the one before a new round started). */
   updatedAt: number;
@@ -460,7 +463,7 @@ export function foldShownList(prev: ShownList | null, r: RoutesRequest, state: P
   const own = (stable: boolean): ShownList => ({
     list,
     snapshot: state.snapshot,
-    quotedFor: Object.fromEntries((state.snapshot?.routes ?? []).map((x) => [x.provider, key])),
+    quotedFor: Object.fromEntries((state.snapshot?.routes ?? []).map((x) => [routeKey(x), key])),
     updatedAt: state.updatedAt,
     stable,
     source,
@@ -476,26 +479,29 @@ export function foldShownList(prev: ShownList | null, r: RoutesRequest, state: P
   // The round streams (or failed part-way): merge it into the rows on screen.
   const shown = prev.snapshot;
   const next = state.snapshot;
-  const answered = new Map(next.routes.map((x) => [x.provider, x]));
+  // By route (routeKey): a venue with several routes (D47: CCTP's Fast and Standard) answers for all of them at once.
+  const answered = new Map(next.routes.map((x) => [routeKey(x), x]));
+  const answeredBy = new Set(next.routes.map((x) => x.provider));
   const waiting = new Set(next.pending);
   const routes: WebRoute[] = [];
   const quotedFor = new Map<string, string>();
   for (const old of shown.routes) {
-    const fresh = answered.get(old.provider);
+    const k = routeKey(old);
+    const fresh = answered.get(k);
     // Best / Fastest stay where they were until the round is done: a partial auction's tags would move them twice.
     if (fresh) {
       routes.push({...fresh, tags: old.tags});
-      quotedFor.set(old.provider, key);
+      quotedFor.set(k, key);
     } else if (waiting.has(old.provider)) {
       routes.push(old);
-      quotedFor.set(old.provider, Object.hasOwn(prev.quotedFor, old.provider) ? prev.quotedFor[old.provider]! : "");
+      quotedFor.set(k, Object.hasOwn(prev.quotedFor, k) ? prev.quotedFor[k]! : "");
     }
-    // else: the venue answered the new round with a refusal (listed below), or isn't asked any more.
+    // else: the venue answered the new round with a refusal (listed below), without this route, or isn't asked any more.
   }
   for (const x of next.routes)
-    if (!quotedFor.has(x.provider)) {
+    if (!quotedFor.has(routeKey(x))) {
       routes.push({...x, tags: []});
-      quotedFor.set(x.provider, key);
+      quotedFor.set(routeKey(x), key);
     }
   // Refusal rows keep the order on screen until the round is done, like the routes: a venue that refuses again keeps
   // its place with the new reason, one still asked keeps its row, one that quotes now (or isn't asked) leaves, and a
@@ -505,7 +511,7 @@ export function foldShownList(prev: ShownList | null, r: RoutesRequest, state: P
   const rejections = [...order].flatMap((p) =>
     refusedNow.has(p)
       ? next.rejections.filter((x) => x.provider === p)
-      : waiting.has(p) && !answered.has(p)
+      : waiting.has(p) && !answeredBy.has(p)
         ? shown.rejections.filter((x) => x.provider === p)
         : [],
   );
@@ -515,5 +521,5 @@ export function foldShownList(prev: ShownList | null, r: RoutesRequest, state: P
 /** The routes on screen quoted for other terms than the request's (`key` = its routesKey, D32): dimmed, never reviewed. */
 export function heldRoutes(shown: ShownList | null, key: string | null): string[] {
   if (!shown?.snapshot || key === null) return [];
-  return shown.snapshot.routes.filter((x) => !Object.hasOwn(shown.quotedFor, x.provider) || shown.quotedFor[x.provider] !== key).map((x) => x.provider);
+  return shown.snapshot.routes.map(routeKey).filter((k) => !Object.hasOwn(shown.quotedFor, k) || shown.quotedFor[k] !== key);
 }

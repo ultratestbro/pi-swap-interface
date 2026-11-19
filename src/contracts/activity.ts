@@ -32,6 +32,8 @@ export interface SwapRecord {
   /** The payer: `${family}:${address}` (e.g. `evm:0xabc…`), or `deposit:${refundAddress}` for QR payments. */
   accountId: string;
   provider: string;
+  /** The venue's route (D47: CCTP "fast" | "standard"), shown with its name; absent for a venue with one route. */
+  routeId?: string;
   /** CAIP-2 + catalog slug of both sides. */
   fromChain: string;
   fromSlug: string;
@@ -130,6 +132,7 @@ export interface NewRecordInput {
   id: string;
   accountId: string;
   provider: string;
+  routeId?: string;
   from: RecordSide;
   to: RecordSide;
   amountIn: bigint;

@@ -234,6 +234,21 @@ describe("delegate", () => {
     expect("ownGasEstimate" in d).toBe(false);
   });
 
+  it("forwards getQuotes (core 0.16, D47: CCTP's Fast and Standard), but never past a wrapper of getQuote alone", async () => {
+    const listed: string[] = [];
+    const cctp = {...fake("cctp"), getQuotes: async () => (listed.push("both"), [])};
+    const d = delegate(cctp);
+    await d.getQuotes?.(params);
+    expect(listed).toEqual(["both"]);
+    expect("getQuotes" in delegate(fake())).toBe(false);
+    // A gap, a gate or a cool-down over getQuote: the router must not reach the venue around it.
+    const gated = delegate(cctp, {getQuote: async () => null});
+    expect("getQuotes" in gated).toBe(false);
+    expect("getQuotes" in withQuoteGap(cctp, 10)).toBe(false);
+    const both = delegate(cctp, {getQuote: async () => null, getQuotes: async () => []});
+    expect(typeof both.getQuotes).toBe("function");
+  });
+
   it("keeps ownGasEstimate (swap2-core 0.13.0): without it the engine would send a 0x native sale with the quoted gas limit", () => {
     const d = delegate({...fake("zeroex"), ownGasEstimate: true});
     expect(d.ownGasEstimate).toBe(true);
