@@ -2,7 +2,7 @@
  * The catalog's public entry (contract: CatalogModule in src/contracts/modules.ts): networks, tokens, addresses,
  * prices, balances, viem chain definitions and public clients — no backend. Other modules import only from here.
  */
-export {catalogPort, usePrices, useSwapTokens, useTokenLookup} from "./port";
+export {catalogPort, useImportedLogos, useImportedPrices, usePrices, useSwapTokens, useTokenLookup} from "./port";
 
 // ── imported tokens (D39) ──
 export {

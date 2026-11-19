@@ -23,6 +23,11 @@ your browser still checks every quote and transaction (see [Connection modes](#c
   picker. The page reads its decimals, symbol and name from the chain itself, shows a warning about look-alike copies,
   and keeps the token in your browser only once you confirm. Venues that trade any token (Uniswap, LI.FI, Jupiter, 0x,
   Fynd, Relay into a chain) quote it; imported tokens are never priced.
+- Token approvals ([`#/revoke`](https://swap.cp0x.com/#/revoke)): what an EVM address still lets apps spend —
+  ERC-20 and Permit2 allowances, NFT operator approvals — on every listed EVM network, most at risk first, and a revoke
+  from your own wallet. Any address can be checked without connecting a wallet. The history comes from free indexers
+  (Etherscan through cp0x's server in Standard mode, public Blockscout instances otherwise), and the page checks every
+  approval against the chain itself before it shows it.
 
 ## Application links
 

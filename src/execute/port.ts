@@ -9,6 +9,7 @@ import {findSwap, getSwaps, updateSwap} from "../activity";
 import {claimSwap, previewClaim} from "./claim";
 import {issueDeposit} from "./deposit";
 import {startSwap} from "./runner";
+import {refusal} from "./errors";
 
 async function claimAndRecord(id: string, signer: SourceSigner): Promise<ClaimResult> {
   try {
@@ -37,4 +38,10 @@ export const executePort: ExecutePort = {
   issueDeposit: (input) => issueDeposit(input),
   previewClaim: (id) => previewClaim(id),
   claimSwap: claimAndRecord,
+  revoke: async (input, signer) => {
+    if (signer.family !== "evm") throw refusal("Approvals are revoked from an EVM wallet — nothing was sent.");
+    // With the approvals SDK, loaded only when the Approvals section revokes something.
+    const {sendRevoke} = await import("./accounts/revoke");
+    return sendRevoke(signer, input);
+  },
 };

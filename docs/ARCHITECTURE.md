@@ -1768,6 +1768,55 @@ swap reverted (`simulation_failed`) and the engine revoked the approval it had j
   that stands is asked three times, then revoked; the engine's own dry run likewise; no retry before an approval),
   `tests/unit/swap/refusals.test.ts` (the selector, never an address or hash).
 
+**D46 — The Approvals section (owner, 2026-11-20).** The owner asked for a way to see and take back what a wallet
+lets others spend — "давай подумаем … кнопку/раздел revoke" — inside cp0x Swap rather than as a separate app, with
+free sources only ("ключ возьми от vaulty", "по адресу делаем").
+- **Where.** `#/revoke` (and `#/revoke?address=0x…`; `#/approvals` opens it too, owner 2026-11-20), opened by the
+  "Rev0ke" button (owner: "перемести в правый нижний угол и сделай в нашем стиле как кнопки в хедере, o замени на 0
+  как в cp0x"): the header controls' look, its "0" the logo's cyan slashed zero; fixed in the screen's bottom-right
+  corner from 640 px (the footer ends above it), in a phone's page corner under the swap CTA (a floating one would sit
+  on the CTA wherever the page is too short for it to stick); not on the section itself (the brand goes back). Its own
+  chunk, with the same frame (AppShell, the wallets, activity and settings sheets). The scan and
+  `@anywalletkit/protocol-approvals-evm` 0.6.1 load with the first scan, the revoke with the first revoke.
+- **The scan** (`src/approvals`, approvalsPort): every EVM network the page lists, 4 at a time, each shown as it
+  answers, 90 s at most. The module finds approval-shaped logs with the owner in topic1 through one indexer request
+  for the whole history (sources.ts), verifies each against chain state (Multicall3 over the runtime RPCs — the proxy
+  first in Standard), and flags `unlimited`, `eoa-spender`. Sources: cp0x's `etherscan` proxy slot (cp0x-api, free
+  key, health `"etherscan": "keyed"`, `proxyEtherscanUrl`) on the 14 networks Etherscan's free plan serves, else a
+  public Blockscout instance a browser can read (CORS open, final host), else Routescan (Avalanche); none for BNB Chain,
+  Gnosis, Celo, X Layer, Katana, Morph, Flare, Arc and Elysium — listed as "not checked", never scanned slowly over
+  eth_getLogs. Etherscan calls are paced to one per 500 ms from a page; keyless instances get one short retry; every
+  request has a 20 s deadline. The history is cached per network and address in localStorage (`cp0x.approvals.v1:`,
+  200 addresses at most): a rescan asks only for blocks since — less 50 000 (`INDEXER_LAG_BLOCKS`), since an indexer
+  answers behind the head the module reads up to, and an approval in that gap would otherwise never be read. A
+  spender's name is kept for good, a missing or failed one for an hour. Every read the section makes itself (tokens,
+  balances, collection names) has CCIP-Read off, like the module's: a token's revert can't make the page fetch a URL
+  of its choosing.
+- **The list**: most at risk first — what the spender could take now (the allowance capped by the owner's balance,
+  read on-chain) at the token's DefiLlama price by contract; then unlimited, then a plain-address spender. The ERC-20
+  is the catalog's when listed, else read on-chain as an imported token (D39: by contract, never trusted by symbol);
+  an NFT collection by its name(). The spender is "Permit2", a venue cp0x Swap pins as a SPENDER on that network
+  ("Verified by cp0x", `pinnedVenueOf`; never a call target — 0x's Settlers take no allowance), else the explorer's
+  contract name (Etherscan networks) unless it claims "Permit2" or a venue's name, else its address.
+- **Any address, read-only.** The field takes any EVM address; empty means the connected EVM wallet. Revoke buttons
+  appear only when the address is the connected wallet's.
+- **The revoke** (execute `revoke` → `accounts/revoke.ts`, the D10 choke point): getSigner switches the wallet to the
+  approval's network; then only the module's own revoke of an approval the same scan found — ERC-20 approve(spender,
+  0), an NFT's approve(0x0, id) / setApprovalForAll(operator, false), Permit2 lockdown — value 0, to the approval's
+  token (or one of the network's Permit2 contracts), with `isRevokeTransaction` agreeing against every target the scan
+  found there, from the scanned owner on its network, not reverting in eth_call; an ERC-20 approval's token must not
+  answer ERC-165 as an ERC-721 (there approve(spender, 0) approves token #0 — the module's own check, F31). Then the
+  receipt, and that network is scanned again — for the address scanned at that moment, each network's latest scan
+  winning over an older one that answers later. An EIP-7702 delegation is shown, never revoked from the page (its revoke is a signed type-4
+  authorization a browser wallet gives only in its own settings).
+- **Demo** (`src/mocks/demoApprovals.ts`): a fixed scan of the demo wallet, offline; a revoke drops its row.
+- **Tests.** `tests/unit/approvals/approvals.test.ts` (sources, what is at risk, the order, the spender's name),
+  `tests/unit/execute/revoke.test.ts` (exactly the revoke calldata per standard; never the wallet for another owner,
+  network, an unscanned or changed approval, a delegation, a revert), `tests/unit/config/standard.test.ts` (the
+  health flag), e2e `approvals.spec.ts` (phone, tablet, desktop: the list, the order, a revoke, read-only for another
+  address, the header links). Checked live on 2026-11-20 against a real wallet in Public mode (Chromium): 13 networks
+  in 7 s.
+
 ## 5. Conventions
 
 - **TypeScript**: strict, `noUncheckedIndexedAccess`, `verbatimModuleSyntax` (use `import type`). Named exports

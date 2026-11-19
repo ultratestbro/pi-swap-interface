@@ -8,6 +8,7 @@
  * Hooks in a port are ordinary hooks: call them unconditionally, top level.
  * The port object is fixed for the page's lifetime (demo is decided at boot).
  */
+import type {ApprovalsPort, RevokeInput} from "./approvals";
 import type {ComponentType, ReactNode} from "react";
 import type {ActivityState, SwapRecord} from "./activity";
 import type {Balance, Chain, Owners, PriceMap, SwapToken, Token, TokenLookup} from "./domain";
@@ -123,6 +124,11 @@ export interface ExecutePort {
   previewClaim(id: string): Promise<ClaimPreview | null>;
   /** Sends the claim from an EVM signer already on the destination chain; updates the record (claimHash, trackId). */
   claimSwap(id: string, signer: SourceSigner): Promise<ClaimResult>;
+  /**
+   * Revokes one token approval from an EVM signer already on its network (D46: accounts/revoke.ts, the Approvals
+   * section's only write); resolves with the hash once it is mined. Throws an answered Error when refused.
+   */
+  revoke(input: RevokeInput, signer: SourceSigner): Promise<{hash: string}>;
 }
 
 /** activity: persisted swaps and their tracking. */
@@ -147,4 +153,5 @@ export interface AppPorts {
   swap: SwapPort;
   execute: ExecutePort;
   activity: ActivityPort;
+  approvals: ApprovalsPort;
 }

@@ -6,6 +6,7 @@
 import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
 import {lazy, Suspense, useState} from "react";
 import {activityPort} from "./activity";
+import {approvalsPort} from "./approvals";
 import {catalogPort} from "./catalog";
 import {isDemo, PortsProvider, useHashRoute, usePorts} from "./config";
 import type {AppPorts} from "./contracts/ports";
@@ -23,6 +24,7 @@ export const realPorts: AppPorts = {
   swap: swapPort,
   execute: executePort,
   activity: activityPort,
+  approvals: approvalsPort,
 };
 
 /** The ui kit's gallery (design review): its own chunk, so the main bundle never carries it. */

@@ -398,3 +398,65 @@
     gap: 6px;
   }
 }
+
+/* The Revoke section's button (D46): the header controls' look (surface2, the button shadow, a pill), floating in the
+   bottom-right corner; its "0" in the cp0x logo's cyan, the font's own slashed zero like the logo's. */
+.revokeButton {
+  position: fixed;
+  right: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: var(--r-pill);
+  background: var(--surface2);
+  color: var(--ink);
+  box-shadow: var(--sh-button);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.revokeZero {
+  color: #2cfffe;
+  font-variant-numeric: slashed-zero;
+}
+
+@media (hover: hover) {
+  .revokeButton:hover {
+    background: var(--surface3-alt);
+  }
+}
+
+.revokeButton:active {
+  background: var(--surface3-alt);
+}
+
+.revokeButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The footer ends above the floating button (≥ 640 px), so it never covers a link at the bottom of the page. */
+@media (min-width: 640px) {
+  .withRevoke .footer {
+    padding-bottom: calc(24px + 64px + env(safe-area-inset-bottom));
+  }
+}
+
+/* A phone: the page's bottom-right corner instead (in flow, after the main area, above the footer), since a floating
+   button would sit on the swap screen's CTA wherever the page is short enough for it not to stick. */
+@media (max-width: 639px) {
+  .revokeButton {
+    position: static;
+    align-self: flex-end;
+    height: 40px;
+    margin: 8px var(--sp-page) 0 auto;
+    padding: 0 16px;
+    font-size: 15px;
+  }
+}

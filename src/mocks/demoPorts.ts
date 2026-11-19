@@ -34,6 +34,7 @@ import type {
 import type {QuoteRequest, RequoteState, RouteRejection, RouteSnapshot, RoutesRequest, RoutesState, VenueTrust, WebRoute} from "../contracts/routes";
 import type {WalletFamily, WalletOption, WalletsApi, WalletsState} from "../contracts/wallets";
 import {demoWallets} from "../config/demo";
+import {demoApprovalsPort, demoRevoke, resetDemoApprovals} from "./demoApprovals";
 import {createTokenBucket, type TokenBucket} from "../config/pacing";
 import {getRuntimeConfig} from "../config/runtime";
 import {chainByCaip2} from "../shared/chains";
@@ -697,6 +698,7 @@ export const demoExecutePort: ExecutePort = {
     setTimeout(() => patchRecord(id, (x) => ({...x, status: "completed", updatedAt: Date.now()})), 4000);
     return {hash, chain: r?.toChain ?? "eip155:8453", id: next};
   },
+  revoke: (input) => demoRevoke(input),
 };
 
 /** Every port, fixture-backed. */
@@ -706,10 +708,12 @@ export const demoPorts: AppPorts = {
   swap: demoSwapPort,
   execute: demoExecutePort,
   activity: demoActivityPort,
+  approvals: demoApprovalsPort,
 };
 
 /** Tests: put the demo stores back to their first state. */
 export function resetDemoState(): void {
+  resetDemoApprovals();
   wallets.set(undefined);
   records.set(undefined);
   demoImports.set(undefined);

@@ -101,6 +101,26 @@ export const VENUE_RULES: Readonly<Record<string, VenueRule>> = {
 /** The rule checkPlanBrowser holds `provider`'s live plan to (undefined = none: calldata refused). */
 export const venueRule = (provider: string): VenueRule | undefined => VENUE_RULES[provider];
 
+/**
+ * The venue whose rule pins `address` as a SPENDER on `caip2` (the Approvals section's "verified by cp0x" label, D46),
+ * or null. Spenders only: a call target is not a contract to give an allowance to (0x's Settlers, learned per quote,
+ * take none — anyone could spend one), and 0x's spender is canonical Permit2, which the section names before asking.
+ */
+export function pinnedVenueOf(caip2: string, address: string): string | null {
+  const a = address.toLowerCase();
+  for (const [venue, rule] of Object.entries(VENUE_RULES)) {
+    if (rule.kind !== "pins") continue;
+    let listed: readonly string[] = [];
+    try {
+      listed = rule.pins.spenders(caip2);
+    } catch {
+      // A rule that doesn't know the network lists nothing on it.
+    }
+    if (listed.some((x) => x.toLowerCase() === a)) return venue;
+  }
+  return null;
+}
+
 const TRON = "tron:728126428";
 const cfTronVault = (CF_VAULTS as Readonly<Record<string, string>>)[TRON];
 

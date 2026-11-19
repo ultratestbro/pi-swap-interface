@@ -23,12 +23,14 @@ export interface AppShellProps {
   onWallets(): void;
   onActivity(): void;
   onSettings(): void;
+  /** The screen shown: its link in the header reads as the current one. Default "swap". */
+  section?: "swap" | "approvals";
   children: ReactNode;
 }
 
-export function AppShell({wallets, activity, demo, onWallets, onActivity, onSettings, children}: AppShellProps) {
+export function AppShell({wallets, activity, demo, onWallets, onActivity, onSettings, section = "swap", children}: AppShellProps) {
   return (
-    <div className={s.shell}>
+    <div className={section === "swap" ? `${s.shell} ${s.withRevoke}` : s.shell}>
       <header className={s.header}>
         <a className={s.brand} href="#/" aria-label="cp0x Swap, home">
           <img className={s.logo} src="logos/cp0x@2x.png" srcSet="logos/cp0x.png 1x, logos/cp0x@2x.png 2x, logos/cp0x@3x.png 3x" alt="cp0x" width={61} height={22} />
@@ -47,6 +49,13 @@ export function AppShell({wallets, activity, demo, onWallets, onActivity, onSett
         </div>
       </header>
       <main className={s.main}>{children}</main>
+      {/* The Revoke section's button (D46, owner 2026-11-20): bottom right on every screen but its own, the header
+          controls' look, its "0" the cp0x logo's. A phone: the page's bottom-right corner, under the CTA. */}
+      {section === "swap" ? (
+        <a className={s.revokeButton} href="#/revoke" aria-label="Revoke token approvals" data-testid="nav-approvals">
+          Rev<span className={s.revokeZero}>0</span>ke
+        </a>
+      ) : null}
       <footer className={s.footer}>
         <FooterLine onSettings={onSettings} />
       </footer>

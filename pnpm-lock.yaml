@@ -11,6 +11,9 @@ importers:
       '@anywalletkit/core':
         specifier: 0.9.0
         version: 0.9.0
+      '@anywalletkit/protocol-approvals-evm':
+        specifier: 0.6.1
+        version: 0.6.1(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-0x':
         specifier: 0.1.2
         version: 0.1.2(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
@@ -207,6 +210,12 @@ packages:
   '@anywalletkit/core@0.9.0':
     resolution: {integrity: sha512-vU5tjqG8z65dwK0X077XAIHgbdz9JQC4Tp62cxzgHk7KKge10UmfaX3jWrZmHbGMWaurNtjF5oeWSMqEqvPE3g==}
     engines: {node: '>=22'}
+
+  '@anywalletkit/protocol-approvals-evm@0.6.1':
+    resolution: {integrity: sha512-vcd6IeW73b8NSRIgGbjHZmvQs6T3HcAQNJY/jeWOJ7jBkGBEsk6BqZ09V1gvKM3fb6AyjDuucJtmBazKB2fOPQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@anywalletkit/core': 0.9.0
 
   '@anywalletkit/protocol-swap2-0x@0.1.2':
     resolution: {integrity: sha512-fecfyP30ahQwWpq36rCcKP2YJxjJ3vL9QEJYOLiRW6cOv+hu2dOELuWExuSYR8IzQNgPP1UNdNxwd3GzVl2NTw==}
@@ -3317,6 +3326,16 @@ snapshots:
       '@noble/hashes': 2.4.0
       '@scure/bip32': 2.4.0
       '@scure/bip39': 2.4.0
+
+  '@anywalletkit/protocol-approvals-evm@0.6.1(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+    dependencies:
+      '@anywalletkit/core': 0.9.0
+      viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
+    transitivePeerDependencies:
+      - bufferutil
+      - typescript
+      - utf-8-validate
+      - zod
 
   '@anywalletkit/protocol-swap2-0x@0.1.2(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:

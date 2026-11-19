@@ -65,9 +65,12 @@ describe("the health answer", () => {
       venues: {lifi: "keyed", relay: "anonymous", near_intents: "anonymous", jupiter: "anonymous", symbiosis: "anonymous", fynd: "anonymous", zeroex: "anonymous", across: "anonymous"},
       rpc: {configured: true, chains: ["1", "solana"]},
       thornode: true,
+      etherscan: false,
     });
-    // An older server has no thornode field: off.
+    // An older server has no thornode field: off. The Etherscan slot (D46) only while keyed.
     expect(parseHealth({venues: {}, rpc: {configured: false, chains: []}})?.thornode).toBe(false);
+    expect(parseHealth({venues: {etherscan: "keyed"}, rpc: {configured: false, chains: []}})?.etherscan).toBe(true);
+    expect(parseHealth({venues: {etherscan: "anonymous"}, rpc: {configured: false, chains: []}})?.etherscan).toBe(false);
     for (const bad of [null, "ok", {}, {venues: {}}, {venues: [], rpc: {}}]) expect(parseHealth(bad)).toBeNull();
   });
 

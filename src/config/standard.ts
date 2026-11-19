@@ -55,6 +55,8 @@ export interface SwapWebHealth {
   rpc: {configured: boolean; chains: readonly string[]};
   /** The THORNode confirm pass-through is on (absent on an older server: false). */
   thornode: boolean;
+  /** The Etherscan slot carries the Approvals section's scan with cp0x's key (D46; absent on an older server: false). */
+  etherscan?: boolean;
 }
 
 /** The slots that carry traffic. */
@@ -109,7 +111,7 @@ export function parseHealth(raw: unknown): SwapWebHealth | null {
   const venues: Partial<Record<ProxyVenue, "keyed" | "anonymous">> = {};
   for (const v of PROXY_VENUES) venues[v] = raw.venues[v] === "keyed" ? "keyed" : "anonymous";
   const chains = Array.isArray(raw.rpc.chains) ? raw.rpc.chains.filter((c): c is string => typeof c === "string" && /^(\d{1,12}|solana)$/.test(c)) : [];
-  return {venues, rpc: {configured: raw.rpc.configured === true, chains}, thornode: raw.thornode === true};
+  return {venues, rpc: {configured: raw.rpc.configured === true, chains}, thornode: raw.thornode === true, etherscan: raw.venues.etherscan === "keyed"};
 }
 
 /**
@@ -388,6 +390,8 @@ export interface StandardRuntime {
   venueLive(venue: ProxyVenue): boolean;
   /** Resolves once the health check answered or gave up (HEALTH_TIMEOUT_MS at most after start). */
   settled(): Promise<void>;
+  /** The Etherscan slot's URL while health says it is keyed (D46); null before the answer or without it. */
+  etherscanUrl(): string | null;
   /** Run the health check (once). */
   start(): Promise<void>;
   status(): ConnectionStatus;
@@ -478,6 +482,7 @@ export function createStandardRuntime(
     fetch: wrapped,
     venueLive: (venue) => live(`venue:${venue}`),
     settled: () => settledP,
+    etherscanUrl: () => (answer?.etherscan ? `${plan.base}/venue/etherscan/v2/api` : null),
     start() {
       started ??= (async () => {
         // The timer settles the page even if the answer never comes; a late answer is ignored (the page stays Public).
@@ -570,6 +575,13 @@ export function proxyVenueLive(venue: string): boolean {
 
 /** Resolves once this page's health check answered or gave up (3 s at most); at once on a page without Standard. */
 export const proxySettled = (): Promise<void> => runtime?.settled() ?? Promise.resolve();
+
+/**
+ * cp0x's Etherscan slot for the Approvals section's scan (D46: an owner's approval logs and a spender's name, with
+ * cp0x's key): its URL on a Standard page whose health says it is keyed; null in Public and Custom, before health
+ * answers (await proxySettled first) and after it failed.
+ */
+export const proxyEtherscanUrl = (): string | null => runtime?.etherscanUrl() ?? null;
 
 /** This page's connection status (Settings). */
 export const connectionStatus = (): ConnectionStatus => runtime?.status() ?? offline;

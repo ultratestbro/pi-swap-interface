@@ -9,3 +9,4 @@ export {decodeSwapId, encodeSwapId} from "./ids";
 export {FEE_CEILING, swapFeeCap, uncappedFeeText, SwapGateRefusal, SwapReviewMismatch} from "./gate";
 export {SOLANA_FEE_CEILING} from "./accounts/solana";
 export {omnistonSwapRouteSigned, tonCallSigned} from "./tonPlan";
+export {pinnedVenueOf} from "./pins";

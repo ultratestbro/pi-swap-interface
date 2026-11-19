@@ -56,6 +56,7 @@ export {
   nextUtcMidnight,
   parseHealth,
   proxySettled,
+  proxyEtherscanUrl,
   proxyTarget,
   proxyVenueLive,
   proxyVenueUrl,
