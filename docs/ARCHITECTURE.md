@@ -152,7 +152,7 @@ QR payer instead (BTC, ZEC…, TON without a TON wallet): ports.execute.issueDep
 ### 3.5 Track
 
 ```
-activity tracker (leader tab via navigator.locks "cp0x-swap-tracker"): duePolls every 5 s, hidden too (D42), all on visibilitychange
+activity tracker (leader tab via navigator.locks "cp0x-swap-tracker", taken by the shown tab, D44): duePolls every 5 s, hidden too (D42), all on visibilitychange
   → swap.swapStatus(trackId ?? id, fromChain) → applyStatus | pollFailed → store (IndexedDB) → BroadcastChannel → every tab
   → settle: invalidate react-query ["bal"]
   → a QR deposit first seen (depositSeen): `counted` → Standard only: one POST <API>/api/v2/swap-web/sent (D36)
@@ -1739,6 +1739,17 @@ first large Relay swaps (100 000 USDT → USDG) read "100 000" in the chat while
 - **Tests.** `reports.test.ts` (exact amounts, both addresses, a QR deposit's refund address, an odd address left
   out), `counter.test.ts` (the runner's body), `settings.test.tsx` (the copy), e2e `standard.spec.ts` (the report's
   keys, exact amounts, the two addresses).
+
+**D44 — The tab the person looks at polls (owner, 2026-11-19).** A Curve swap (DAI → ETH on Ethereum) was mined at
+13:06:23 and showed in MetaMask, but the open tab still read "in progress" until the person pressed "Refresh status"
+(13:07:48): only the Web Lock holder polls, and that was another swap.cp0x.com tab, in the background with its timers
+slowed (D42) — or one opened before D42 that polls only while shown.
+- **Rule.** A tab takes the lock (`steal`) as it loads while shown and whenever it is shown again, and re-checks every
+  unfinished swap at once; the tab it was taken from queues for the lock again, so it leads once this one goes away.
+  A tab that loads hidden queues as before. One poller per browser still; the leader is the last tab looked at.
+- **Fallback.** Without Web Locks every tab polls (as before); a browser without `steal` queues instead (as before).
+- **Tests.** `tests/unit/activity/tracker.test.ts` (a hidden tab queues and leads once the holder goes; a shown tab
+  takes the lock on load and back on `visibilitychange`, the other queues once).
 
 ## 5. Conventions
 

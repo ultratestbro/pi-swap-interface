@@ -132,44 +132,101 @@ describe("useSwapTracker / useActivity / useSwap", () => {
     }
   });
 
-  it("with Web Locks only the lock holder polls; the next tab takes over when it unmounts", async () => {
-    await loadSwaps();
-    saveSwap(rec("awk1.lifi.lead", {createdAt: Date.now()}));
-    status.fn.mockResolvedValue({status: "pending", transactions: []});
-    // A minimal LockManager: one holder per name, a queue behind it.
-    const queue: (() => void)[] = [];
-    let held = false;
+  // A minimal LockManager: one holder per name, a queue behind it, `steal` (the holder's request rejects).
+  function fakeLocks() {
+    type Entry = {n: number; steal: boolean; grant: () => void; reject: (e: unknown) => void};
+    const entries: Entry[] = [];
+    const queue: Entry[] = [];
+    let holder: Entry | null = null;
     const locks = {
-      request: (_name: string, opts: {signal?: AbortSignal}, cb: () => Promise<void>) =>
+      request: (_name: string, opts: {signal?: AbortSignal; steal?: boolean}, cb: () => Promise<void>) =>
         new Promise<void>((resolve, reject) => {
-          const grant = () => {
-            held = true;
-            void cb().then(() => {
-              held = false;
-              queue.shift()?.();
-              resolve();
-            });
+          const entry: Entry = {
+            n: entries.length + 1,
+            steal: opts.steal === true,
+            grant: () => {
+              holder = entry;
+              void cb().then(() => {
+                if (holder !== entry) return; // stolen: its request has rejected already
+                holder = null;
+                resolve();
+                queue.shift()?.grant();
+              });
+            },
+            reject,
           };
-          if (!held) grant();
+          entries.push(entry);
+          if (opts.steal) {
+            const prev = holder;
+            holder = null;
+            prev?.reject(new DOMException("stolen", "AbortError"));
+            entry.grant();
+          } else if (!holder) entry.grant();
           else {
-            queue.push(grant);
-            opts.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+            queue.push(entry);
+            opts.signal?.addEventListener("abort", () => {
+              const i = queue.indexOf(entry);
+              if (i < 0) return;
+              queue.splice(i, 1);
+              reject(new DOMException("aborted", "AbortError"));
+            });
           }
         }),
     };
     Object.defineProperty(navigator, "locks", {value: locks, configurable: true});
+    return {entries, queue, holder: () => holder};
+  }
+
+  it("with Web Locks only the lock holder polls; a hidden tab queues and takes over when it unmounts", async () => {
+    await loadSwaps();
+    saveSwap(rec("awk1.lifi.lead", {createdAt: Date.now()}));
+    status.fn.mockResolvedValue({status: "pending", transactions: []});
+    const lock = fakeLocks();
     try {
       const qc = new QueryClient();
       const wrapper = ({children}: {children: ReactNode}) => createElement(QueryClientProvider, {client: qc}, children);
       const leader = renderHook(() => activityPort.useSwapTracker(), {wrapper});
       await waitFor(() => expect(status.fn).toHaveBeenCalled());
+      const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
       const follower = renderHook(() => activityPort.useSwapTracker(), {wrapper});
-      expect(queue).toHaveLength(1);
+      visibility.mockRestore();
+      expect(lock.queue.map((e) => e.n)).toEqual([2]);
       leader.unmount();
-      await waitFor(() => expect(queue).toHaveLength(0));
-      expect(held).toBe(true); // the follower holds it now
+      await waitFor(() => expect(lock.queue).toHaveLength(0));
+      expect(lock.holder()?.n).toBe(2); // the follower holds it now
       follower.unmount();
-      await waitFor(() => expect(held).toBe(false));
+      await waitFor(() => expect(lock.holder()).toBeNull());
+    } finally {
+      Reflect.deleteProperty(navigator, "locks");
+    }
+  });
+
+  it("the tab the person looks at takes the lock — on load and when shown again; the other queues (owner 2026-11-19)", async () => {
+    await loadSwaps();
+    saveSwap(rec("awk1.lifi.shown", {createdAt: Date.now()}));
+    status.fn.mockResolvedValue({status: "pending", transactions: []});
+    const lock = fakeLocks();
+    try {
+      const qc = new QueryClient();
+      const wrapper = ({children}: {children: ReactNode}) => createElement(QueryClientProvider, {client: qc}, children);
+      // An older tab holds the lock (in the background, its timers slowed); a new tab opens in front.
+      const polls = () => status.fn.mock.calls.filter(([id]) => id === "awk1.lifi.shown").length;
+      const older = renderHook(() => activityPort.useSwapTracker(), {wrapper});
+      await waitFor(() => expect(polls()).toBe(1));
+      const shown = renderHook(() => activityPort.useSwapTracker(), {wrapper});
+      // It takes the lock and checks every unfinished swap at once; the older one queues behind it.
+      expect(lock.holder()?.n).toBe(2);
+      await waitFor(() => expect(polls()).toBe(2));
+      await waitFor(() => expect(lock.queue.map((e) => e.n)).toEqual([3]));
+      // The person goes back to the older tab: it takes the lock again (the newer tab, already leading, re-checks).
+      document.dispatchEvent(new Event("visibilitychange"));
+      await waitFor(() => expect(lock.holder()?.steal).toBe(true));
+      expect(lock.holder()!.n).toBeGreaterThan(3);
+      // One hold, the other tab queued once: no tab piles up requests.
+      await waitFor(() => expect(lock.queue).toHaveLength(1));
+      shown.unmount();
+      older.unmount();
+      await waitFor(() => expect(lock.queue).toHaveLength(0));
     } finally {
       Reflect.deleteProperty(navigator, "locks");
     }

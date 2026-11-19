@@ -757,7 +757,8 @@ Same `pollSwap(r)` and `swapContext(r)`. `useSwapTracker()`:
 - `refreshBalances(qc, accountId)` → `qc.invalidateQueries({queryKey: ["balances"]})`.
 - `report("tx", …)` → `console.warn` (no backend; leave a `reportIncident` hook).
 - One poller per browser: `navigator.locks.request("cp0x-swap-tracker", () => new Promise(() => {}))` held by the
-  leader tab; others only render (BroadcastChannel keeps them in sync). Without `navigator.locks`, every tab polls
+  leader tab; others only render (BroadcastChannel keeps them in sync). The shown tab takes it (`{steal: true}`) on
+  load and on `visibilitychange`; the one it was taken from queues again (D44). Without `navigator.locks`, every tab polls
   (`polling` set de-dupes per tab only — acceptable).
 - TICK_MS 5 000 unchanged.
 
