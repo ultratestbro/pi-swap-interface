@@ -1,6 +1,7 @@
 // Ported from cp0x-elysium apps/mobile/lib/swap/routes.test.ts @756b115 (import paths changed).
 import {describe, expect, it} from "vitest";
 import {isStale, keepSelection, orderRoutes, parseRejections, tagRoutes, toRouteView, type RouteView} from "../../../src/swap/routes";
+import {preferSoonBest} from "../../../src/swap/webRoute";
 
 const q = (provider: string, min: string, eta: number, extra: Record<string, unknown> = {}) =>
   ({
@@ -197,3 +198,22 @@ describe("toRouteView approval spender", () => {
     expect(toRouteView(q("omniston", "1", 240, {txRequest: {approvalAddress: own}}), {chain: "eip155:8453", isToken: true}).approvalSpender).toBe(own);
   });
 });
+
+describe("preferSoonBest (D47)", () => {
+  const r = (eta: number, value: number, tags: RouteView["tags"] = []) => ({...toRouteView(q("x", "1", eta, {tags})), relativeValue: value});
+  it("moves 'best' off a route of over an hour to the best-valued route within the hour", () => {
+    const slow = r(115_240, 1, ["best"]);
+    const fast = r(45, 0.998, ["fastest"]);
+    const mid = r(600, 0.997);
+    const out = preferSoonBest([slow, fast, mid]);
+    expect(out.map((x) => x.tags)).toEqual([[], ["best"], []]);
+  });
+  it("leaves the auction's pick when it is within the hour, or nothing sooner is known", () => {
+    const quick = [r(1180, 1, ["best"]), r(45, 0.998, ["fastest"])];
+    expect(preferSoonBest(quick)).toEqual(quick);
+    // An unknown ETA (0) isn't known to be sooner.
+    const unknown = [r(115_240, 1, ["best"]), r(0, 0.99)];
+    expect(preferSoonBest(unknown)).toEqual(unknown);
+  });
+});
+

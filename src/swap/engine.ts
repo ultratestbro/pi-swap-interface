@@ -37,7 +37,7 @@ import {reportRefused} from "../activity/counter";
 import {orderRoutes, parseRejections, tagRoutes} from "./routes";
 import {createProviderStores} from "./stores";
 import {sourceParams} from "./source";
-import {toWebRoute} from "./webRoute";
+import {preferSoonBest, toWebRoute} from "./webRoute";
 
 type Prices = Readonly<Record<string, number>>;
 
@@ -288,7 +288,8 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
       rows.filter((x, i) => !(x.provider && quoted.has(x.provider)) && (!x.provider || rows.findIndex((y) => y.provider === x.provider) === i));
     const view = (quotes: RouteSet["quotes"], pending: string[], refusals: readonly Swap2Refusal[]): RouteSnapshot => ({
       mode,
-      routes: orderRoutes(quotes.map((q) => shown(toWebRoute(q, source, gas, native, req.slippageBps)))),
+      // The default pick is never a route of over an hour while a sooner one exists (D47: CCTP's Standard from Linea).
+      routes: orderRoutes(preferSoonBest(quotes.map((q) => shown(toWebRoute(q, source, gas, native, req.slippageBps))))),
       pending,
       rejections: onePerVenue(
         parseRejections(scrub ? refusals.map((x) => ({message: scrub(x.message), ...(x.reason ? {reason: x.reason} : {})})) : refusals, req.from).map((x) =>

@@ -379,6 +379,20 @@ describe("a venue with several routes (D47: CCTP Fast and Standard)", () => {
     expect(one!.rejections).toEqual([]);
   });
 
+  it("a route of over an hour is never the default pick while a sooner one exists (Linea's Standard: up to 32 h)", async () => {
+    // Fast's fee (20 bps) is outside the router's tie band: the auction ranks the free 32 h Standard best.
+    const linea = routesVenue("cctp", {fast: {min: "4990000", eta: 45}, standard: {min: "5000000", eta: 115_240}});
+    const final = await engineOver([linea]).quoteRoutes(live(), () => {});
+    expect(final!.routes.map((r) => [r.routeId, r.tags])).toEqual([
+      ["fast", ["best"]],
+      ["standard", []],
+    ]);
+    // Within the hour (Standard from an L2, ~20 min) the auction's pick stands.
+    const l2 = routesVenue("cctp", {fast: {min: "4990000", eta: 45}, standard: {min: "5000000", eta: 1180}});
+    const kept = await engineOver([l2]).quoteRoutes(live(), () => {});
+    expect(kept!.routes[0]).toMatchObject({routeId: "standard", tags: ["best"]});
+  });
+
   it("a route the venue no longer offers is gone, never replaced by its other one", async () => {
     const fastOnly = routesVenue("cctp", {fast: {min: "4999230", eta: 45}});
     const res = await engineOver([fastOnly]).requoteRoute(request(), {provider: "cctp", routeId: "standard"});

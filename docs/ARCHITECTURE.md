@@ -1834,8 +1834,11 @@ the source's finality — about 15–19 minutes from Ethereum and the L2s, hours
 - **Quoting.** The router asks a venue's `getQuotes` in a dry round without a routeId and holds each of its quotes to
   a routeId. `delegate` forwards it; the round's observer wraps it like `getQuote` (skips, back-offs, the rate-limit
   watch, the settled row); a wrapper of `getQuote` alone drops it, so nothing reaches the venue around a gap, gate or
-  cool-down. CCTP lists Standard next to Fast only when it pays out more. Ranking stays the router's: within its tie
-  band (5 bps) the faster wins, so Fast is the default where Circle's fee is about 1 bp.
+  cool-down. CCTP lists Standard next to Fast only when it pays out more. Ranking is the router's — within its tie
+  band (5 bps) the faster wins, so Fast is the default where Circle's fee is about 1 bp — with one rule on top (owner
+  2026-11-20, "добавь"): a route of over an hour (`SLOW_ROUTE_S`; Standard from Linea takes up to 32 h) is never the
+  default pick while a route known to arrive within the hour exists — "best" moves to the best-valued of those
+  (`preferSoonBest`, applied to each round's final list). The slow route stays listed with its ETA, for the user to take.
 - **The reviewed route, exactly.** The review re-quotes `{provider, routeId}` (`requoteRoute`: the router then calls
   `getQuote` with that routeId — never the venue's list, whose best, the free Standard, would replace a picked Fast);
   `ReviewedSwap.routeId` goes into the engine config (`RouterSwap2Config.routeId`: every quote of the execution, the

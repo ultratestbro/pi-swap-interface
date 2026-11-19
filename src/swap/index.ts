@@ -43,7 +43,7 @@ export {FYND_LICENSE_URL, VENUE_TRUST, fyndRouterNotice, venueTrust, venueTrustT
 // ── route list ──
 export {friendlyReason, isStale, keepSelection, orderRoutes, parseRejections, tagRoutes, toRouteView, type QuoteLike} from "./routes";
 export {classifyRefusal, redactRaw, type ClassifiedRefusal} from "./refusals";
-export {executionOf, routeFloor, routeKey, toWebRoute} from "./webRoute";
+export {executionOf, preferSoonBest, routeFloor, routeKey, SLOW_ROUTE_S, toWebRoute} from "./webRoute";
 export {DEBOUNCE_MS, PREVIEW_DEBOUNCE_MS, PREVIEW_STALE_MS, REFRESH_MS, createUseRoutes, routesKey, type QuoteRoutesFn, type UseRoutesOptions} from "./useRoutes";
 // Only the predicate leaves the module: the sample addresses stay inside the engine's preview round (D7).
 export {canPreview} from "./preview";

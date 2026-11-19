@@ -91,3 +91,24 @@ export function toWebRoute(
 /** The minimum a route is held to — what the list, the summary and the review show, and the swap enforces. */
 export const routeFloor = (route: Pick<WebRoute, "minDestAmount" | "floorBps">): bigint =>
   executionFloor(route.minDestAmount, route.floorBps !== undefined ? BigInt(route.floorBps) : FLOOR_TOLERANCE_BPS);
+
+/** A route that takes longer than this is never the default pick while a route known to be faster exists (D47). */
+export const SLOW_ROUTE_S = 3600;
+
+/**
+ * The auction's "best", unless it takes over an hour (CCTP's Standard from Linea: up to 32 h, D47) while a route known
+ * to arrive within the hour exists: then "best" moves to the top of those by value (the router's relativeValue, then the
+ * larger guaranteed output) — the list's default pick. The slow route stays listed, with its ETA, for the user to take.
+ * An unknown ETA (0) never counts as fast. Returns the routes as given when nothing moves.
+ */
+export function preferSoonBest<R extends Pick<WebRoute, "tags" | "etaSeconds" | "relativeValue" | "minDestAmount">>(routes: readonly R[]): R[] {
+  const best = routes.find((r) => r.tags.includes("best"));
+  if (!best || best.etaSeconds <= SLOW_ROUTE_S) return [...routes];
+  const soon = routes.filter((r) => r.etaSeconds > 0 && r.etaSeconds <= SLOW_ROUTE_S);
+  if (!soon.length) return [...routes];
+  const pick = soon.reduce((a, b) => (b.relativeValue > a.relativeValue || (b.relativeValue === a.relativeValue && b.minDestAmount > a.minDestAmount) ? b : a));
+  return routes.map((r) =>
+    r === best ? {...r, tags: r.tags.filter((t) => t !== "best")} : r === pick ? {...r, tags: ["best", ...r.tags.filter((t) => t !== "best" && t !== "fastest")]} : r,
+  );
+}
+
