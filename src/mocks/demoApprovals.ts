@@ -48,6 +48,11 @@ export function demoApprovalRows(): ApprovalRow[] {
     ),
     row(
       "eip155:1",
+      {standard: "erc20", token: token("eip155:1", "USDC")?.contract ?? "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", spender: "0x1111111254EEB25477B68fb85Ed929f73A960582", amount: MAX, unlimited: true},
+      {token: token("eip155:1", "USDC"), balance: 0n, spenderName: "AggregationRouterV5", verified: false},
+    ),
+    row(
+      "eip155:1",
       {standard: "erc721", token: "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D", spender: "0x1E0049783F008A0085193E00003D00cd54003c71", amount: null, unlimited: true},
       {token: null, balance: null, spenderName: "OpenSea Conduit", verified: false, collection: "BoredApeYachtClub"},
     ),

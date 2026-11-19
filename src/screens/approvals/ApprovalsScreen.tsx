@@ -9,7 +9,7 @@
 import {useMemo, useState} from "react";
 import type {ApprovalRow, ChainScan} from "../../contracts/approvals";
 import type {WalletFamily} from "../../contracts/wallets";
-import {evmOwner, scannedOn, sortRows, usdAtRisk} from "../../approvals";
+import {atRiskUnits, evmOwner, scannedOn, sortRows, usdAtRisk} from "../../approvals";
 import {addressUrl, chainByCaip2Web, formatAmount, formatUsd, shortAddress} from "../../catalog";
 import {isDemo, setHashQuery, useHashRoute, usePorts} from "../../config";
 import {swapErrorText} from "../../execute";
@@ -204,7 +204,6 @@ function ApprovalItem({
   onRevoke(): void;
 }) {
   const a = row.approval;
-  const usd = usdAtRisk(row, prices);
   const eoa = a.risks.includes("eoa-spender");
   const spenderUrl = addressUrl(row.caip2, a.spender);
   const token = row.token ? {...row.token, ...(logos[row.token.key] ? {logo: logos[row.token.key]} : {})} : null;
@@ -238,7 +237,7 @@ function ApprovalItem({
         </div>
       </div>
       <div className={s.side}>
-        {usd !== null && usd > 0 ? <span className={s.usd}>{formatUsd(usd)}</span> : <span className={s.usdNone}>—</span>}
+        <AtRisk row={row} prices={prices} />
         {a.standard === "eip7702" ? (
           <span className={s.hint}>Remove it in your wallet&apos;s settings</span>
         ) : canRevoke ? (
@@ -247,6 +246,25 @@ function ApprovalItem({
       </div>
     </li>
   );
+}
+
+/**
+ * What the spender could take now: in USD at the token's price, else in the token; "None in wallet" when the owner
+ * holds none of it (the allowance stays: anything received later is spendable). Nothing for NFTs, a delegation or a
+ * balance that couldn't be read.
+ */
+function AtRisk({row, prices}: {row: ApprovalRow; prices: Readonly<Record<string, number>>}) {
+  if (!row.token || row.balance === null) return null;
+  if (row.balance === 0n)
+    return (
+      <span className={s.usdNone} title="You hold none of it now — but the approval still lets the spender take any you receive later.">
+        None in wallet
+      </span>
+    );
+  const usd = usdAtRisk(row, prices);
+  if (usd !== null && usd > 0) return <span className={s.usd}>{formatUsd(usd)}</span>;
+  const units = atRiskUnits(row);
+  return units ? <span className={s.usd}>{`${formatAmount(units.toString(), row.token.decimals)} ${row.token.symbol}`}</span> : null;
 }
 
 const STANDARD_ONLY = "Checked in Standard mode only";

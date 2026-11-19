@@ -25,13 +25,17 @@ const test = base.extend<{watch: PageWatch}>({
 test("the demo wallet's approvals, most at risk first; a revoke drops its row", async ({page}, info) => {
   await page.goto("./#/revoke?demo=1");
   const rows = page.getByTestId("approval-row");
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(5);
   // Unlimited USDT to a plain address, then the unlimited USDC: the largest amount that could be spent leads.
   await expect(rows.nth(0)).toContainText("USDT");
   await expect(rows.nth(0)).toContainText("Unlimited");
   await expect(rows.nth(0)).toContainText("Wallet address");
   await expect(rows.nth(1)).toContainText("Verified by cp0x");
-  await expect(page.getByTestId("approvals-summary")).toContainText("4");
+  await expect(page.getByTestId("approvals-summary")).toContainText("5");
+  // A token the wallet holds none of says so; an NFT approval shows no amount at all.
+  await expect(rows.nth(3)).toContainText("None in wallet");
+  await expect(rows.nth(4)).toContainText("BoredApeYachtClub");
+  await expect(rows.nth(4)).not.toContainText("—");
   await expect(page.getByTestId("approvals-summary")).toContainText("could be spent");
   await expect(page.getByTestId("approvals-not-checked")).toContainText("BNB Chain");
   await expectNoHorizontalScroll(page);
@@ -39,20 +43,20 @@ test("the demo wallet's approvals, most at risk first; a revoke drops its row", 
 
   await rows.nth(0).getByTestId("approval-revoke").click();
   await expect(page.getByText("Revoked on Ethereum")).toBeVisible();
-  await expect(rows).toHaveCount(3);
+  await expect(rows).toHaveCount(4);
   await expect(rows.nth(0)).not.toContainText("USDT");
 });
 
 test("another address is checked read-only", async ({page}) => {
   await page.goto("./#/revoke?demo=1");
-  await expect(page.getByTestId("approval-row")).toHaveCount(4);
+  await expect(page.getByTestId("approval-row")).toHaveCount(5);
   await page.getByTestId("approvals-address").fill("0x1111111111111111111111111111111111111111");
   await expect(page.getByTestId("approval-row")).toHaveCount(0);
   await expect(page.getByText("No approvals left on the networks checked")).toBeVisible();
   await page.getByTestId("approvals-address").fill("not an address");
   await expect(page.getByText("That isn't an EVM address.")).toBeVisible();
   await page.getByRole("button", {name: "My wallet"}).click();
-  await expect(page.getByTestId("approval-row")).toHaveCount(4);
+  await expect(page.getByTestId("approval-row")).toHaveCount(5);
   await expect(page.getByTestId("approval-revoke").first()).toBeVisible();
   await expectNoHorizontalScroll(page);
 });

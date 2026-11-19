@@ -216,7 +216,8 @@
 
 .usdNone {
   color: var(--dim);
-  font-size: 15px;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .hint {
