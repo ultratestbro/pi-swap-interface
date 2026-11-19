@@ -1700,7 +1700,7 @@ the summary.
   verified) is reported once per page and code (`once`); previews never. An SDK reason carries the check its text names
   (owner 2026-11-19, `refusals.ts` gateCode): `policy_refused:memo`, `:precision`, `:fees`, `:router`, … — a word from a
   fixed list (the first whose pattern the text names, the narrower first; a failed simulation by what its revert
-  names), never the text; a text none fits keeps the bare reason.
+  names, else its revert's 4-byte selector, D45), never the text; a text none fits keeps the bare reason.
 - **Only Standard, fire-and-forget**: D36's rules — a Standard page with a plan, never Public, Custom, demo or a build
   without the API; simple `text/plain` POSTs to the plan's base with `keepalive`, no credentials, no referrer, 5 s; the
   answer is never read. guard-dist's one-origin rule stands (URLs are built from the plan's base).
@@ -1750,6 +1750,23 @@ slowed (D42) — or one opened before D42 that polls only while shown.
 - **Fallback.** Without Web Locks every tab polls (as before); a browser without `steal` queues instead (as before).
 - **Tests.** `tests/unit/activity/tracker.test.ts` (a hidden tab queues and leads once the holder goes; a shown tab
   takes the lock on load and back on `visibilitychange`, the other queues once).
+
+**D45 — A revert just after an approval is asked again (owner, 2026-11-19).** 0x, DAI → ETH on Ethereum: the person
+signed the Permit2 transfer, paid the approval (mined 13:04:23) and confirmed; then the engine's dry run of the signed
+swap reverted (`simulation_failed`) and the engine revoked the approval it had just granted — one more prompt and fee
+(13:04:59). Only the code was on record, not the revert.
+- **Rule.** The EVM account (`accounts/evm.ts`) asks a dry run (`quoteSendTransaction`) or its own simulation before
+  sending that reverts within 60 s of an approval (or claim) it saw mined again, twice, 2.5 s apart: the RPC answering
+  may not have that block yet (load-balanced nodes lag). A revert that stands is refused as before; nothing is sent on
+  a retry; before any approval nothing changes (the engine's gas check expects a revert there).
+- **On record.** A `simulation_failed` none of whose words fit carries its revert's 4-byte selector
+  (`simulation_failed:0x97a6f3b9`, refusals.ts gateCode) — an error the contract declares, never an address or hash.
+- **The SDK's, not here.** Re-quote once instead of refusing when the dry run fails right after an approval; keep a
+  Permit2 approval rather than revoke it (each transfer needs its own signature); sign the Permit2 transfer after the
+  approval, not before (one prompt fewer when the approval outlives the quote).
+- **Tests.** `tests/unit/execute/flow.test.ts` (a revert that clears once the RPC catches up is sent, not revoked; one
+  that stands is asked three times, then revoked; the engine's own dry run likewise; no retry before an approval),
+  `tests/unit/swap/refusals.test.ts` (the selector, never an address or hash).
 
 ## 5. Conventions
 

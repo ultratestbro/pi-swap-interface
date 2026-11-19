@@ -712,12 +712,21 @@ const REVERT_TAGS: readonly (readonly [tag: string, re: RegExp])[] = [
   ["requote", /no longer quotes/i],
 ];
 
-/** The code a safety refusal is reported with: its reason, and the check its text names ("policy_refused:fees"). */
+/** A revert's custom error: its 4-byte selector, alone or before whole 32-byte words (never an address or a hash). */
+const SELECTOR = /0x([0-9a-f]{8})(?:[0-9a-f]{64})*(?![0-9a-f])/i;
+
+/**
+ * The code a safety refusal is reported with: its reason, and the check its text names ("policy_refused:fees"). A
+ * failed simulation none of its words fit is named by its revert's selector, when the text carries one
+ * ("simulation_failed:0x97a6f3b9": an error a contract declares, not free text).
+ */
 export function gateCode(reason: Swap2RefusalReason, text: string): string {
   // Without the "<venue>: " / "swap2: " in front (of each error of a chain, " | "): a venue's name is no check ("wrap: …").
   const said = text.replace(/(^| \| )(?:[\w-]+: )+/g, "$1");
   const tag = (reason === "simulation_failed" ? REVERT_TAGS : CHECK_TAGS).find(([, re]) => re.test(said))?.[0];
-  return tag ? `${reason}:${tag}` : reason;
+  if (tag) return `${reason}:${tag}`;
+  const selector = reason === "simulation_failed" ? said.match(SELECTOR)?.[1] : undefined;
+  return selector ? `${reason}:0x${selector.toLowerCase()}` : reason;
 }
 
 const BY_REASON: Readonly<Record<Swap2RefusalReason, {category: RefusalCategory; short: string; detail: string}>> = {

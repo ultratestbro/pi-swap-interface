@@ -72,6 +72,8 @@ export interface ExecuteDeps {
   router?: (provider: string) => CrossChainRouter;
   /** EVM reads (balance, allowance, gas quote, simulation); default the SDK's read-only account over the RPC list. */
   evmReads?: (signer: EvmSourceSigner) => EvmReads;
+  /** The pause before a revert just after an approval is asked again (accounts/evm.ts RECHECK_MS). */
+  evmRecheckMs?: number;
   /** The venue's EVM rule; default pins.ts. */
   venueRule?: (provider: string) => VenueRule | undefined;
   /** The venue's Tron rule; default pins.ts. */
@@ -260,7 +262,7 @@ async function openAccount(input: ExecuteSwapInput, gate: SwapGate, signWindow: 
   if (signer.family === "evm") {
     await assertEvmWallet(signer);
     await assertEoa(signer.pub, signer.owner, chainByCaip2Web(reviewed.fromChain)?.name ?? from.chainName);
-    const raw = evmEngineAccount(signer, deps.evmReads ? {reads: deps.evmReads(signer)} : {});
+    const raw = evmEngineAccount(signer, {...(deps.evmReads ? {reads: deps.evmReads(signer)} : {}), ...(deps.evmRecheckMs !== undefined ? {recheckMs: deps.evmRecheckMs} : {})});
     if (!same(await raw.getAddress(), reviewed.refundAddress)) throw new SwapReviewMismatch("the connected wallet isn't the reviewed one");
     return gateAccount(raw, gate);
   }

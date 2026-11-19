@@ -120,16 +120,60 @@ export async function assertEvmWallet(signer: Pick<EvmSourceSigner, "wallet" | "
   if (live !== signer.chain.id) throw refusal(`Your wallet switched networks — nothing was sent. Switch back to ${signer.chain.name}.`);
 }
 
+/** A call the node ran and refused (swap2-core's dry-run "revert"), as against an RPC that didn't answer. */
+const REVERTED = /execution reverted|\breverted\b|ExecutionReverted|ContractFunctionReverted/i;
+
+export function isRevert(e: unknown): boolean {
+  for (let x = e, i = 0; x && typeof x === "object" && i < 8; x = (x as {cause?: unknown}).cause, i++) {
+    const o = x as {code?: unknown; message?: unknown; shortMessage?: unknown; details?: unknown};
+    if (o.code === 3 || REVERTED.test([o.message, o.shortMessage, o.details].filter((v) => typeof v === "string").join(" "))) return true;
+  }
+  return false;
+}
+
+/** How long after this execution's approval (or claim) was mined a revert may be the RPC lagging behind it. */
+export const AFTER_MINED_MS = 60_000;
+/** A revert in that window is asked again this often, this many times, before it stands. */
+export const RECHECK_MS = 2_500;
+export const RECHECKS = 2;
+
 /**
  * Adapt a connected EVM wallet to the engine account. `reads` defaults to the SDK's read-only account over
  * `signer.rpcUrls`. The wallet must already be on `signer.chain` (wallets.getSigner switched it).
+ *
+ * A dry run (`quoteSendTransaction`, the engine's estimate of the call it is about to send) or the simulation before
+ * sending that reverts within AFTER_MINED_MS of an approval this account saw mined is asked again, RECHECKS times
+ * RECHECK_MS apart (owner 2026-11-19): the RPC answering it may not have the approval's block yet (load-balanced
+ * nodes lag), and the engine refuses at once and revokes the approval it just paid for. A revert that stands is
+ * refused as before; nothing is ever sent on a retry.
  */
-export function evmEngineAccount(signer: EvmSourceSigner, opts: {reads?: EvmReads} = {}): EvmEngineAccount {
+export function evmEngineAccount(signer: EvmSourceSigner, opts: {reads?: EvmReads; recheckMs?: number} = {}): EvmEngineAccount {
   const owner = getAddress(signer.owner);
   const chainId = signer.chain.id;
   const reads = opts.reads ?? evmReads(signer);
   const wallet = signer.wallet;
   const assertWallet = () => assertEvmWallet(signer);
+  const recheckMs = opts.recheckMs ?? RECHECK_MS;
+  let minedAt = 0;
+  const justMined = () => minedAt > 0 && Date.now() - minedAt < AFTER_MINED_MS;
+  const dryRun = async (tx: EvmTransaction) => {
+    for (let i = 0; ; i++) {
+      try {
+        return await reads.quoteSendTransaction(tx);
+      } catch (e) {
+        if (i >= RECHECKS || !justMined() || !isRevert(e)) throw e;
+        await sleep(recheckMs);
+      }
+    }
+  };
+  const simulate = async (tx: EvmTransaction) => {
+    let sim = await reads.simulateTransaction(tx).catch(() => null);
+    for (let i = 0; sim && !sim.ok && justMined() && i < RECHECKS; i++) {
+      await sleep(recheckMs);
+      sim = await reads.simulateTransaction(tx).catch(() => null);
+    }
+    return sim;
+  };
 
   return {
     getAddress: async () => owner,
@@ -137,12 +181,12 @@ export function evmEngineAccount(signer: EvmSourceSigner, opts: {reads?: EvmRead
     getBalance: () => reads.getBalance(),
     getAllowance: (token, spender) => reads.getAllowance(token, spender),
     getTokenInfo: (token) => reads.getTokenInfo(token),
-    quoteSendTransaction: (tx) => reads.quoteSendTransaction(tx),
+    quoteSendTransaction: (tx) => dryRun(tx),
     async sendTransaction(tx) {
       checkTx(tx, chainId);
       await assertWallet();
       // Parity with wallet-evm: refuse a transaction that reverts in eth_call. A transport failure is not a refusal (the wallet simulates too).
-      const sim = await reads.simulateTransaction(tx).catch(() => null);
+      const sim = await simulate(tx);
       if (sim && !sim.ok) throw refusal(`The transaction would fail on-chain (${sim.reason.slice(0, 120)}) — nothing was sent.`);
       try {
         const hash = await wallet.sendTransaction({
@@ -158,7 +202,10 @@ export function evmEngineAccount(signer: EvmSourceSigner, opts: {reads?: EvmRead
         throw normalizeWalletError(e, signer.transport);
       }
     },
-    waitForTransaction: (hash) => waitForEvmTx(signer.pub, hash as Hex),
+    async waitForTransaction(hash) {
+      await waitForEvmTx(signer.pub, hash as Hex);
+      minedAt = Date.now();
+    },
     async signTypedData(td) {
       if (!td || typeof td !== "object" || !td.primaryType || !td.domain || !td.types || !td.message)
         throw refusal("The order to sign is malformed — nothing was signed.");

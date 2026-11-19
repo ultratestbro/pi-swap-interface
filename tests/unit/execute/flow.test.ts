@@ -177,7 +177,7 @@ function rig(
     transport: "injected",
   };
   const router = new CrossChainRouter([provider]);
-  const deps: ExecuteDeps = {router: () => router, evmReads: () => o.reads ?? fakeReads()};
+  const deps: ExecuteDeps = {router: () => router, evmReads: () => o.reads ?? fakeReads(), evmRecheckMs: 1};
   const phases: string[] = [];
   const run = () => executeSwap({from: FROM, to: TO, reviewed: o.r ?? reviewed, signer, onPhase: (p) => phases.push(p)}, deps);
   return {run, calls: w.calls, wallet: w, phases, signer};
@@ -381,10 +381,50 @@ describe("executeSwap through the gate (real engine, fake wallet)", () => {
   });
 
   it("a swap call that reverts in eth_call never reaches the wallet (the approval is revoked)", async () => {
-    const reads = fakeReads({simulateTransaction: async (tx) => (tx.data === DATA ? {ok: false, reason: "STF"} : {ok: true, gas: 1n, returnData: "0x"})});
+    let asked = 0;
+    const reads = fakeReads({simulateTransaction: async (tx) => (tx.data === DATA ? (asked++, {ok: false, reason: "STF"}) : {ok: true, gas: 1n, returnData: "0x"})});
     const {run, calls} = rig(venue(), {reads});
     await expect(run()).rejects.toThrow(/would fail on-chain/);
     expect(sends(calls).map((a) => a.data)).toEqual([approveData(ROUTER, AMOUNT), approveData(ROUTER, 0n)]);
+    // Right after its approval was mined: asked again twice (a lagging RPC), then it stands.
+    expect(asked).toBe(3);
+  });
+
+  it("a swap call that reverts only until the RPC sees the approval is sent, not refused and revoked", async () => {
+    let asked = 0;
+    const reads = fakeReads({
+      simulateTransaction: async (tx) => (tx.data === DATA && asked++ === 0 ? {ok: false, reason: "TRANSFER_FROM_FAILED"} : {ok: true, gas: 1n, returnData: "0x"}),
+    });
+    const {run, calls} = rig(venue(), {reads});
+    await run();
+    expect(sends(calls).map((a) => a.data)).toEqual([approveData(ROUTER, AMOUNT), DATA]);
+  });
+
+  it("the engine's dry run that reverts just after the approval is asked again, then the swap goes", async () => {
+    // The engine estimates the call itself (ownGasEstimate, as for a Permit2 swap): before the approval (the gas check,
+    // expected to revert) and after it (the dry run, which a lagging RPC fails once).
+    const estimates: number[] = [];
+    const reads = fakeReads({
+      quoteSendTransaction: async (tx) => {
+        if (tx.data !== DATA) return {fee: 1_000n};
+        estimates.push(estimates.length);
+        if (estimates.length <= 2) throw new Error("Execution reverted for an unknown reason.");
+        return {fee: 1_000n};
+      },
+    });
+    const {run, calls} = rig(Object.assign(venue(), {ownGasEstimate: true}), {reads});
+    await run();
+    expect(estimates).toHaveLength(3);
+    expect(sends(calls).map((a) => a.data)).toEqual([approveData(ROUTER, AMOUNT), DATA]);
+  });
+
+  it("without an approval mined first a revert is not asked again", async () => {
+    let asked = 0;
+    const reads = fakeReads({getAllowance: async () => AMOUNT, simulateTransaction: async () => (asked++, {ok: false, reason: "STF"})});
+    const {run, calls} = rig(venue(), {reads});
+    await expect(run()).rejects.toThrow(/would fail on-chain/);
+    expect(asked).toBe(1);
+    expect(calls).toHaveLength(0);
   });
 
   it("a second Confirm while the first runs is refused (same payer, same chain)", async () => {

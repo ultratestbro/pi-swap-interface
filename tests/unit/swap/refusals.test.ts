@@ -455,6 +455,12 @@ describe("gateCode (the swap statistics' code for a safety refusal)", () => {
     expect(gateCode("simulation_failed", "jupiter: not enough of the input token in the wallet — simulation fails: x")).toBe("simulation_failed:balance");
     expect(gateCode("simulation_failed", "fynd: the swap would revert now (Too little received). Nothing was sent; refresh the quote.")).toBe("simulation_failed:price");
     expect(gateCode("simulation_failed", "swap2: the transaction does not simulate from this account (execution reverted)")).toBe("simulation_failed");
+    // No word fits: the revert's selector, alone or before its arguments — never an address or a hash.
+    expect(gateCode("simulation_failed", "swap2: the signed swap does not simulate from this account (execution reverted: 0x97A6F3B9)")).toBe("simulation_failed:0x97a6f3b9");
+    expect(gateCode("simulation_failed", `the swap would revert now (0x8f2b6f5e${"0".repeat(63)}1)`)).toBe("simulation_failed:0x8f2b6f5e");
+    expect(gateCode("simulation_failed", "reverted calling 0x1111111111111111111111111111111111111111")).toBe("simulation_failed");
+    expect(gateCode("simulation_failed", `reverted in 0x${"ab".repeat(32)}`)).toBe("simulation_failed");
+    expect(gateCode("policy_refused", "cctp: finality threshold 0x12345678")).toBe("policy_refused");
     expect(gateCode("policy_refused", "cctp: finality threshold 1000 is neither Fast nor Standard")).toBe("policy_refused");
   });
 
