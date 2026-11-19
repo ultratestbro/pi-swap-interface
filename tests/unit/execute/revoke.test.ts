@@ -33,7 +33,7 @@ const erc20 = (over: Partial<ScannedApproval> = {}): ScannedApproval => ({
 const permit2: ScannedApproval = {...erc20(), id: `8453:permit2:${USDC.toLowerCase()}:${OTHER.toLowerCase()}`, standard: "permit2", spender: OTHER, amount: 5n, unlimited: false, risks: []};
 const operator: ScannedApproval = {...erc20(), id: `8453:erc721:${BAYC.toLowerCase()}:${SEAPORT.toLowerCase()}`, standard: "erc721", token: BAYC, spender: SEAPORT, amount: null};
 
-function rig(o: {address?: string; chainId?: number; sim?: EvmReads["simulateTransaction"]; send?: () => Promise<string>; erc721?: boolean | Error} = {}) {
+function rig(o: {address?: string; chainId?: number; sim?: EvmReads["simulateTransaction"]; send?: () => Promise<string>; erc721?: boolean | "empty" | Error} = {}) {
   const sent: {to: string; data: string; value: bigint}[] = [];
   const wallet = {
     getAddresses: async () => [o.address ?? ME],
@@ -46,10 +46,11 @@ function rig(o: {address?: string; chainId?: number; sim?: EvmReads["simulateTra
   const pub = {
     waitForTransactionReceipt: async () => ({status: "success", blockNumber: 1n}),
     getBlockNumber: async () => 2n,
-    // ERC-165 supportsInterface(0x80ac58cd): an ERC-20 reverts (no such function).
-    readContract: vi.fn(async () => {
+    // ERC-165 supportsInterface(0x80ac58cd): an ERC-20 reverts (no such function); WETH9's fallback answers nothing.
+    call: vi.fn(async () => {
       if (o.erc721 instanceof Error) throw o.erc721;
-      if (o.erc721) return true;
+      if (o.erc721 === true) return {data: `0x${"0".repeat(63)}1`};
+      if (o.erc721 === "empty") return {data: "0x"};
       throw new Error("execution reverted");
     }),
   };
@@ -111,6 +112,12 @@ describe("sendRevoke (D46)", () => {
     let r = rig({erc721: true});
     await expect(sendRevoke(r.signer, {owner: ME, approval: erc20(), scanned: [erc20()]}, {reads: r.reads})).rejects.toThrow(/NFT collection/);
     expect(r.wallet.sendTransaction).not.toHaveBeenCalled();
+    // WETH9 (its fallback answers any call with nothing) and a plain "false" are the ERC-20s they were found as.
+    for (const erc721 of ["empty", false] as const) {
+      const ok = rig({erc721});
+      await sendRevoke(ok.signer, {owner: ME, approval: erc20(), scanned: [erc20()]}, {reads: ok.reads});
+      expect(ok.sent).toHaveLength(1);
+    }
     // The network didn't answer the check: nothing sent either.
     r = rig({erc721: new Error("fetch failed")});
     await expect(sendRevoke(r.signer, {owner: ME, approval: erc20(), scanned: [erc20()]}, {reads: r.reads})).rejects.toThrow(/Couldn't check the token/);

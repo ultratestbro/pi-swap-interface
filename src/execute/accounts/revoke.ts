@@ -15,11 +15,11 @@
  * gives only in its own settings.
  */
 import ApprovalsProtocolEvm, {isRevokeTransaction, STANDARDS, type EvmApproval} from "@anywalletkit/protocol-approvals-evm";
-import {getAddress, type Address, type Hex} from "viem";
+import {encodeFunctionData, getAddress, type Address, type Hex} from "viem";
 import type {RevokeInput, ScannedApproval} from "../../contracts/approvals";
 import type {EvmSourceSigner} from "../../contracts/execution";
 import {refusal} from "../errors";
-import {assertEvmWallet, evmReads, normalizeWalletError, waitForEvmTx, type EvmReads} from "./evm";
+import {assertEvmWallet, evmReads, isRevert, normalizeWalletError, waitForEvmTx, type EvmReads} from "./evm";
 
 const NOT_SENT = "nothing was sent.";
 const ERC721_INTERFACE = "0x80ac58cd";
@@ -27,15 +27,24 @@ const SUPPORTS_INTERFACE = [
   {type: "function", name: "supportsInterface", stateMutability: "view", inputs: [{type: "bytes4"}], outputs: [{type: "bool"}]},
 ] as const;
 
-/** Whether `token` says it is an ERC-721 (ERC-165): true; reverting or anything else: false (the ERC-20 it was found as). */
+/** ABI `true` as a return word. */
+const TRUE_WORD = /^0x0{63}1$/i;
+
+/**
+ * Whether `token` says it is an ERC-721 (ERC-165 `supportsInterface(0x80ac58cd)` answering exactly true), as the
+ * module's own check reads it: a revert, an empty answer (WETH9's fallback takes any call and returns nothing — the
+ * owner's live WETH revoke on 2026-11-20 was refused when that read as a failure), false or anything else is the ERC-20
+ * it was found as. Only a network that didn't answer refuses: it proves nothing either way.
+ */
 async function isErc721(pub: EvmSourceSigner["pub"], token: Address): Promise<boolean> {
+  let data: Hex | undefined;
   try {
-    return (await pub.readContract({address: token, abi: SUPPORTS_INTERFACE, functionName: "supportsInterface", args: [ERC721_INTERFACE]})) === true;
+    ({data} = await pub.call({to: token, data: encodeFunctionData({abi: SUPPORTS_INTERFACE, functionName: "supportsInterface", args: [ERC721_INTERFACE]})}));
   } catch (e) {
-    // A revert answers "not an NFT"; a network that didn't answer proves nothing, so nothing is sent.
-    if (/revert/i.test(e instanceof Error ? e.message : String(e))) return false;
+    if (isRevert(e)) return false;
     throw refusal(`Couldn't check the token — try again; ${NOT_SENT}`, e);
   }
+  return !!data && TRUE_WORD.test(data);
 }
 
 /** The module's approval, as its builder and checks take it. */
