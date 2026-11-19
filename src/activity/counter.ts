@@ -10,7 +10,8 @@
  * - `/done`, once it is stuck (it may still end) and once it ends: the outcome, and for a delivered swap what actually
  *   arrived (received.ts, exact), how far that is from the expected amount in bps and whether it fell under the
  *   minimum, and how long it took.
- * - `/refused`, for a route refused before signing: the SDK's check (`gate`, with its reason code — never free text)
+ * - `/refused`, for a route refused before signing: the SDK's check (`gate`, with its reason code and the check its
+ *   text names, e.g. `policy_refused:memo` — refusals.ts gateCode; never free text)
  *   or the person declining in the wallet (`wallet`). A route refused while quoting is reported once per page.
  * - Only on a Standard page: a build with VITE_CP0X_API, the Standard mode, not demo (pageConnection's plan). Public,
  *   Custom, demo and every build without the API never send anything.

@@ -1,7 +1,7 @@
 import {describe, expect, it} from "vitest";
 import type {RefusalCategory} from "../../../src/contracts/routes";
 import {DEMO_REFUSALS} from "../../../src/mocks";
-import {NO_QUOTE, classifyRefusal, redactRaw, waitWords} from "../../../src/swap/refusals";
+import {NO_QUOTE, classifyRefusal, gateCode, redactRaw, waitWords} from "../../../src/swap/refusals";
 import {parseRejections} from "../../../src/swap/routes";
 
 const ETH = {symbol: "ETH", decimals: 18};
@@ -426,5 +426,43 @@ describe("demo refusals", () => {
     expect(classifyRefusal("symbiosis", DEMO_REFUSALS.timeout.raw)).toEqual(DEMO_REFUSALS.timeout);
     expect(classifyRefusal("omniston", DEMO_REFUSALS.nativeLeg.raw, ETH)).toEqual(DEMO_REFUSALS.nativeLeg);
     expect(classifyRefusal("omniston", DEMO_REFUSALS.noResolver.raw, USDC)).toEqual(DEMO_REFUSALS.noResolver);
+  });
+});
+
+describe("gateCode (the swap statistics' code for a safety refusal)", () => {
+  it("names the check the SDK's text points at, from a fixed list", () => {
+    // THORChain's own rules (pinned 0.4.4): the request, not a mismatch.
+    expect(gateCode("policy_refused", "thorchain: amount has more precision than THORChain's 8 decimals — round it to 8 decimals")).toBe("policy_refused:precision");
+    expect(gateCode("policy_refused", "thorchain: THORChain fees 5.20% — too expensive at this amount (cap 5%)")).toBe("policy_refused:fees");
+    expect(gateCode("policy_refused", "thorchain: slippage 600 bps is outside 0–500 bps")).toBe("policy_refused:slippage");
+    // And what it built: the memo, the router call.
+    expect(gateCode("policy_refused", "thorchain: memo failed verification (=:BASE.ETH:0xab12:123:cp:30)")).toBe("policy_refused:memo");
+    expect(gateCode("policy_refused", "thorchain: transfer is not depositWithExpiry")).toBe("policy_refused:calldata");
+    expect(gateCode("policy_refused", "thorchain: the router calldata does not decode")).toBe("policy_refused:calldata");
+    expect(gateCode("vault_mismatch", "thorchain: router 0xab12 is not a THORChain router this module trusts on ETH")).toBe("vault_mismatch:router");
+    expect(gateCode("stale_node", "thorchain: two THORNodes could not confirm the inbound vault")).toBe("stale_node:node");
+    // Other venues.
+    expect(gateCode("policy_refused", "across: the fill deadline is 30000 s away, past the 21600 s the SpokePool allows")).toBe("policy_refused:deadline");
+    expect(gateCode("policy_refused", "symbiosis: Symbiosis built a transaction for chain 1, not 8453")).toBe("policy_refused:chain");
+    expect(gateCode("recipient_mismatch", "relay: the deposit is credited to 0xab12, not to the sender 0xcd34")).toBe("recipient_mismatch:recipient");
+    expect(gateCode("policy_refused", "core: swap2: remote provider 'x' asks to approve 0xab on 1, which the app did not pin as a spender")).toBe("policy_refused:approval");
+    expect(gateCode("policy_refused", "curve: the route has 9 steps, more than 5")).toBe("policy_refused:route");
+    expect(gateCode("policy_refused", "wrap: transfer is not deposit()")).toBe("policy_refused:calldata");
+  });
+
+  it("a failed simulation by what its revert names; a text none fits keeps the bare reason", () => {
+    expect(gateCode("simulation_failed", "swap2: the transaction does not simulate from this account (execution reverted: TRANSFER_FROM_FAILED)")).toBe("simulation_failed:approval");
+    expect(gateCode("simulation_failed", "jupiter: not enough of the input token in the wallet — simulation fails: x")).toBe("simulation_failed:balance");
+    expect(gateCode("simulation_failed", "fynd: the swap would revert now (Too little received). Nothing was sent; refresh the quote.")).toBe("simulation_failed:price");
+    expect(gateCode("simulation_failed", "swap2: the transaction does not simulate from this account (execution reverted)")).toBe("simulation_failed");
+    expect(gateCode("policy_refused", "cctp: finality threshold 1000 is neither Fast nor Standard")).toBe("policy_refused");
+  });
+
+  it("never more than the server takes: [A-Za-z0-9_.:-], 48 at most", () => {
+    for (const reason of ["recipient_unverifiable", "recipient_mismatch", "vault_mismatch", "stale_node", "policy_refused", "simulation_failed"] as const) {
+      for (const text of ["the recipient is unknown", "the signature is odd", "the quote is stale", "fees too high", "a call to 0xab"]) {
+        expect(gateCode(reason, text)).toMatch(/^[A-Za-z0-9_.:-]{1,48}$/);
+      }
+    }
   });
 });

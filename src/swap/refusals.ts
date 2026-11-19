@@ -663,6 +663,63 @@ export const GATE_REASONS: ReadonlySet<Swap2RefusalReason> = new Set<Swap2Refusa
   "simulation_failed",
 ]);
 
+/**
+ * Which of a venue's checks refused, for the swap statistics (owner 2026-11-19): `policy_refused:memo`. The tag is a
+ * word from this fixed list — the first whose pattern the SDK's text names, the narrower ones first — never the text
+ * itself (it can name tokens, hosts, functions). A rough area, not the exact check; a text none fits keeps the bare reason.
+ */
+const CHECK_TAGS: readonly (readonly [tag: string, re: RegExp])[] = [
+  // The request, not the venue's answer: THORChain's 8 decimals, a slippage past its cap.
+  ["precision", /\bprecision\b|\bdecimals\b/i],
+  ["slippage", /slippage|tolerance/i],
+  // The quote's own state: priced for display, from another session or caller; a venue switched off or busy.
+  ["requote", /quote again|dry quote|not checked on this device|not known on this side|not sealed|not issued to this caller|intent (?:id|token)|integrity check/i],
+  ["disabled", /\bdisabled\b|switched off|\bpaused\b/i],
+  ["limit", /too many|try again later/i],
+  ["origin", /redirect|another origin/i],
+  // What the venue built.
+  ["memo", /\bmemo\b|\bnote\b/i],
+  ["signature", /permit|typed (?:data|order)|EIP712|signature|signed by|\bnonce\b|\btypes\b|witness/i],
+  ["approval", /approv|allowance|spender|transfer_?from/i],
+  ["fees", /fee|affiliate/i],
+  ["gas", /\bgas\b|compute.?budget|\btip\b/i],
+  ["deadline", /deadline|\bexpir|live (?:longer|past)|quote time|\bwindow\b/i],
+  ["node", /\bnodes?\b|THORNode|\bheight\b/i],
+  ["balance", /\bbalances?\b|not enough of/i],
+  ["calldata", /calldata|\bdecodes?\b|re-encode|canonically encoded/i],
+  ["recipient", /recipient|receiver|destination|beneficiary|\bowner\b|refund|\bpays?\b|on behalf of|\bsender\b|\bdepositor\b|credited to|\btaker\b|\btrader\b|\bmaker\b/i],
+  ["chain", /\bchain(?:Id)?\b/i],
+  ["order", /\border\b|solver|relayer/i],
+  ["router", /\brouter\b/i],
+  ["contract", /contract|\bvault\b|\bbridge\b|\bportal\b|settlement|\bdex\b|wrapped native/i],
+  ["route", /\broutes?\b|\bsteps?\b|\bhops?\b|\bbatch\b|\blegs?\b|\bpools\b|\bsources?\b|swap.?(?:type|mode)|\bwraps?\b/i],
+  ["token", /\btokens?\b|\bassets?\b|\bpath\b|\bpool\b|\bcoins?\b|\bmints?\b|jetton|\bdelivers\b|\bsells\b/i],
+  ["amount", /\bamounts?\b|amountIn|\bsends?\b|\btakes\b|\bmoves\b|\bvalue\b|\bwei\b|\bcovers\b|\binput\b|\bspends?\b|\bbridges\b|\bswaps\b|\bpull\b/i],
+  ["price", /\bprice\b|too little|\boutput\b|\bminimum\b/i],
+  ["calldata", /calldata|function|selector|decode|encod|\bcalls?\b|router|target|transaction|payload|message|\bbytes?\b|instruction|program|protobuf|\bBoC\b|\bcell\b|escrow|interaction|profile|\bbuild\b|param|offset|array/i],
+  // A call that is not the one function it must be: "transfer is not batchSwap", "… is not deposit()".
+  ["calldata", /\bis not (?:[a-z]+[A-Z]\w*|\w+\(\))/],
+  ["quote", /quote|metadata/i],
+];
+
+/** A failed simulation, by what its revert names (its text always names the transaction, so the list above can't). */
+const REVERT_TAGS: readonly (readonly [tag: string, re: RegExp])[] = [
+  ["approval", /allowance|transfer_?from|approv|permit/i],
+  ["balance", /\bbalances?\b|not enough|insufficient funds/i],
+  ["price", /slippage|too little|insufficient.?output|minimum|return amount|price/i],
+  ["deadline", /deadline|expired/i],
+  ["gas", /\bgas\b/i],
+  ["requote", /no longer quotes/i],
+];
+
+/** The code a safety refusal is reported with: its reason, and the check its text names ("policy_refused:fees"). */
+export function gateCode(reason: Swap2RefusalReason, text: string): string {
+  // Without the "<venue>: " / "swap2: " in front (of each error of a chain, " | "): a venue's name is no check ("wrap: …").
+  const said = text.replace(/(^| \| )(?:[\w-]+: )+/g, "$1");
+  const tag = (reason === "simulation_failed" ? REVERT_TAGS : CHECK_TAGS).find(([, re]) => re.test(said))?.[0];
+  return tag ? `${reason}:${tag}` : reason;
+}
+
 const BY_REASON: Readonly<Record<Swap2RefusalReason, {category: RefusalCategory; short: string; detail: string}>> = {
   rate_limited: {category: "busy", short: RETRY, detail: BUSY},
   upstream_unavailable: {category: "unavailable", short: "Unavailable right now — try later", detail: "The venue's service didn't give a usable answer just now."},

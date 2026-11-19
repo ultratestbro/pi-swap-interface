@@ -202,7 +202,12 @@ describe("refusals (/refused)", () => {
     expect(refusalReport(Object.assign(new Error("Exceeded maximum fee cost"), {}))).toEqual({kind: "gate", code: "fee_cap"});
     const vault = withReason(new Swap2ExecutionError("vault moved"), "vault_mismatch");
     expect(refusalOf(vault)?.reason).toBe("vault_mismatch");
-    expect(refusalReport(vault)).toEqual({kind: "gate", code: "vault_mismatch"});
+    expect(refusalReport(vault)).toEqual({kind: "gate", code: "vault_mismatch:contract"});
+    // With the check its text (or a cause's) names (refusals.ts gateCode).
+    expect(refusalReport(new Error("swap failed", {cause: withReason(new Swap2ExecutionError("thorchain: the memo is not the canonical =:x"), "policy_refused")}))).toEqual({
+      kind: "gate",
+      code: "policy_refused:memo",
+    });
     expect(refusalReport(withReason(new Swap2ExecutionError("quote expired"), "quote_expired"))).toBeNull();
     expect(refusalReport(new Error("insufficient funds for gas"))).toBeNull();
   });

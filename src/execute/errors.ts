@@ -10,7 +10,7 @@ import {
   Swap2MaybeSentError,
   Swap2ValidationError,
 } from "@anywalletkit/protocol-swap2-core/errors";
-import {GATE_REASONS} from "../swap/refusals";
+import {GATE_REASONS, gateCode} from "../swap/refusals";
 import {SwapGateRefusal, SwapReviewMismatch} from "./gate";
 
 /** The wallet rejection line (D25). One constant so the review, the record and the tests agree. */
@@ -130,7 +130,8 @@ const reviewCode = (message: string): string =>
 /**
  * A failure worth a refusal report (D41): the person declined in the wallet, or a check refused the route before
  * signing — a write the plan didn't arm, a review mismatch, the account's fee cap, an SDK safety refusal. Its code is
- * fixed, the SDK's reason, or the mismatch's words as a slug: never free text. Null for anything else.
+ * fixed, the SDK's reason with the check its text names (refusals.ts gateCode), or the mismatch's words as a slug:
+ * never free text. Null for anything else.
  */
 export function refusalReport(e: unknown): {kind: "gate" | "wallet"; code: string | null} | null {
   if (isWalletRejection(e)) return {kind: "wallet", code: null};
@@ -140,5 +141,6 @@ export function refusalReport(e: unknown): {kind: "gate" | "wallet"; code: strin
   if (mismatch) return {kind: "gate", code: reviewCode(mismatch.message)};
   if (isFeeCapRefusal(e)) return {kind: "gate", code: "fee_cap"};
   const reason = refusalOf(e)?.reason;
-  return reason && GATE_REASONS.has(reason) ? {kind: "gate", code: reason} : null;
+  if (!reason || !GATE_REASONS.has(reason)) return null;
+  return {kind: "gate", code: gateCode(reason, chain.map((x) => (typeof x.message === "string" ? x.message : "")).join(" | "))};
 }
