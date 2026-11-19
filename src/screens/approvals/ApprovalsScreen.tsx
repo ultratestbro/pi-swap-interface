@@ -2,8 +2,8 @@
  * The Revoke section (D46, `#/revoke`, `#/revoke?address=0x…`; `#/approvals` too): what an EVM address lets others
  * spend, on every network the page lists, as a table (owner 2026-11-20: like revoke.cash) — the asset and what the
  * owner holds of it, the kind, the approved amount, the value at risk, the spender, when it was last set — newest
- * first, searchable by spender, and revoked from the connected wallet one by one or as a selection. Any address can
- * be checked without a wallet (read-only); only the wallet that gave an approval can revoke it.
+ * first, searchable by spender, and revoked from the connected wallet one at a time (no batch yet: no selection).
+ * Any address can be checked without a wallet (read-only); only the wallet that gave an approval can revoke it.
  *
  * The page frame is the swap screen's (AppShell with the wallets, activity and settings sheets); the scan is
  * approvalsPort's, the revoke execute's — this screen holds neither a network client nor a wallet.
@@ -17,13 +17,13 @@ import {isDemo, setHashQuery, useHashRoute, usePorts} from "../../config";
 import {swapErrorText} from "../../execute";
 import {Button, ChainLogo, CopyButton, Spinner, Tag, TokenIcon, showToast} from "../../ui";
 import {ActivityDrawer} from "../activity/ActivityDrawer";
+import {NetworkPicker} from "../settings/NetworkPicker";
 import {SettingsSheet} from "../settings/SettingsSheet";
 import {AppShell} from "../shell/AppShell";
 import {ConnectSheet} from "../wallets/ConnectSheet";
 import s from "./Approvals.module.css";
 
 const fungible = (r: ApprovalRow): boolean => r.approval.standard === "erc20" || r.approval.standard === "permit2";
-const revocable = (r: ApprovalRow): boolean => r.approval.standard !== "eip7702";
 const chainSlug = (r: ApprovalRow) => r.token?.chain ?? chainByCaip2Web(r.caip2)?.slug ?? "";
 
 /** The asset's name: the token's symbol, the collection's name (else its address), or the account for a delegation. */
@@ -77,10 +77,11 @@ function When({ms}: {ms: number}) {
   );
 }
 
-const SORTS: readonly {id: ApprovalsSort; label: string}[] = [
-  {id: "newest", label: "Last updated: newest first"},
-  {id: "risk", label: "Value at risk: highest first"},
-  {id: "amount", label: "Approved amount: largest first"},
+/** The sort orders, in the app's own picker (the network picker's look; a native <select> opens the OS menu). */
+const SORTS: readonly {value: ApprovalsSort; name: string}[] = [
+  {value: "newest", name: "Last updated: newest first"},
+  {value: "risk", name: "Value at risk: highest first"},
+  {value: "amount", name: "Approved amount: largest first"},
 ];
 
 export function ApprovalsScreen() {
@@ -112,19 +113,6 @@ export function ApprovalsScreen() {
   const checking = scan.chains.filter((c) => c.status === "queued" || c.status === "scanning").length;
   const notChecked = scan.chains.filter((c) => c.status === "unsupported" || c.status === "failed");
 
-  // Selected for "Revoke selected" (approval ids); only rows still listed and revocable count.
-  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
-  const selectable = canRevoke ? rows.filter(revocable) : [];
-  const selected = selectable.filter((r) => picked.has(r.approval.id));
-  const allPicked = selectable.length > 0 && selected.length === selectable.length;
-  const toggle = (id: string) =>
-    setPicked((p) => {
-      const n = new Set(p);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
-
   const [busy, setBusy] = useState<string | null>(null);
   const [connect, setConnect] = useState<{open: boolean; focus: WalletFamily | null}>({open: false, focus: null});
   const [activityOpen, setActivityOpen] = useState(false);
@@ -133,41 +121,22 @@ export function ApprovalsScreen() {
 
   function setAddress(v: string) {
     setText(v);
-    setPicked(new Set());
     setHashQuery({address: v.trim() || null}, {replace: true});
   }
 
-  /** One revoke; resolves true when it was mined. */
-  async function revokeOne(r: ApprovalRow): Promise<boolean> {
-    if (!owner) return false;
+  async function revoke(r: ApprovalRow) {
+    if (!owner || busy) return;
     setBusy(r.approval.id);
     try {
       const signer = await ports.wallets.getSigner(r.caip2);
       await ports.execute.revoke({owner, approval: r.approval, scanned: scannedOn(scan.rows, r.caip2)}, signer);
       showToast(`Revoked on ${r.chainName}`, {tone: "green"});
-      setPicked((p) => {
-        const n = new Set(p);
-        n.delete(r.approval.id);
-        return n;
-      });
       scan.rescanChain(r.caip2);
-      return true;
     } catch (e) {
       showToast(swapErrorText(e, "ETH").replace(/to swap\.$/, "to revoke."), {tone: "red", ms: 5000});
-      return false;
     } finally {
       setBusy(null);
     }
-  }
-
-  async function revoke(r: ApprovalRow) {
-    if (!busy) await revokeOne(r);
-  }
-
-  /** The selection, in the list's order, one wallet prompt each; it stops at the first one that isn't sent. */
-  async function revokeSelected() {
-    if (busy) return;
-    for (const r of selected) if (!(await revokeOne(r))) break;
   }
 
   return (
@@ -241,38 +210,23 @@ export function ApprovalsScreen() {
                   aria-label="Search by spender"
                   data-testid="approvals-search"
                 />
-                <label className={s.sortBox}>
-                  <span className={s.sortLabel}>Sort</span>
-                  <select className={s.sort} value={sort} onChange={(e) => setSort(e.target.value as ApprovalsSort)} data-testid="approvals-sort">
-                    {SORTS.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className={s.sortBox}>
+                  <NetworkPicker
+                    networks={SORTS}
+                    value={sort}
+                    label="Sort approvals"
+                    listLabel="Sort orders"
+                    onChange={(v) => setSort(v as ApprovalsSort)}
+                    searchable={false}
+                    data-testid="approvals-sort"
+                  />
+                </div>
               </div>
             ) : null}
 
             {rows.length ? (
               <div className={s.table} role="table" aria-label="Token approvals" data-testid="approvals-list">
                 <div className={`${s.row} ${s.head}`} role="row">
-                  <span className={s.cSel} role="columnheader">
-                    {canRevoke ? (
-                      <label className={s.selectAll}>
-                        <input
-                          type="checkbox"
-                          className={s.check}
-                          checked={allPicked}
-                          disabled={!selectable.length || !!busy}
-                          onChange={() => setPicked(allPicked ? new Set() : new Set(selectable.map((r) => r.approval.id)))}
-                          aria-label="Select every approval"
-                          data-testid="approvals-select-all"
-                        />
-                        <span className={s.mOnly}>Select all</span>
-                      </label>
-                    ) : null}
-                  </span>
                   <span className={s.cAsset} role="columnheader">
                     Asset
                   </span>
@@ -291,18 +245,7 @@ export function ApprovalsScreen() {
                   <span className={s.cWhen} role="columnheader">
                     Last updated
                   </span>
-                  <span className={s.cAction} role="columnheader">
-                    {canRevoke && selected.length ? (
-                      <Button
-                        title={`Revoke ${selected.length}`}
-                        kind="secondary"
-                        height={40}
-                        disabled={!!busy}
-                        onClick={() => void revokeSelected()}
-                        data-testid="approvals-revoke-selected"
-                      />
-                    ) : null}
-                  </span>
+                  <span className={s.cAction} role="columnheader" />
                 </div>
                 {rows.map((r) => (
                   <ApprovalItem
@@ -311,9 +254,7 @@ export function ApprovalsScreen() {
                     prices={scan.prices}
                     logos={scan.logos}
                     canRevoke={canRevoke}
-                    picked={picked.has(r.approval.id)}
                     busy={busy}
-                    onPick={() => toggle(r.approval.id)}
                     onRevoke={() => void revoke(r)}
                   />
                 ))}
@@ -361,18 +302,14 @@ function ApprovalItem({
   prices,
   logos,
   canRevoke,
-  picked,
   busy,
-  onPick,
   onRevoke,
 }: {
   row: ApprovalRow;
   prices: Readonly<Record<string, number>>;
   logos: Readonly<Record<string, string>>;
   canRevoke: boolean;
-  picked: boolean;
   busy: string | null;
-  onPick(): void;
   onRevoke(): void;
 }) {
   const a = row.approval;
@@ -384,11 +321,6 @@ function ApprovalItem({
   const tx = a.grantedAt?.txHash ? txUrl(row.caip2, a.grantedAt.txHash) : undefined;
   return (
     <div className={s.row} role="row" data-testid="approval-row">
-      <span className={s.cSel} role="cell">
-        {canRevoke && revocable(row) ? (
-          <input type="checkbox" className={s.check} checked={picked} disabled={!!busy} onChange={onPick} aria-label={`Select ${assetName(row)} to ${row.spenderName ?? shortAddress(a.spender)}`} />
-        ) : null}
-      </span>
       <span className={s.cAsset} role="cell">
         <span className={s.assetIcon}>{token ? <TokenIcon token={token} size={36} /> : <ChainLogo slug={chainSlug(row)} size={36} label={row.chainName} />}</span>
         <span className={s.assetText}>

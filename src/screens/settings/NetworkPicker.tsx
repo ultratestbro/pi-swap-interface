@@ -5,7 +5,7 @@
  * dialog; below that the app's bottom sheet. A search field (when `searchable`) keeps focus and drives the list (a
  * combobox over a listbox): arrow keys move, Enter picks, typing filters, Escape closes, and focus goes back to the
  * trigger. A letter typed on the closed trigger opens the list searching for it. Without the search the listbox itself
- * takes focus, with the same keys.
+ * takes focus, with the same keys. Options without a `slug` show no logo: the Revoke list's sort picks with it too.
  */
 import {useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode} from "react";
 import {ChainLogo, Field, Icon, Sheet, SheetHeader, Text, useBreakpoint} from "../../ui";
@@ -16,8 +16,8 @@ export interface PickerNetwork {
   /** What the caller stores: an EVM chain id as text, or "solana". */
   value: string;
   name: string;
-  /** Catalog slug, for the logo. */
-  slug: string;
+  /** Catalog slug, for the logo; none for an option that isn't a network (a sort order). */
+  slug?: string;
 }
 
 /**
@@ -27,8 +27,8 @@ export interface PickerNetwork {
 export function matchNetworks(networks: readonly PickerNetwork[], query: string): readonly PickerNetwork[] {
   const q = query.trim().toLowerCase();
   if (!q) return networks;
-  const starts = (n: PickerNetwork) => n.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)) || n.slug.startsWith(q) || n.value === q;
-  const matches = (n: PickerNetwork) => n.name.toLowerCase().includes(q) || n.slug.includes(q) || n.value.startsWith(q);
+  const starts = (n: PickerNetwork) => n.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)) || !!n.slug?.startsWith(q) || n.value === q;
+  const matches = (n: PickerNetwork) => n.name.toLowerCase().includes(q) || !!n.slug?.includes(q) || n.value.startsWith(q);
   return [...networks.filter(starts), ...networks.filter((n) => !starts(n) && matches(n))];
 }
 
@@ -40,6 +40,7 @@ export function NetworkPicker({
   variant = "field",
   searchable = true,
   footer,
+  listLabel = "Networks",
   "data-testid": testId = "network-picker",
 }: {
   networks: readonly PickerNetwork[];
@@ -53,6 +54,8 @@ export function NetworkPicker({
   searchable?: boolean;
   /** A line under the list (what is still loading). */
   footer?: ReactNode;
+  /** The listbox's name (default "Networks"). */
+  listLabel?: string;
   /** On the trigger; the list's parts get `-search`, `-list`, `-<value>` and the phone sheet `-sheet`. */
   "data-testid"?: string;
 }) {
@@ -128,6 +131,7 @@ export function NetworkPicker({
       autoFocus={!phone}
       searchable={searchable}
       footer={footer}
+      listLabel={listLabel}
       onPick={pick}
       onBack={phone ? undefined : close}
       testId={testId}
@@ -154,7 +158,7 @@ export function NetworkPicker({
         onKeyDown={onTriggerKey}
         data-testid={testId}
       >
-        {chosen ? <ChainLogo slug={chosen.slug} size={chip ? 16 : 20} /> : null}
+        {chosen?.slug ? <ChainLogo slug={chosen.slug} size={chip ? 16 : 20} /> : null}
         <span id={valueId} className={s.pickerValue}>
           {chosen?.name}
         </span>
@@ -200,6 +204,7 @@ function NetworkList({
   autoFocus,
   searchable,
   footer,
+  listLabel,
   onPick,
   onBack,
   testId,
@@ -212,6 +217,7 @@ function NetworkList({
   autoFocus: boolean;
   searchable: boolean;
   footer?: ReactNode;
+  listLabel: string;
   onPick(n: PickerNetwork): void;
   /** Shift+Tab out of the popover's search: closed, back on the trigger (Tab onward closes it by focus alone). */
   onBack?: () => void;
@@ -288,7 +294,7 @@ function NetworkList({
         ref={listbox}
         id={listId}
         role="listbox"
-        aria-label="Networks"
+        aria-label={listLabel}
         className={s.options}
         // Without the search, the list takes focus and the keys itself.
         {...(searchable ? {} : {tabIndex: 0, "aria-activedescendant": currentId, onKeyDown: onKey})}
@@ -305,7 +311,7 @@ function NetworkList({
             onClick={() => onPick(n)}
             data-testid={`${testId}-${n.value}`}
           >
-            <ChainLogo slug={n.slug} size={20} />
+            {n.slug ? <ChainLogo slug={n.slug} size={20} /> : null}
             <span className={s.optionName}>{n.name}</span>
             <span className={s.optionCheck}>{n.value === value ? <Icon name="check" size={12} color="var(--accent)" /> : null}</span>
           </li>

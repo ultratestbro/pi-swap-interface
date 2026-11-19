@@ -22,7 +22,7 @@ const test = base.extend<{watch: PageWatch}>({
   ],
 });
 
-test("the demo wallet's approvals as a table, newest first; a revoke drops its row; a selection revokes in turn", async ({page}, info) => {
+test("the demo wallet's approvals as a table, newest first, sorted in the app's picker; a revoke drops its row", async ({page}, info) => {
   await page.goto("./#/revoke?demo=1");
   const rows = page.getByTestId("approval-row");
   await expect(rows).toHaveCount(5);
@@ -42,25 +42,24 @@ test("the demo wallet's approvals as a table, newest first; a revoke drops its r
   await expectNoHorizontalScroll(page);
   await shot(page, info, "approvals");
 
-  // Sort by value at risk, search by spender.
-  await page.getByTestId("approvals-sort").selectOption("risk");
+  // No selection (no batch revoke yet): no checkboxes.
+  await expect(page.getByTestId("approvals-list").getByRole("checkbox")).toHaveCount(0);
+  // Sort by value at risk in the app's own picker (a popover, a sheet on phones), search by spender.
+  await page.getByTestId("approvals-sort").click();
+  await page.getByTestId("approvals-sort-risk").click();
+  await expect(page.getByTestId("approvals-sort")).toContainText("Value at risk");
   await expect(rows.nth(0)).toContainText("USDT");
   await expect(rows.nth(1)).toContainText("WETH");
   await page.getByTestId("approvals-search").fill("li.fi");
   await expect(rows).toHaveCount(1);
   await page.getByTestId("approvals-search").fill("");
-  await page.getByTestId("approvals-sort").selectOption("newest");
+  await page.getByTestId("approvals-sort").click();
+  await page.getByTestId("approvals-sort-newest").click();
 
   await rows.nth(0).getByTestId("approval-revoke").click();
   await expect(page.getByText("Revoked on Ethereum")).toBeVisible();
   await expect(rows).toHaveCount(4);
   await expect(rows.nth(0)).not.toContainText("USDT");
-
-  // Two picked, revoked one after the other.
-  await rows.nth(0).getByRole("checkbox").check();
-  await rows.nth(1).getByRole("checkbox").check();
-  await page.getByTestId("approvals-revoke-selected").click();
-  await expect(rows).toHaveCount(2, {timeout: 8000});
 });
 
 test("another address is checked read-only", async ({page}) => {
