@@ -441,8 +441,15 @@
   outline-offset: 2px;
 }
 
-/* The footer ends above the floating button (≥ 640 px), so it never covers a link at the bottom of the page. */
-@media (min-width: 640px) {
+/* From 1100 px the footer's one line has room beside the button: the button sits on that line (its centre on the
+   line's) at the page's end. Below that the footer wraps toward it, so the footer ends above the button instead. */
+@media (min-width: 1100px) {
+  .revokeButton {
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1099px) {
   .withRevoke .footer {
     padding-bottom: calc(24px + 64px + env(safe-area-inset-bottom));
   }

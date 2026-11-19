@@ -253,12 +253,14 @@ const STANDARD_ONLY = "Checked in Standard mode only";
 
 function NotChecked({chains}: {chains: readonly ChainScan[]}) {
   const names = (list: readonly ChainScan[]) => list.map((c) => c.name).join(", ");
-  const failed = chains.filter((c) => c.status === "failed");
+  const limited = chains.filter((c) => c.status === "failed" && c.note?.startsWith("Etherscan's free limit"));
+  const failed = chains.filter((c) => c.status === "failed" && !limited.includes(c));
   const standardOnly = chains.filter((c) => c.status === "unsupported" && c.note === STANDARD_ONLY);
   const none = chains.filter((c) => c.status === "unsupported" && c.note !== STANDARD_ONLY);
   return (
     <div className={s.notChecked} data-testid="approvals-not-checked">
       {failed.length ? <p>Couldn&apos;t read {names(failed)} — scan again in a moment.</p> : null}
+      {limited.length ? <p>Etherscan&apos;s free limit is spent for today on {names(limited)} — it resets at 00:00 UTC.</p> : null}
       {standardOnly.length ? <p>Checked in Standard mode only: {names(standardOnly)}.</p> : null}
       {none.length ? <p>Not checked yet (no free history source): {names(none)}.</p> : null}
     </div>

@@ -91,6 +91,20 @@ describe("what an approval puts at risk", () => {
   });
 });
 
+describe("Etherscan's plan answers", () => {
+  it("a spent daily limit or an unserved network is a 429 the module won't wait for (it would split the range forever); anything else passes", async () => {
+    const {planLimited} = await import("../../../src/approvals/scan");
+    const body = (result: string) => new Response(JSON.stringify({status: "0", message: "NOTOK", result}), {status: 200});
+    for (const r of ["Community Free API Limit reached. Resets 2026-11-20 00:00:00 UTC.", "Free API access is not supported for this chain. Please upgrade your api plan"]) {
+      const res = await planLimited(body(r));
+      expect(res.status).toBe(429);
+      expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(60);
+    }
+    for (const r of ["Max rate limit reached", "No records found"]) expect((await planLimited(body(r))).status).toBe(200);
+    expect((await planLimited(new Response("x", {status: 502}))).status).toBe(502);
+  });
+});
+
 describe("the history cache", () => {
   it("keeps a history INDEXER_LAG_BLOCKS behind what was read (an indexer answers behind the head), never before its start", async () => {
     const {historyCache, INDEXER_LAG_BLOCKS} = await import("../../../src/approvals/scan");

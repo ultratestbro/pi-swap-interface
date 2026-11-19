@@ -104,10 +104,25 @@ const labelCache: LabelCache = {
 /** The page's fetch, called as a plain function (the module keeps it on an object, and a browser refuses a detached window.fetch), with a deadline. */
 const pageFetch: typeof fetch = (input, init) => fetch(input, {...init, signal: init?.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS)});
 
+/**
+ * Etherscan's plan answers (HTTP 200, `NOTOK`): a network's shared "Community Free API Limit" spent for the day, or a
+ * network the free plan doesn't serve. The module would read "limit" as a block range too wide and halve it again and
+ * again — hundreds of calls clogging every network's turn — so it gets them as a 429 that waits past its patience: one
+ * call, then that network is unread (port.ts says why).
+ */
+const PLAN_LIMIT = /community free api limit|free api access is not supported|upgrade your api plan/i;
+
+export async function planLimited(res: Response): Promise<Response> {
+  if (res.status !== 200) return res;
+  const text = await res.clone().text();
+  if (!PLAN_LIMIT.test(text)) return res;
+  return new Response(text, {status: 429, headers: {"content-type": "application/json", "retry-after": "3600", "x-plan-limit": "1"}});
+}
+
 /** One Etherscan call at a time from this page, ETHERSCAN_GAP_MS apart. */
 let etherscanTurn: Promise<void> = Promise.resolve();
 const pacedFetch: typeof fetch = (input, init) => {
-  const go = etherscanTurn.then(() => pageFetch(input, init));
+  const go = etherscanTurn.then(() => pageFetch(input, init)).then(planLimited);
   etherscanTurn = go.then(
     () => new Promise((r) => setTimeout(r, ETHERSCAN_GAP_MS)),
     () => new Promise((r) => setTimeout(r, ETHERSCAN_GAP_MS)),

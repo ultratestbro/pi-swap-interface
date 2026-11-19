@@ -11,6 +11,9 @@ import {CHAIN_LIST, useImportedLogos, useImportedPrices} from "../catalog";
 import {proxyEtherscanUrl, proxySettled} from "../config";
 import {historySource, noSourceNote} from "./sources";
 
+/** Etherscan's free daily limit for a network is spent (scan.ts PLAN_LIMIT_NOTE; here so the port needn't load the scan). */
+const PLAN_LIMIT_NOTE = "Etherscan's free limit for this network is spent for today";
+
 /** The scan and the approvals SDK load with the section's first scan, not with the page. */
 const scanModule = () => import("./scan");
 
@@ -104,7 +107,9 @@ function useApprovals(ownerInput: string | null): ReturnType<ApprovalsPort["useA
     } catch (e) {
       // No backend: an incident goes to the console only (no address).
       console.warn("approvals scan failed", {chain: chain.name, source: source.kind, error: errorLine(e)});
-      patch({status: "failed", note: "Couldn't read this network — try again"});
+      // The module's words for a 429 that waits too long: here only Etherscan's spent daily plan limit (scan.ts).
+      const planLimit = source.kind === "etherscan" && /rate limit reached/i.test(errorLine(e));
+      patch({status: "failed", note: planLimit ? PLAN_LIMIT_NOTE : "Couldn't read this network — try again"});
     }
   }, []);
 
