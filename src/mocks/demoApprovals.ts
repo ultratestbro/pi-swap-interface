@@ -14,13 +14,14 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 const token = (caip2: string, symbol: string): Token | null => TOKENS.find((t) => t.caip2 === caip2 && t.symbol === symbol && !!t.contract) ?? null;
 
-function row(caip2: string, a: Omit<ScannedApproval, "id" | "chainId" | "risks"> & {risks?: string[]}, extra: Pick<ApprovalRow, "token" | "balance" | "spenderName" | "verified" | "collection">): ApprovalRow {
+function row(caip2: string, a: Omit<ScannedApproval, "id" | "chainId" | "risks"> & {risks?: string[]}, extra: Pick<ApprovalRow, "token" | "balance" | "spenderName" | "verified" | "collection" | "nftCount" | "updatedAt">): ApprovalRow {
   const chain = CHAIN_LIST.find((c) => c.caip2 === caip2)!;
   const approval: ScannedApproval = {
     ...a,
     id: `${chain.chainId}:${a.standard}:${a.token.toLowerCase()}:${a.spender.toLowerCase()}`,
     chainId: chain.chainId!,
     risks: a.risks ?? (a.unlimited ? ["unlimited"] : []),
+    grantedAt: {block: 1, txHash: `0x${"cd".repeat(32)}`},
   };
   return {approval, caip2, chainName: chain.name, ...extra};
 }
@@ -34,27 +35,27 @@ export function demoApprovalRows(): ApprovalRow[] {
     row(
       "eip155:1",
       {standard: "erc20", token: usdt?.contract ?? "0xdAC17F958D2ee523a2206206994597C13D831ec7", spender: "0x9a3c5f40cE0c5B2a3eD8B0b4C1aE2f3A9B1d7e01", amount: MAX, unlimited: true, risks: ["unlimited", "eoa-spender"]},
-      {token: usdt, balance: 2_450_000_000n, spenderName: null, verified: false},
+      {token: usdt, balance: 2_450_000_000n, spenderName: null, verified: false, updatedAt: Date.UTC(2026, 10, 18, 9, 41)},
     ),
     row(
       "eip155:8453",
       {standard: "erc20", token: usdc?.contract ?? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", spender: "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE", amount: MAX, unlimited: true},
-      {token: usdc, balance: 812_400_000n, spenderName: "LI.FI", verified: true},
+      {token: usdc, balance: 812_400_000n, spenderName: "LI.FI", verified: true, updatedAt: Date.UTC(2026, 10, 12, 18, 5)},
     ),
     row(
       "eip155:42161",
       {standard: "permit2", token: weth?.contract ?? "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", spender: "0xA51afAFe0263b40EdaEf0Df8781eA9aa03E381a3", amount: 500_000_000_000_000_000n, unlimited: false, expiration: 1_800_000_000},
-      {token: weth, balance: 1_200_000_000_000_000_000n, spenderName: "Uniswap", verified: true},
+      {token: weth, balance: 1_200_000_000_000_000_000n, spenderName: "Uniswap", verified: true, updatedAt: Date.UTC(2026, 9, 30, 14, 22)},
     ),
     row(
       "eip155:1",
       {standard: "erc20", token: token("eip155:1", "USDC")?.contract ?? "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", spender: "0x1111111254EEB25477B68fb85Ed929f73A960582", amount: MAX, unlimited: true},
-      {token: token("eip155:1", "USDC"), balance: 0n, spenderName: "AggregationRouterV5", verified: false},
+      {token: token("eip155:1", "USDC"), balance: 0n, spenderName: "AggregationRouterV5", verified: false, updatedAt: Date.UTC(2026, 8, 1, 7, 3)},
     ),
     row(
       "eip155:1",
       {standard: "erc721", token: "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D", spender: "0x1E0049783F008A0085193E00003D00cd54003c71", amount: null, unlimited: true},
-      {token: null, balance: null, spenderName: "OpenSea Conduit", verified: false, collection: "BoredApeYachtClub"},
+      {token: null, balance: null, spenderName: "OpenSea Conduit", verified: false, collection: "BoredApeYachtClub", nftCount: 2n, updatedAt: Date.UTC(2026, 5, 15, 21, 30)},
     ),
   ];
 }

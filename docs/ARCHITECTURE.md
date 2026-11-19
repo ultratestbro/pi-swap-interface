@@ -1792,12 +1792,17 @@ free sources only ("ключ возьми от vaulty", "по адресу де�
   spender's name is kept for good, a missing or failed one for an hour. Every read the section makes itself (tokens,
   balances, collection names) has CCIP-Read off, like the module's: a token's revert can't make the page fetch a URL
   of its choosing.
-- **The list**: most at risk first — what the spender could take now (the allowance capped by the owner's balance,
-  read on-chain) at the token's DefiLlama price by contract; then unlimited, then a plain-address spender. The ERC-20
-  is the catalog's when listed, else read on-chain as an imported token (D39: by contract, never trusted by symbol);
-  an NFT collection by its name(). The spender is "Permit2", a venue cp0x Swap pins as a SPENDER on that network
-  ("Verified by cp0x", `pinnedVenueOf`; never a call target — 0x's Settlers take no allowance), else the explorer's
-  contract name (Etherscan networks) unless it claims "Permit2" or a venue's name, else its address.
+- **The list** (owner 2026-11-20: "показывать как на revoke cash"): a table — the asset with what the owner holds of it
+  ("0 WBTC ($0.00)", "3 NFTs"), the type (Token, Permit2, NFT, Delegation) and network, the approved amount
+  ("Unlimited", "< 0.001 WETH"), the value at risk (the allowance capped by the balance, at the token's DefiLlama
+  price by contract; an NFT approval: $0.00 when none are held, else "Unknown"), the spender, when it was last set (its
+  block's time, linking the transaction), and Revoke. Newest first by default; sorted by value at risk or by the
+  approved amount, searched by spender; a selection is revoked one wallet prompt after another, stopping at the first
+  that isn't sent. Under 1 000 px a row is a card. The ERC-20 is the catalog's when listed, else read on-chain as an
+  imported token (D39: by contract, never trusted by symbol); an NFT collection by its name(), its count by
+  balanceOf. The spender is "Permit2", a venue cp0x Swap pins as a SPENDER on that network ("Verified";
+  `pinnedVenueOf`; never a call target — 0x's Settlers take no allowance), else the explorer's contract name (Etherscan
+  networks) unless it claims "Permit2" or a venue's name, else its address.
 - **Any address, read-only.** The field takes any EVM address; empty means the connected EVM wallet. Revoke buttons
   appear only when the address is the connected wallet's.
 - **The revoke** (execute `revoke` → `accounts/revoke.ts`, the D10 choke point): getSigner switches the wallet to the

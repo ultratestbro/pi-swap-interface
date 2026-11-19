@@ -22,29 +22,45 @@ const test = base.extend<{watch: PageWatch}>({
   ],
 });
 
-test("the demo wallet's approvals, most at risk first; a revoke drops its row", async ({page}, info) => {
+test("the demo wallet's approvals as a table, newest first; a revoke drops its row; a selection revokes in turn", async ({page}, info) => {
   await page.goto("./#/revoke?demo=1");
   const rows = page.getByTestId("approval-row");
   await expect(rows).toHaveCount(5);
-  // Unlimited USDT to a plain address, then the unlimited USDC: the largest amount that could be spent leads.
+  // Newest first: the unlimited USDT to a plain address, then LI.FI's USDC (verified).
   await expect(rows.nth(0)).toContainText("USDT");
   await expect(rows.nth(0)).toContainText("Unlimited");
-  await expect(rows.nth(0)).toContainText("Wallet address");
-  await expect(rows.nth(1)).toContainText("Verified by cp0x");
+  await expect(rows.nth(0)).toContainText("Wallet");
+  await expect(rows.nth(0)).toContainText("2,450 USDT");
+  await expect(rows.nth(1)).toContainText("Verified");
+  // A token the wallet holds none of: $0.00 at risk; an NFT collection it holds some of: Unknown.
+  await expect(rows.nth(3)).toContainText("0 USDC ($0.00)");
+  await expect(rows.nth(4)).toContainText("2 NFTs");
+  await expect(rows.nth(4)).toContainText("Unknown");
   await expect(page.getByTestId("approvals-summary")).toContainText("5");
-  // A token the wallet holds none of says so; an NFT approval shows no amount at all.
-  await expect(rows.nth(3)).toContainText("None in wallet");
-  await expect(rows.nth(4)).toContainText("BoredApeYachtClub");
-  await expect(rows.nth(4)).not.toContainText("—");
-  await expect(page.getByTestId("approvals-summary")).toContainText("could be spent");
+  await expect(page.getByTestId("approvals-summary")).toContainText("at risk");
   await expect(page.getByTestId("approvals-not-checked")).toContainText("BNB Chain");
   await expectNoHorizontalScroll(page);
   await shot(page, info, "approvals");
+
+  // Sort by value at risk, search by spender.
+  await page.getByTestId("approvals-sort").selectOption("risk");
+  await expect(rows.nth(0)).toContainText("USDT");
+  await expect(rows.nth(1)).toContainText("WETH");
+  await page.getByTestId("approvals-search").fill("li.fi");
+  await expect(rows).toHaveCount(1);
+  await page.getByTestId("approvals-search").fill("");
+  await page.getByTestId("approvals-sort").selectOption("newest");
 
   await rows.nth(0).getByTestId("approval-revoke").click();
   await expect(page.getByText("Revoked on Ethereum")).toBeVisible();
   await expect(rows).toHaveCount(4);
   await expect(rows.nth(0)).not.toContainText("USDT");
+
+  // Two picked, revoked one after the other.
+  await rows.nth(0).getByRole("checkbox").check();
+  await rows.nth(1).getByRole("checkbox").check();
+  await page.getByTestId("approvals-revoke-selected").click();
+  await expect(rows).toHaveCount(2, {timeout: 8000});
 });
 
 test("another address is checked read-only", async ({page}) => {

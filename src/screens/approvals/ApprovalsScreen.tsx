@@ -1,7 +1,9 @@
 /**
- * The Revoke section (D46, `#/revoke`, `#/revoke?address=0x…`; `#/approvals` too): what an EVM address lets others spend, on
- * every network the page lists, most at risk first, and a revoke from the connected wallet. Any address can be
- * checked without a wallet (read-only); only the wallet that gave an approval can revoke it.
+ * The Revoke section (D46, `#/revoke`, `#/revoke?address=0x…`; `#/approvals` too): what an EVM address lets others
+ * spend, on every network the page lists, as a table (owner 2026-11-20: like revoke.cash) — the asset and what the
+ * owner holds of it, the kind, the approved amount, the value at risk, the spender, when it was last set — newest
+ * first, searchable by spender, and revoked from the connected wallet one by one or as a selection. Any address can
+ * be checked without a wallet (read-only); only the wallet that gave an approval can revoke it.
  *
  * The page frame is the swap screen's (AppShell with the wallets, activity and settings sheets); the scan is
  * approvalsPort's, the revoke execute's — this screen holds neither a network client nor a wallet.
@@ -9,8 +11,8 @@
 import {useMemo, useState} from "react";
 import type {ApprovalRow, ChainScan} from "../../contracts/approvals";
 import type {WalletFamily} from "../../contracts/wallets";
-import {atRiskUnits, evmOwner, scannedOn, sortRows, usdAtRisk} from "../../approvals";
-import {addressUrl, chainByCaip2Web, formatAmount, formatUsd, shortAddress} from "../../catalog";
+import {evmOwner, scannedOn, sortedRows, usdAtRisk, valueAtRisk, type ApprovalsSort} from "../../approvals";
+import {addressUrl, chainByCaip2Web, formatAmount, formatUsd, shortAddress, txUrl} from "../../catalog";
 import {isDemo, setHashQuery, useHashRoute, usePorts} from "../../config";
 import {swapErrorText} from "../../execute";
 import {Button, ChainLogo, CopyButton, Spinner, Tag, TokenIcon, showToast} from "../../ui";
@@ -20,25 +22,66 @@ import {AppShell} from "../shell/AppShell";
 import {ConnectSheet} from "../wallets/ConnectSheet";
 import s from "./Approvals.module.css";
 
-const NFT_LABEL: Readonly<Record<string, string>> = {erc721: "Every NFT of", "erc721-token": "One NFT of", erc1155: "Every token of"};
-
-/** What the approval is on: the token, an NFT collection (its name, else its address), or the account itself. */
-function subjectText(r: ApprovalRow): string {
-  const a = r.approval;
-  if (a.standard === "eip7702") return "Account delegation";
-  const nft = NFT_LABEL[a.standard];
-  if (nft) return `${nft} ${r.collection ?? shortAddress(a.token)}${a.tokenId !== undefined && a.standard === "erc721-token" ? ` #${a.tokenId}` : ""}`;
-  return r.token?.symbol ?? shortAddress(a.token);
-}
-
-/** How much of it, for a capped ERC-20 / Permit2 allowance ("up to 0.5 WETH"); null otherwise (the tag says Unlimited). */
-function capText(r: ApprovalRow): string | null {
-  const a = r.approval;
-  if (a.unlimited || a.amount === null || a.standard === "eip7702" || NFT_LABEL[a.standard]) return null;
-  return r.token ? `up to ${formatAmount(a.amount.toString(), r.token.decimals)} ${r.token.symbol}` : `up to ${a.amount.toString()} units`;
-}
-
+const fungible = (r: ApprovalRow): boolean => r.approval.standard === "erc20" || r.approval.standard === "permit2";
+const revocable = (r: ApprovalRow): boolean => r.approval.standard !== "eip7702";
 const chainSlug = (r: ApprovalRow) => r.token?.chain ?? chainByCaip2Web(r.caip2)?.slug ?? "";
+
+/** The asset's name: the token's symbol, the collection's name (else its address), or the account for a delegation. */
+function assetName(r: ApprovalRow): string {
+  const a = r.approval;
+  if (a.standard === "eip7702") return "Your account";
+  if (fungible(r)) return r.token?.symbol ?? shortAddress(a.token);
+  return `${r.collection ?? shortAddress(a.token)}${a.standard === "erc721-token" && a.tokenId !== undefined ? ` #${a.tokenId}` : ""}`;
+}
+
+/** What the owner holds of it: "0 WBTC ($0.00)", "3 NFTs"; null when unread. */
+function holdingText(r: ApprovalRow, prices: Readonly<Record<string, number>>): string | null {
+  if (fungible(r)) {
+    if (r.balance === null || !r.token) return null;
+    const price = prices[r.token.key];
+    const units = r.balance === 0n ? "0" : formatAmount(r.balance.toString(), r.token.decimals);
+    const usd = price !== undefined ? ` (${formatUsd((Number(r.balance) / 10 ** r.token.decimals) * price)})` : "";
+    return `${units} ${r.token.symbol}${usd}`;
+  }
+  if (r.nftCount === null || r.nftCount === undefined) return null;
+  return `${r.nftCount.toString()} NFT${r.nftCount === 1n ? "" : "s"}`;
+}
+
+const TYPE_LABEL: Readonly<Record<string, string>> = {erc20: "Token", permit2: "Permit2", erc721: "NFT", "erc721-token": "NFT", erc1155: "NFT", eip7702: "Delegation"};
+
+/** How much it allows: "Unlimited", "< 0.001 WETH", "1 NFT" (one token's approval). */
+function approvedText(r: ApprovalRow): string {
+  const a = r.approval;
+  if (a.standard === "eip7702") return "Everything";
+  if (a.standard === "erc721-token") return "1 NFT";
+  if (a.unlimited || a.amount === null) return "Unlimited";
+  return r.token ? `${formatAmount(a.amount.toString(), r.token.decimals).replace(/^</, "< ")} ${r.token.symbol}` : `${a.amount.toString()} units`;
+}
+
+/** "$4.38", "< $0.01", "$0.00", "Unknown" (an NFT collection the owner holds some of), or "—". */
+function riskText(r: ApprovalRow, prices: Readonly<Record<string, number>>): string {
+  const v = valueAtRisk(r, prices);
+  if (v === "unknown") return "Unknown";
+  if (v === null) return "—";
+  return v === 0 ? "$0.00" : formatUsd(v).replace(/^</, "< ");
+}
+
+/** "11/18/2026" over "01:41 PM" (the viewer's time zone). */
+function When({ms}: {ms: number}) {
+  const d = new Date(ms);
+  return (
+    <>
+      <span>{d.toLocaleDateString("en-US", {year: "numeric", month: "2-digit", day: "2-digit"})}</span>
+      <span className={s.time}>{d.toLocaleTimeString("en-US", {hour: "2-digit", minute: "2-digit"})}</span>
+    </>
+  );
+}
+
+const SORTS: readonly {id: ApprovalsSort; label: string}[] = [
+  {id: "newest", label: "Last updated: newest first"},
+  {id: "risk", label: "Value at risk: highest first"},
+  {id: "amount", label: "Approved amount: largest first"},
+];
 
 export function ApprovalsScreen() {
   const ports = usePorts();
@@ -56,11 +99,31 @@ export function ApprovalsScreen() {
   const scan = ports.approvals.useApprovals(owner);
   const canRevoke = !!owner && !!connected && owner.toLowerCase() === connected.toLowerCase();
 
-  const rows = useMemo(() => sortRows(scan.rows, scan.prices), [scan.rows, scan.prices]);
-  const total = useMemo(() => rows.reduce((sum, r) => sum + (usdAtRisk(r, scan.prices) ?? 0), 0), [rows, scan.prices]);
+  const [sort, setSort] = useState<ApprovalsSort>("newest");
+  const [search, setSearch] = useState("");
+  const all = useMemo(() => sortedRows(scan.rows, scan.prices, sort), [scan.rows, scan.prices, sort]);
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((r) => r.approval.spender.toLowerCase().includes(q) || (r.spenderName ?? "").toLowerCase().includes(q));
+  }, [all, search]);
+  const total = useMemo(() => all.reduce((sum, r) => sum + (usdAtRisk(r, scan.prices) ?? 0), 0), [all, scan.prices]);
   const done = scan.chains.filter((c) => c.status === "done").length;
   const checking = scan.chains.filter((c) => c.status === "queued" || c.status === "scanning").length;
   const notChecked = scan.chains.filter((c) => c.status === "unsupported" || c.status === "failed");
+
+  // Selected for "Revoke selected" (approval ids); only rows still listed and revocable count.
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const selectable = canRevoke ? rows.filter(revocable) : [];
+  const selected = selectable.filter((r) => picked.has(r.approval.id));
+  const allPicked = selectable.length > 0 && selected.length === selectable.length;
+  const toggle = (id: string) =>
+    setPicked((p) => {
+      const n = new Set(p);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
 
   const [busy, setBusy] = useState<string | null>(null);
   const [connect, setConnect] = useState<{open: boolean; focus: WalletFamily | null}>({open: false, focus: null});
@@ -70,22 +133,41 @@ export function ApprovalsScreen() {
 
   function setAddress(v: string) {
     setText(v);
+    setPicked(new Set());
     setHashQuery({address: v.trim() || null}, {replace: true});
   }
 
-  async function revoke(r: ApprovalRow) {
-    if (!owner || busy) return;
+  /** One revoke; resolves true when it was mined. */
+  async function revokeOne(r: ApprovalRow): Promise<boolean> {
+    if (!owner) return false;
     setBusy(r.approval.id);
     try {
       const signer = await ports.wallets.getSigner(r.caip2);
       await ports.execute.revoke({owner, approval: r.approval, scanned: scannedOn(scan.rows, r.caip2)}, signer);
       showToast(`Revoked on ${r.chainName}`, {tone: "green"});
+      setPicked((p) => {
+        const n = new Set(p);
+        n.delete(r.approval.id);
+        return n;
+      });
       scan.rescanChain(r.caip2);
+      return true;
     } catch (e) {
       showToast(swapErrorText(e, "ETH").replace(/to swap\.$/, "to revoke."), {tone: "red", ms: 5000});
+      return false;
     } finally {
       setBusy(null);
     }
+  }
+
+  async function revoke(r: ApprovalRow) {
+    if (!busy) await revokeOne(r);
+  }
+
+  /** The selection, in the list's order, one wallet prompt each; it stops at the first one that isn't sent. */
+  async function revokeSelected() {
+    if (busy) return;
+    for (const r of selected) if (!(await revokeOne(r))) break;
   }
 
   return (
@@ -125,9 +207,9 @@ export function ApprovalsScreen() {
           <>
             <div className={s.summary} data-testid="approvals-summary">
               <div className={s.summaryMain}>
-                <span className={s.big}>{rows.length}</span>
+                <span className={s.big}>{all.length}</span>
                 <span className={s.summaryText}>
-                  {rows.length === 1 ? "approval" : "approvals"} found{total > 0 ? <> · <b className={s.atRisk}>{formatUsd(total)}</b> could be spent</> : null}
+                  {all.length === 1 ? "approval" : "approvals"} found{total > 0 ? <> · <b className={s.atRisk}>{formatUsd(total)}</b> at risk</> : null}
                 </span>
               </div>
               <div className={s.summarySide}>
@@ -140,19 +222,105 @@ export function ApprovalsScreen() {
                 )}
               </div>
             </div>
-            {!canRevoke && rows.length ? (
+            {!canRevoke && all.length ? (
               <p className={s.note}>
                 Read-only: to revoke, connect the wallet {shortAddress(owner)}.
                 {!connected ? null : ` The connected one is ${shortAddress(connected)}.`}
               </p>
             ) : null}
 
-            <ul className={s.list} data-testid="approvals-list">
-              {rows.map((r) => (
-                <ApprovalItem key={r.approval.id} row={r} prices={scan.prices} logos={scan.logos} canRevoke={canRevoke} busy={busy} onRevoke={() => void revoke(r)} />
-              ))}
-            </ul>
-            {!checking && !rows.length ? <p className={s.empty}>No approvals left on the networks checked. Nothing to revoke.</p> : null}
+            {all.length ? (
+              <div className={s.toolbar}>
+                <input
+                  className={s.search}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search by spender"
+                  spellCheck={false}
+                  autoComplete="off"
+                  aria-label="Search by spender"
+                  data-testid="approvals-search"
+                />
+                <label className={s.sortBox}>
+                  <span className={s.sortLabel}>Sort</span>
+                  <select className={s.sort} value={sort} onChange={(e) => setSort(e.target.value as ApprovalsSort)} data-testid="approvals-sort">
+                    {SORTS.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : null}
+
+            {rows.length ? (
+              <div className={s.table} role="table" aria-label="Token approvals" data-testid="approvals-list">
+                <div className={`${s.row} ${s.head}`} role="row">
+                  <span className={s.cSel} role="columnheader">
+                    {canRevoke ? (
+                      <label className={s.selectAll}>
+                        <input
+                          type="checkbox"
+                          className={s.check}
+                          checked={allPicked}
+                          disabled={!selectable.length || !!busy}
+                          onChange={() => setPicked(allPicked ? new Set() : new Set(selectable.map((r) => r.approval.id)))}
+                          aria-label="Select every approval"
+                          data-testid="approvals-select-all"
+                        />
+                        <span className={s.mOnly}>Select all</span>
+                      </label>
+                    ) : null}
+                  </span>
+                  <span className={s.cAsset} role="columnheader">
+                    Asset
+                  </span>
+                  <span className={s.cType} role="columnheader">
+                    Type
+                  </span>
+                  <span className={s.cAmount} role="columnheader">
+                    Approved amount
+                  </span>
+                  <span className={s.cRisk} role="columnheader">
+                    Value at risk
+                  </span>
+                  <span className={s.cSpender} role="columnheader">
+                    Approved spender
+                  </span>
+                  <span className={s.cWhen} role="columnheader">
+                    Last updated
+                  </span>
+                  <span className={s.cAction} role="columnheader">
+                    {canRevoke && selected.length ? (
+                      <Button
+                        title={`Revoke ${selected.length}`}
+                        kind="secondary"
+                        height={40}
+                        disabled={!!busy}
+                        onClick={() => void revokeSelected()}
+                        data-testid="approvals-revoke-selected"
+                      />
+                    ) : null}
+                  </span>
+                </div>
+                {rows.map((r) => (
+                  <ApprovalItem
+                    key={r.approval.id}
+                    row={r}
+                    prices={scan.prices}
+                    logos={scan.logos}
+                    canRevoke={canRevoke}
+                    picked={picked.has(r.approval.id)}
+                    busy={busy}
+                    onPick={() => toggle(r.approval.id)}
+                    onRevoke={() => void revoke(r)}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {!checking && !all.length ? <p className={s.empty}>No approvals left on the networks checked. Nothing to revoke.</p> : null}
+            {all.length && !rows.length ? <p className={s.empty}>No spender matches &ldquo;{search.trim()}&rdquo;.</p> : null}
             {notChecked.length ? <NotChecked chains={notChecked} /> : null}
           </>
         ) : null}
@@ -193,36 +361,57 @@ function ApprovalItem({
   prices,
   logos,
   canRevoke,
+  picked,
   busy,
+  onPick,
   onRevoke,
 }: {
   row: ApprovalRow;
   prices: Readonly<Record<string, number>>;
   logos: Readonly<Record<string, string>>;
   canRevoke: boolean;
+  picked: boolean;
   busy: string | null;
+  onPick(): void;
   onRevoke(): void;
 }) {
   const a = row.approval;
   const eoa = a.risks.includes("eoa-spender");
   const spenderUrl = addressUrl(row.caip2, a.spender);
   const token = row.token ? {...row.token, ...(logos[row.token.key] ? {logo: logos[row.token.key]} : {})} : null;
+  const holding = holdingText(row, prices);
+  const risk = riskText(row, prices);
+  const tx = a.grantedAt?.txHash ? txUrl(row.caip2, a.grantedAt.txHash) : undefined;
   return (
-    <li className={s.item} data-testid="approval-row">
-      <div className={s.asset}>
-        {token ? <TokenIcon token={token} size={40} /> : <ChainLogo slug={chainSlug(row)} size={40} label={row.chainName} />}
-      </div>
-      <div className={s.body}>
-        <div className={s.line}>
-          <span className={s.what}>{subjectText(row)}</span>
-          {a.unlimited && a.standard !== "eip7702" ? <Tag tone="amber">Unlimited</Tag> : null}
-          {capText(row) ? <span className={s.cap}>{capText(row)}</span> : null}
-        </div>
-        <div className={s.sub}>
-          <span className={s.chain}>{row.chainName}</span>
-          <span aria-hidden="true">·</span>
-          <span className={s.spender}>
-            to{" "}
+    <div className={s.row} role="row" data-testid="approval-row">
+      <span className={s.cSel} role="cell">
+        {canRevoke && revocable(row) ? (
+          <input type="checkbox" className={s.check} checked={picked} disabled={!!busy} onChange={onPick} aria-label={`Select ${assetName(row)} to ${row.spenderName ?? shortAddress(a.spender)}`} />
+        ) : null}
+      </span>
+      <span className={s.cAsset} role="cell">
+        <span className={s.assetIcon}>{token ? <TokenIcon token={token} size={36} /> : <ChainLogo slug={chainSlug(row)} size={36} label={row.chainName} />}</span>
+        <span className={s.assetText}>
+          <span className={s.assetName}>{assetName(row)}</span>
+          {holding ? <span className={s.dimLine}>{holding}</span> : null}
+        </span>
+      </span>
+      <span className={s.cType} role="cell">
+        <span className={s.mLabel}>Type</span>
+        <Tag tone="muted">{TYPE_LABEL[a.standard] ?? a.standard}</Tag>
+        <span className={s.chainName}>{row.chainName}</span>
+      </span>
+      <span className={s.cAmount} role="cell">
+        <span className={s.mLabel}>Approved</span>
+        <span className={a.unlimited || a.standard === "eip7702" ? s.unlimited : s.amount}>{approvedText(row)}</span>
+      </span>
+      <span className={s.cRisk} role="cell">
+        <span className={s.mLabel}>At risk</span>
+        <span className={risk === "Unknown" || risk === "—" ? s.riskNone : s.risk}>{risk}</span>
+      </span>
+      <span className={s.cSpender} role="cell">
+        <span className={s.spenderText}>
+          <span className={s.spenderName}>
             {spenderUrl ? (
               <a href={spenderUrl} target="_blank" rel="noreferrer noopener">
                 {row.spenderName ?? shortAddress(a.spender)}
@@ -230,41 +419,38 @@ function ApprovalItem({
             ) : (
               (row.spenderName ?? shortAddress(a.spender))
             )}
+            {row.verified ? <Tag tone="green" title="A contract cp0x Swap itself checks and uses">Verified</Tag> : null}
+            {eoa ? <Tag tone="red" title="The spender is a plain address, not a contract: an approval to one is rarely intended">Wallet</Tag> : null}
           </span>
-          <CopyButton value={a.spender} aria-label="Copy the spender's address" size={26} />
-          {row.verified ? <Tag tone="green" title="A contract cp0x Swap itself checks and uses">Verified by cp0x</Tag> : null}
-          {eoa ? <Tag tone="red" title="The spender is a plain address, not a contract: an approval to one is rarely intended">Wallet address</Tag> : null}
-        </div>
-      </div>
-      <div className={s.side}>
-        <AtRisk row={row} prices={prices} />
+          {row.spenderName ? <span className={s.mono}>{shortAddress(a.spender)}</span> : null}
+        </span>
+        <CopyButton value={a.spender} aria-label="Copy the spender's address" size={26} />
+      </span>
+      <span className={s.cWhen} role="cell">
+        <span className={s.mLabel}>Updated</span>
+        {row.updatedAt ? (
+          tx ? (
+            <a className={s.when} href={tx} target="_blank" rel="noreferrer noopener" title="The transaction that set it">
+              <When ms={row.updatedAt} />
+            </a>
+          ) : (
+            <span className={s.when}>
+              <When ms={row.updatedAt} />
+            </span>
+          )
+        ) : (
+          <span className={s.riskNone}>—</span>
+        )}
+      </span>
+      <span className={s.cAction} role="cell">
         {a.standard === "eip7702" ? (
           <span className={s.hint}>Remove it in your wallet&apos;s settings</span>
         ) : canRevoke ? (
           <Button title="Revoke" kind="secondary" height={40} loading={busy === a.id} disabled={!!busy && busy !== a.id} onClick={onRevoke} data-testid="approval-revoke" />
         ) : null}
-      </div>
-    </li>
-  );
-}
-
-/**
- * What the spender could take now: in USD at the token's price, else in the token; "None in wallet" when the owner
- * holds none of it (the allowance stays: anything received later is spendable). Nothing for NFTs, a delegation or a
- * balance that couldn't be read.
- */
-function AtRisk({row, prices}: {row: ApprovalRow; prices: Readonly<Record<string, number>>}) {
-  if (!row.token || row.balance === null) return null;
-  if (row.balance === 0n)
-    return (
-      <span className={s.usdNone} title="You hold none of it now — but the approval still lets the spender take any you receive later.">
-        None in wallet
       </span>
-    );
-  const usd = usdAtRisk(row, prices);
-  if (usd !== null && usd > 0) return <span className={s.usd}>{formatUsd(usd)}</span>;
-  const units = atRiskUnits(row);
-  return units ? <span className={s.usd}>{`${formatAmount(units.toString(), row.token.decimals)} ${row.token.symbol}`}</span> : null;
+    </div>
+  );
 }
 
 const STANDARD_ONLY = "Checked in Standard mode only";

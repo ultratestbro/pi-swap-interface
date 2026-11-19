@@ -158,7 +158,33 @@ function scanned(a: EvmApproval): ScannedApproval {
     ...(a.expiration !== undefined ? {expiration: Number(a.expiration)} : {}),
     ...(a.permit2 ? {permit2: getAddress(a.permit2)} : {}),
     ...(a.spenderLabel?.name ? {spenderLabel: {name: a.spenderLabel.name, ...(a.spenderLabel.url ? {url: a.spenderLabel.url} : {})}} : {}),
+    ...(a.grantedAt && Number.isSafeInteger(Number(a.grantedAt.block)) ? {grantedAt: {block: Number(a.grantedAt.block), txHash: String(a.grantedAt.txHash ?? "")}} : {}),
   };
+}
+
+/** Blocks' times (ms) on a network, read once each for the page's life; null where a read failed. */
+const blockTimes = new Map<string, Promise<number | null>>();
+const BLOCK_TIME_READS = 40;
+async function timesOf(chain: Chain, blocks: readonly number[]): Promise<Map<number, number | null>> {
+  const out = new Map<number, number | null>();
+  const todo = [...new Set(blocks)].slice(0, BLOCK_TIME_READS);
+  const one = (b: number) => {
+    const key = `${chain.chainId}:${b}`;
+    let p = blockTimes.get(key);
+    if (!p) {
+      p = reader(chain.chainId!)
+        .getBlock({blockNumber: BigInt(b)})
+        .then(
+          (blk) => Number(blk.timestamp) * 1000,
+          () => null,
+        );
+      blockTimes.set(key, p);
+    }
+    return p.then((t) => void out.set(b, t));
+  };
+  // Four at a time: a busy wallet's history spans dozens of blocks.
+  for (let i = 0; i < todo.length; i += 4) await Promise.all(todo.slice(i, i + 4).map(one));
+  return out;
 }
 
 /** Names only a verified spender may carry: an explorer label is whatever its deployer called the contract. */
@@ -278,7 +304,15 @@ export async function scanChain(chain: Chain, owner: string, source: HistorySour
   const list = approvals.map((a) => scanned(a as EvmApproval));
   const erc20 = [...new Set(list.filter((a) => a.standard === "erc20" || a.standard === "permit2").map((a) => a.token))];
   const nfts = [...new Set(list.filter((a) => a.standard === "erc721" || a.standard === "erc721-token" || a.standard === "erc1155").map((a) => a.token))];
-  const [tokens, balances, names] = await Promise.all([Promise.all(erc20.map((t) => tokenOf(chain, t))), balancesOf(chain, getAddress(owner), erc20), namesOf(chain, nfts)]);
+  // An ERC-721's balanceOf(owner) is the ERC-20's call: how many of the collection's NFTs the owner holds.
+  const collections721 = [...new Set(list.filter((a) => a.standard === "erc721" || a.standard === "erc721-token").map((a) => a.token))];
+  const [tokens, balances, names, counts, times] = await Promise.all([
+    Promise.all(erc20.map((t) => tokenOf(chain, t))),
+    balancesOf(chain, getAddress(owner), erc20),
+    namesOf(chain, nfts),
+    balancesOf(chain, getAddress(owner), collections721),
+    timesOf(chain, list.flatMap((a) => (a.grantedAt ? [a.grantedAt.block] : []))),
+  ]);
   const byToken = new Map(erc20.map((t, i) => [t.toLowerCase(), tokens[i] ?? null]));
   const rows = list.map((a): ApprovalRow => {
     const fungible = a.standard === "erc20" || a.standard === "permit2";
@@ -291,7 +325,8 @@ export async function scanChain(chain: Chain, owner: string, source: HistorySour
       balance: fungible ? (balances.get(a.token.toLowerCase()) ?? null) : null,
       spenderName: label.name,
       verified: label.verified,
-      ...(fungible ? {} : {collection: names.get(a.token.toLowerCase()) ?? null}),
+      ...(fungible ? {} : {collection: names.get(a.token.toLowerCase()) ?? null, nftCount: counts.get(a.token.toLowerCase()) ?? null}),
+      updatedAt: a.grantedAt ? (times.get(a.grantedAt.block) ?? null) : null,
     };
   });
   return {approvals: list, rows, complete: coverage.complete};

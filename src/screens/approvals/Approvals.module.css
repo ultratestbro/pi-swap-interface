@@ -4,7 +4,7 @@
   flex-direction: column;
   gap: 16px;
   width: 100%;
-  max-width: 760px;
+  max-width: 1180px;
   margin: 0 auto;
   padding: 8px var(--sp-page) 40px;
 }
@@ -124,107 +124,352 @@
   font-size: 14px;
 }
 
-.list {
+/* The table (owner 2026-11-20: like revoke.cash). Rows are cards on surface1 (no borders); the head is dim caps. */
+.toolbar {
   display: flex;
-  flex-direction: column;
   gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  min-width: 0;
 }
 
-.item {
-  display: flex;
+.search {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--r-control);
+  background: var(--surface1);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+
+.search::placeholder {
+  color: var(--dim);
+}
+
+.search:focus-visible,
+.sort:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.sortBox {
+  display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  border-radius: var(--r-card);
+  gap: 8px;
+  height: 44px;
+  padding: 0 6px 0 14px;
+  border-radius: var(--r-control);
+  background: var(--surface1);
+}
+
+.sortLabel {
+  color: var(--dim);
+  font-size: 14px;
+}
+
+.sort {
+  height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--r-chip);
+  background: var(--surface2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 24px minmax(170px, 1.5fr) 96px minmax(110px, 1fr) minmax(88px, 0.8fr) minmax(170px, 1.5fr) minmax(130px, 1fr) 104px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--r-control);
   background: var(--surface1);
   min-width: 0;
 }
 
-.asset {
+.head {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  background: none;
+  color: var(--dim);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.row > span {
+  min-width: 0;
+}
+
+.cAsset {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cSpender {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cRisk,
+.cWhen {
+  font-variant-numeric: tabular-nums;
+}
+
+.cRisk {
+  text-align: right;
+}
+
+.cAction {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.check {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.assetIcon {
   flex: none;
 }
 
-.body {
+.assetText,
+.spenderText {
   display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
-.line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-  min-width: 0;
-}
-
-.what {
+.assetName {
   color: var(--ink);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.cap {
-  color: var(--muted);
+.dimLine {
+  color: var(--dim);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cType {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.chainName {
+  color: var(--dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.selectAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.mOnly {
+  display: none;
+}
+
+.mLabel {
+  display: none;
+}
+
+.unlimited {
+  color: var(--amber);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.amount {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.risk {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.riskNone {
+  color: var(--dim);
   font-size: 14px;
 }
 
-.sub {
+.spenderName {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 6px;
-  color: var(--muted);
-  font-size: 13px;
-  min-width: 0;
-}
-
-.chain {
   color: var(--ink);
+  font-size: 15px;
 }
 
-.spender a {
+.spenderName a {
   color: var(--accent);
   text-decoration: none;
   overflow-wrap: anywhere;
 }
 
-.spender a:hover {
+.spenderName a:hover,
+.when:hover {
   text-decoration: underline;
 }
 
-.side {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.usd {
-  color: var(--amber);
-  font-size: 15px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.usdNone {
+.mono {
   color: var(--dim);
-  font-size: 14px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.when {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  color: var(--ink2);
+  font-size: 13px;
+  text-decoration: none;
   white-space: nowrap;
 }
 
+.time {
+  color: var(--dim);
+  font-size: 12px;
+}
+
 .hint {
-  max-width: 150px;
   color: var(--dim);
   font-size: 12px;
   text-align: right;
+}
+
+/* Under 1000 px each row is a card: the asset (and its checkbox) on top, the amounts in a line with their labels,
+   the spender, then when it was set and the Revoke button. The head keeps only the select-all and Revoke N. */
+@media (max-width: 999px) {
+  .row {
+    grid-template-columns: 24px 1fr 1fr 1fr;
+    grid-template-areas:
+      "sel asset asset asset"
+      ". type amount risk"
+      ". spender spender spender"
+      ". when when action";
+    gap: 10px 12px;
+    padding: 14px;
+  }
+
+  .cSel {
+    grid-area: sel;
+    align-self: start;
+    padding-top: 9px;
+  }
+
+  .cAsset {
+    grid-area: asset;
+  }
+
+  .cType {
+    grid-area: type;
+  }
+
+  .cAmount {
+    grid-area: amount;
+  }
+
+  .cRisk {
+    grid-area: risk;
+    text-align: left;
+  }
+
+  .cSpender {
+    grid-area: spender;
+  }
+
+  .cWhen {
+    grid-area: when;
+    align-self: center;
+  }
+
+  .cAction {
+    grid-area: action;
+  }
+
+  .cType,
+  .cAmount,
+  .cRisk,
+  .cWhen {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .mLabel {
+    display: block;
+    color: var(--dim);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+
+  .head {
+    grid-template-areas: "sel asset asset action";
+    grid-template-columns: 24px 1fr 1fr auto;
+    padding: 0 14px;
+  }
+
+  .head .cAsset,
+  .head .cType,
+  .head .cAmount,
+  .head .cRisk,
+  .head .cSpender,
+  .head .cWhen {
+    display: none;
+  }
+
+  .head .cSel {
+    grid-column: sel / action;
+    padding-top: 0;
+    align-self: center;
+  }
+
+  .mOnly {
+    display: inline;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
 }
 
 .empty {
@@ -247,31 +492,17 @@
   margin: 0;
 }
 
-/* Phone: the amount and the button move under the text. */
+/* Phone: the title smaller; the search over the sort. */
 @media (max-width: 639px) {
   .title {
     font-size: 22px;
   }
 
-  .item {
-    flex-wrap: wrap;
-    align-items: flex-start;
+  .toolbar {
+    flex-direction: column;
   }
 
-  .body {
-    flex-basis: calc(100% - 60px);
-  }
-
-  .side {
-    flex-direction: row;
-    align-items: center;
+  .sortBox {
     justify-content: space-between;
-    width: 100%;
-    padding-left: 54px;
-  }
-
-  .hint {
-    max-width: none;
-    text-align: left;
   }
 }

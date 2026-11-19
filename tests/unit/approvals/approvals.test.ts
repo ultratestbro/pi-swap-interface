@@ -2,7 +2,7 @@ import {describe, expect, it} from "vitest";
 import type {ApprovalRow, ScannedApproval} from "../../../src/contracts/approvals";
 import type {Token} from "../../../src/contracts/domain";
 import {CHAIN_LIST} from "../../../src/catalog";
-import {atRiskUnits, BLOCKSCOUT_URLS, ETHERSCAN_FREE_CHAIN_IDS, evmOwner, historySource, noSourceNote, ROUTESCAN_URLS, scannedOn, sortRows, usdAtRisk} from "../../../src/approvals";
+import {allowanceUsd, atRiskUnits, BLOCKSCOUT_URLS, ETHERSCAN_FREE_CHAIN_IDS, evmOwner, historySource, noSourceNote, ROUTESCAN_URLS, scannedOn, sortedRows, sortRows, usdAtRisk, valueAtRisk} from "../../../src/approvals";
 import {spenderName} from "../../../src/approvals/scan";
 
 const PROXY = "https://cp0x-api.test/api/v2/swap-web/venue/etherscan/v2/api";
@@ -81,6 +81,20 @@ describe("what an approval puts at risk", () => {
     expect(sortRows([nft, small, eoaNft, big], {[USDC.key]: 1}).map((r) => r.approval.id)).toEqual(["b", "a", "d", "c"]);
     expect(scannedOn([small, big], "eip155:8453").map((a) => a.id)).toEqual(["a", "b"]);
     expect(scannedOn([small], "eip155:1")).toEqual([]);
+  });
+
+  it("the table's columns: the approved amount in USD, the value at risk (an NFT: $0 with none held, else unknown), the sort orders", () => {
+    expect(allowanceUsd(row({}, {unlimited: false, amount: 100_000_000n}), {[USDC.key]: 1})).toBe(100);
+    expect(allowanceUsd(row(), {[USDC.key]: 1})).toBeNull();
+    expect(valueAtRisk(row(), {[USDC.key]: 1})).toBe(500);
+    const nft = (count: bigint | null) => row({token: null, balance: null, nftCount: count}, {standard: "erc721", amount: null});
+    expect(valueAtRisk(nft(0n), {})).toBe(0);
+    expect(valueAtRisk(nft(3n), {})).toBe("unknown");
+    expect(valueAtRisk(row({}, {standard: "eip7702"}), {})).toBeNull();
+    const old = row({updatedAt: 1_000}, {id: "old"});
+    const fresh = row({updatedAt: 2_000, balance: 1_000_000n}, {id: "fresh"});
+    expect(sortedRows([old, fresh], {[USDC.key]: 1}, "newest").map((r) => r.approval.id)).toEqual(["fresh", "old"]);
+    expect(sortedRows([fresh, old], {[USDC.key]: 1}, "risk").map((r) => r.approval.id)).toEqual(["old", "fresh"]);
   });
 
   it("an address to check: EVM only, checksummed", () => {

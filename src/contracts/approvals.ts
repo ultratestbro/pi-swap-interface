@@ -22,6 +22,8 @@ export interface ScannedApproval {
   permit2?: string;
   risks: readonly string[];
   spenderLabel?: {name: string; url?: string};
+  /** The log the approval was last set in (its block and transaction), when the history named it. */
+  grantedAt?: {block: number; txHash: string};
 }
 
 /** One approval as the section shows it. */
@@ -38,6 +40,10 @@ export interface ApprovalRow {
   verified: boolean;
   /** An NFT approval's collection name (its name()), read on-chain; null when it has none. */
   collection?: string | null;
+  /** How many of an ERC-721 collection's NFTs the owner holds (balanceOf); null when unread or an ERC-1155. */
+  nftCount?: bigint | null;
+  /** When the approval was last set (its block's time, ms); null when unknown. */
+  updatedAt?: number | null;
 }
 
 export type ChainScanStatus = "queued" | "scanning" | "done" | "failed" | "unsupported";
