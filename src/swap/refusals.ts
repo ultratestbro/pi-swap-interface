@@ -739,6 +739,21 @@ export function gateCode(reason: Swap2RefusalReason, text: string): string {
   return selector ? `${reason}:0x${selector.toLowerCase()}` : reason;
 }
 
+/** Route-list sections that ask the person to change their own request — the amount, a setting — not a check's verdict. */
+const REQUEST_CATEGORIES: ReadonlySet<RefusalCategory> = new Set<RefusalCategory>(["amount", "setup"]);
+
+/**
+ * The code a venue's refusal is reported to the swap statistics with (D41), or null when it is no safety refusal: a
+ * reason outside GATE_REASONS, or one the route list files under the person's own request. THORChain's module refuses
+ * 8+ decimals, its 5% fee cap and a slippage past its range as `policy_refused`, yet each asks for another amount or
+ * setting — the owner's alert "policy_refused:precision" for 0.000000165 ETH (2026-11-20) was no check at work.
+ */
+export function gateReport(provider: string, reason: Swap2RefusalReason | undefined, text: string): string | null {
+  if (!reason || !GATE_REASONS.has(reason)) return null;
+  if (REQUEST_CATEGORIES.has(classifyRefusal(provider, text, undefined, reason).category)) return null;
+  return gateCode(reason, text);
+}
+
 const BY_REASON: Readonly<Record<Swap2RefusalReason, {category: RefusalCategory; short: string; detail: string}>> = {
   rate_limited: {category: "busy", short: RETRY, detail: BUSY},
   upstream_unavailable: {category: "unavailable", short: "Unavailable right now — try later", detail: "The venue's service didn't give a usable answer just now."},

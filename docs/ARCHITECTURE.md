@@ -1698,9 +1698,12 @@ the summary.
   mismatch as `review:<its words as a slug, no hex or numbers>`, the account's fee cap `fee_cap`, an SDK safety reason
   from `GATE_REASONS`). A quote round's safety refusal (a router the venue's pins don't know, a vault that can't be
   verified) is reported once per page and code (`once`); previews never. An SDK reason carries the check its text names
-  (owner 2026-11-19, `refusals.ts` gateCode): `policy_refused:memo`, `:precision`, `:fees`, `:router`, … — a word from a
+  (owner 2026-11-19, `refusals.ts` gateCode): `policy_refused:memo`, `:fees`, `:router`, … — a word from a
   fixed list (the first whose pattern the text names, the narrower first; a failed simulation by what its revert
-  names, else its revert's 4-byte selector, D45), never the text; a text none fits keeps the bare reason.
+  names, else its revert's 4-byte selector, D45), never the text; a text none fits keeps the bare reason. A refusal
+  the route list files under the person's own request (`amount`, `setup`) is never reported, whatever its reason
+  (`refusals.ts` gateReport, 2026-11-20): THORChain's module refuses 8+ decimals, its 5% fee cap and a slippage past
+  its range as `policy_refused`, and the owner got a "check refused" alert `policy_refused:precision` for 0.000000165 ETH.
 - **Only Standard, fire-and-forget**: D36's rules — a Standard page with a plan, never Public, Custom, demo or a build
   without the API; simple `text/plain` POSTs to the plan's base with `keepalive`, no credentials, no referrer, 5 s; the
   answer is never read. guard-dist's one-origin rule stands (URLs are built from the plan's base).
