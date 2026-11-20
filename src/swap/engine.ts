@@ -32,7 +32,7 @@ import {lazyLoads} from "./omnistonLazy";
 import {KEYED_PREVIEW_VENUES, previewAddressing, previewBaseParams, previewSkip, scrubSamples} from "./preview";
 import {delegate, isLive} from "./providerWrappers";
 import {buildProviders, closeProviders} from "./providers";
-import {GATE_REASONS, gateCode, RATE_LIMITED} from "./refusals";
+import {gateReport, RATE_LIMITED} from "./refusals";
 import {reportRefused} from "../activity/counter";
 import {orderRoutes, parseRejections, tagRoutes} from "./routes";
 import {createProviderStores} from "./stores";
@@ -341,10 +341,10 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
             onRefusal: (reason: string, info?: Swap2RefusalInfo) => {
               watch(reason);
               // A safety check refused the venue's route (a router it doesn't know, a vault it can't verify): once
-              // per page and check to the swap statistics (D41). Not from previews: they quote with sample addresses.
-              if (r.mode !== "preview" && info?.reason && GATE_REASONS.has(info.reason)) {
-                reportRefused({venue: p.name, fromChain: r.req.from.caip2, toChain: r.req.to.caip2, kind: "gate", code: gateCode(info.reason, reason), once: true});
-              }
+              // per page and check to the swap statistics (D41) — not a request to change the amount or a setting.
+              // Not from previews: they quote with sample addresses.
+              const code = r.mode !== "preview" ? gateReport(p.name, info?.reason, reason) : null;
+              if (code) reportRefused({venue: p.name, fromChain: r.req.from.caip2, toChain: r.req.to.caip2, kind: "gate", code, once: true});
               qp.onRefusal?.(reason, info);
             },
           };

@@ -1,7 +1,7 @@
 import {describe, expect, it} from "vitest";
 import type {RefusalCategory} from "../../../src/contracts/routes";
 import {DEMO_REFUSALS} from "../../../src/mocks";
-import {NO_QUOTE, classifyRefusal, gateCode, redactRaw, waitWords} from "../../../src/swap/refusals";
+import {NO_QUOTE, classifyRefusal, gateCode, gateReport, redactRaw, waitWords} from "../../../src/swap/refusals";
 import {parseRejections} from "../../../src/swap/routes";
 
 const ETH = {symbol: "ETH", decimals: 18};
@@ -426,6 +426,22 @@ describe("demo refusals", () => {
     expect(classifyRefusal("symbiosis", DEMO_REFUSALS.timeout.raw)).toEqual(DEMO_REFUSALS.timeout);
     expect(classifyRefusal("omniston", DEMO_REFUSALS.nativeLeg.raw, ETH)).toEqual(DEMO_REFUSALS.nativeLeg);
     expect(classifyRefusal("omniston", DEMO_REFUSALS.noResolver.raw, USDC)).toEqual(DEMO_REFUSALS.noResolver);
+  });
+});
+
+describe("gateReport (a safety refusal for the swap statistics, never the person's own request)", () => {
+  it("leaves out what the route list asks the person to change: another amount, another setting", () => {
+    // THORChain's module refuses these as policy_refused; the owner's alert of 2026-11-20 was the first (0.000000165 ETH).
+    expect(gateReport("thorchain", "policy_refused", "thorchain: amount has more precision than THORChain's 8 decimals — round it to 8 decimals")).toBeNull();
+    expect(gateReport("thorchain", "policy_refused", "thorchain: thorchain: THORChain fees 8.22% — too expensive at this amount (cap 5%)")).toBeNull();
+    expect(gateReport("thorchain", "policy_refused", "thorchain: slippage 600 bps is outside 0–500 bps")).toBeNull();
+  });
+  it("keeps a check's verdict, with the check it names; no reason or another one is none", () => {
+    expect(gateReport("thorchain", "policy_refused", "thorchain: memo failed verification (=:BASE.ETH:0xab12:123:cp:30)")).toBe("policy_refused:memo");
+    expect(gateReport("thorchain", "vault_mismatch", "thorchain: router 0xab12 is not a THORChain router this module trusts on ETH")).toBe("vault_mismatch:router");
+    expect(gateReport("fynd", "simulation_failed", "swap2: the transaction does not simulate from this account (execution reverted: TRANSFER_FROM_FAILED)")).toBe("simulation_failed:approval");
+    expect(gateReport("thorchain", undefined, "thorchain: memo failed verification")).toBeNull();
+    expect(gateReport("thorchain", "amount_too_small", "thorchain: memo failed verification")).toBeNull();
   });
 });
 
