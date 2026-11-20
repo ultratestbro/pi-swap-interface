@@ -2,10 +2,14 @@ import {describe, expect, it, vi} from "vitest";
 import type {CrossChainProvider, Quote, QuoteParams} from "@anywalletkit/protocol-swap2-core/types";
 import {DEFAULT_RUNTIME_CONFIG} from "../../../src/config/defaults";
 import type {QuoteRequest, RouteSnapshot, RoutesRequest} from "../../../src/contracts/routes";
+import {reportRefused} from "../../../src/activity/counter";
 import {LAZY_WAIT_MS, createQuoteEngine, eligibleProviders, quoteParams} from "../../../src/swap/engine";
 import {lazyLoads, lazyOmniston} from "../../../src/swap/omnistonLazy";
 import type {ProviderStores} from "../../../src/swap/stores";
 import {ME, USDC_BASE, USDC_ETH, USDT_ETH, request, venue} from "./fixtures";
+
+// The swap statistics' report of a refusal, watched (D41): its own rules are reports.test.ts's.
+vi.mock("../../../src/activity/counter", async (original) => ({...(await original<typeof import("../../../src/activity/counter")>()), reportRefused: vi.fn()}));
 
 // The Omniston chunk is a stand-in that routes between EVM networks and refuses (no network): these tests check the
 // first round around its lazy load, not the SDK.
@@ -78,6 +82,21 @@ describe("eligibleProviders (the router's own predicate)", () => {
 });
 
 describe("quoteRoutes", () => {
+  it("reports a check's refusal to the swap statistics, never a request for another amount or setting, nor a preview's", async () => {
+    vi.mocked(reportRefused).mockClear();
+    const providers = () => [
+      venue("thorchain", {refuse: "thorchain: amount has more precision than THORChain's 8 decimals — round it to 8 decimals", refuseReason: "policy_refused", delayMs: 5}),
+      venue("chainflip", {refuse: "chainflip: the deposit channel's memo does not match", refuseReason: "policy_refused", delayMs: 5}),
+    ];
+    await engineOver(providers()).quoteRoutes(live(), () => {});
+    expect(vi.mocked(reportRefused).mock.calls).toEqual([
+      [{venue: "chainflip", fromChain: "eip155:42161", toChain: "eip155:8453", kind: "gate", code: "policy_refused:memo", once: true}],
+    ]);
+    vi.mocked(reportRefused).mockClear();
+    const {amountIn, slippageBps, from, to} = request();
+    await engineOver(providers()).quoteRoutes({mode: "preview", req: {preview: true, from, to, amountIn, slippageBps, toOther: false}}, () => {});
+    expect(reportRefused).not.toHaveBeenCalled();
+  });
   it("first update: every asked venue pending; then each venue leaves pending as it settles", async () => {
     const providers = [venue("fast", {min: "4990000", delayMs: 30, eta: 2}), venue("slow", {min: "4999000", delayMs: 80, eta: 45}), venue("nope", {refuse: "pair is not available", delayMs: 5}), venue("skip", {supports: false})];
     const {updates, onUpdate} = collect();

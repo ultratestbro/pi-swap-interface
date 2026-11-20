@@ -124,7 +124,7 @@ export function startSwap(input: StartSwapInput, deps: ExecuteDeps = {}): Promis
         }
         if (!swapFailureExpected(e)) console.warn("swap failed", {provider: reviewed.provider, error: e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)});
         // A route the check refused, or the person declined, before anything was sent (D41).
-        const refused = refusalReport(e);
+        const refused = refusalReport(e, reviewed.provider);
         if (refused) reportRefused({venue: reviewed.provider, fromChain: from.caip2, toChain: to.caip2, ...refused});
         if (!started) {
           reject(e);

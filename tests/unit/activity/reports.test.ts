@@ -208,6 +208,9 @@ describe("refusals (/refused)", () => {
       kind: "gate",
       code: "policy_refused:memo",
     });
+    // A refusal that asks for another amount or setting is the person's request, not a check (refusals.ts gateReport).
+    expect(refusalReport(withReason(new Swap2ExecutionError("thorchain: THORChain fees 7.10% — too expensive at this amount (cap 5%)"), "policy_refused"), "thorchain")).toBeNull();
+    expect(refusalReport(withReason(new Swap2ExecutionError("thorchain: slippage 600 bps is outside 0–500 bps"), "policy_refused"), "thorchain")).toBeNull();
     expect(refusalReport(withReason(new Swap2ExecutionError("quote expired"), "quote_expired"))).toBeNull();
     expect(refusalReport(new Error("insufficient funds for gas"))).toBeNull();
   });
