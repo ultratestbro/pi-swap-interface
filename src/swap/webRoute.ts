@@ -25,11 +25,12 @@ import {venueTrust} from "./venues";
  * (0.5.0) return a price-only quote, without its transaction, when it was
  * priced for a placeholder recipient or refund (a preview), and 0x's dry
  * quote is its `/swap/permit2/price` answer, which carries no transaction (a
- * Settler call, built only for a live quote; D38). Never offered as a deposit
+ * Settler call, built only for a live quote; D38), and CoW's token sale is a
+ * signed order with no transaction at all (D48). Never offered as a deposit
  * address, so a QR payer reads "Needs a wallet that signs" instead of a dead
  * end.
  */
-const SIGNED_ONLY: ReadonlySet<string> = new Set(["chainflip", "omniston", "symbiosis", "lifi", "usdt0", "stargate", "zeroex"]);
+const SIGNED_ONLY: ReadonlySet<string> = new Set(["chainflip", "omniston", "symbiosis", "lifi", "usdt0", "stargate", "zeroex", "cow"]);
 
 /** txRequest present (or a signed-only venue) → the wallet signs; else the payer sends to a deposit address. */
 export function executionOf(q: Pick<Quote, "provider" | "txRequest">): Execution {

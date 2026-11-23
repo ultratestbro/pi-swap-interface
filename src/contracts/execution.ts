@@ -46,6 +46,8 @@ export interface ExecutionPhaseDetail {
   index?: number;
   total?: number;
   hash?: string;
+  /** The page's own: a CoW order's gas-free permit is what the wallet is asked to sign now (D48). */
+  permit?: true;
 }
 
 export type EvmTransport = "injected" | "walletconnect";

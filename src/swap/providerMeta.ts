@@ -9,9 +9,10 @@ import {acrossRouteUnpriced} from "@anywalletkit/protocol-swap2-across/pricing";
 import {CF_VAULTS} from "@anywalletkit/protocol-swap2-chainflip/config";
 import {ZEROEX_CHAINS, ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
 import {stargateRegistry} from "@anywalletkit/protocol-swap2-stargate/deployments";
+import {COW_DEPLOYMENTS, COW_VAULT_RELAYER, deploymentOf} from "@anywalletkit/protocol-swap2-cow";
 import {chainByCaip2Web} from "../catalog";
 
-/** Mobile lib/swap/providers.ts PROVIDER_NAMES, plus Curve, 0x and Across. */
+/** Mobile lib/swap/providers.ts PROVIDER_NAMES, plus Curve, 0x, Across and CoW. */
 export const PROVIDER_NAMES: Readonly<Record<string, string>> = {
   near_intents: "NEAR Intents",
   lifi: "LI.FI",
@@ -31,6 +32,7 @@ export const PROVIDER_NAMES: Readonly<Record<string, string>> = {
   jupiter: "Jupiter",
   zeroex: "0x",
   across: "Across",
+  cow: "CoW Protocol",
 };
 
 /** A venue's display name; unknown names pass through. */
@@ -77,6 +79,9 @@ export const OMNISTON_ORDER_PROTOCOL: Readonly<Record<string, string>> = {
 /** 0x serves this EVM network (its chain table: Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, BNB Chain). */
 const zeroExServes = (chain: string): boolean => !!zeroExChain(ZEROEX_CHAINS, zeroExChainId(chain));
 
+/** CoW serves this EVM network (its package's deployments: Ethereum, Arbitrum, Base). */
+export const cowServes = (chain: string): boolean => chain.startsWith("eip155:") && !!deploymentOf(COW_DEPLOYMENTS, Number(chain.slice("eip155:".length)));
+
 /**
  * The spender an ERC-20 source on `chain` must be approved for when the dry
  * quote names none, or null. Omniston: its gasless order is built after the
@@ -90,6 +95,8 @@ export function orderSpender(provider: string, chain: string): string | null {
   if (provider === "omniston") return OMNISTON_ORDER_PROTOCOL[chain] ?? null;
   if (provider === "chainflip" && chain.startsWith("eip155:")) return CF_VAULTS[chain] ?? null;
   if (provider === "zeroex" && zeroExServes(chain)) return ZEROEX_PERMIT2;
+  // CoW (D48): a token sale's allowance goes to the GPv2 vault relayer (or an EIP-2612 permit for it, decided at Confirm).
+  if (provider === "cow" && cowServes(chain)) return COW_VAULT_RELAYER;
   return null;
 }
 
@@ -99,6 +106,12 @@ export function orderSpender(provider: string, chain: string): string | null {
  * Permit2, then sends the swap carrying the signature. The review says so (D38).
  */
 export const PERMIT2_VENUES: ReadonlySet<string> = new Set(["zeroex"]);
+
+/**
+ * Venues whose token sale is a signed order that solvers fill (CoW, D48): the wallet approves the venue's vault relayer
+ * — or signs a gas-free EIP-2612 permit for it, when the token has one — then signs the order; no swap transaction.
+ */
+export const ORDER_VENUES: ReadonlySet<string> = new Set(["cow"]);
 
 /** One side of a pair as venueScope reads it (a SwapToken fits). */
 export interface ScopeSide {
@@ -121,7 +134,7 @@ export interface ScopeSide {
 export const LISTED_ONLY_VENUES: ReadonlySet<string> = new Set(["usdt0", "stargate", "cctp", "thorchain", "chainflip", "near_intents", "symbiosis", "omniston", "across"]);
 
 /** Venues that also swap within one network (their own supportsSameChain); the router asks no other venue then. */
-const SAME_CHAIN_VENUES: ReadonlySet<string> = new Set(["lifi", "uniswap", "curve", "wrap", "balancer", "fynd", "jupiter", "omniston", "zeroex"]);
+const SAME_CHAIN_VENUES: ReadonlySet<string> = new Set(["lifi", "uniswap", "curve", "wrap", "balancer", "fynd", "jupiter", "omniston", "zeroex", "cow"]);
 
 const isSymbol = (x: ScopeSide, ...names: string[]) => names.includes(x.symbol.toUpperCase());
 
@@ -249,6 +262,10 @@ function usualScope(provider: string, from: ScopeSide, to: ScopeSide): string {
       return zeroExServes(from.caip2) ? "Doesn't cover this pair" : "Not on this network";
     case "across":
       return acrossScope(from, to);
+    case "cow":
+      // Same network only, on its 3 chains (Ethereum, Arbitrum, Base).
+      if (!sameNet) return "Same-network swaps only";
+      return cowServes(from.caip2) ? "Doesn't cover this pair" : "Not on this network";
     case "stargate":
       return stargateScope(from, to);
     case "wrap":

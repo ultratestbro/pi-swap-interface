@@ -39,6 +39,7 @@ export const PROVIDER_LOGOS: ReadonlySet<string> = new Set([
   "jupiter",
   "zeroex",
   "across",
+  "cow",
 ]);
 
 /** Catalog slugs with a network SVG: all 37 networks but `morph` (a monogram on mobile too). */

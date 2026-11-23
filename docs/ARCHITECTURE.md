@@ -1852,6 +1852,47 @@ the source's finality — about 15–19 minutes from Ethereum and the L2s, hours
   `execute/gate.test.ts` and `execute/imported.test.ts` (the plan and every quote of the execution are the reviewed
   route), `activity/store.test.ts` (records keep it), e2e `demo.spec.ts` (both rows; Standard picked is reviewed).
 
+**D48 — CoW Protocol: same-network swaps as signed orders (owner, 2026-11-23).** The SDK release of 2026-11-23
+(swap2-core 0.17.0, router 0.8.0, protocol-swap2-cow 0.1.0, the providers' patches) adds CoW. The owner: "в сдк вышли
+апдейты + добавлен новый протокол cow, давай добавим в swap".
+- **The venue.** `cow` (`cowProvider`, on by default in every mode, after Wrap in ask order): exact-input sells on
+  Ethereum, Arbitrum and Base. Keyless and straight from the browser to `api.cow.fi` — never through cp0x's proxy (the
+  module refuses to run behind a remote stub, and a key isn't needed). One quote per 1.1 s from a page
+  (`pacing.cowGapMs`, never under 1 s: the orderbook allows 1/s and ~500/h per IP) and a 429 cools it down
+  (`coolDownOnRateLimit`). Its RPCs are the page's, for the token's permit, eth-flow reads and a native payout's
+  receiver. Orders name the app (`appCode` "cp0x Swap"). Trust badge API; name "CoW Protocol"; logo CoW Swap's tile.
+- **What the wallet does.** A token sale signs an EIP-712 GPv2 order (no swap transaction, no gas); its allowance
+  goes to the GPv2 vault relayer — by a gas-free EIP-2612 permit (signed, carried in the order's appData as a pre-hook)
+  when the token has one, else by an exact approval (input plus the account's other open orders of that token). A
+  native sale is one eth-flow `createOrder` transaction carrying the input. An order trades for 20 minutes, then
+  expires: a token never left the wallet; eth-flow's ETH is refunded by CoW.
+- **The in-page gate (D10).** `VenueRule {kind: "gpv2"}` and `gpv2Problem`, checked before every other venue rule: on
+  a chain the package serves, a token sale is a GPv2 order the SDK's own reader (`assertGpv2Order`) binds to the
+  review — this owner, the reviewed token and exact input, at least the reviewed minimum of the reviewed token to the
+  reviewed recipient, zero fee, fill-or-kill, plain balances, GPv2Settlement on this chain — expiring within 30 min;
+  approvals to the vault relayer only (`checkPlan` lets a CoW order's allowance exceed the input, never undercut it);
+  at most one permit, for that token, the relayer, at least the input, expiring with the order, and never with an
+  approval. A native sale: the pinned eth-flow contract, `decodeEthFlowCall` → `createOrder` for exactly the input,
+  the reviewed token and recipient, at least the minimum. No other venue's plan may carry a permit or a GPv2 order.
+  `planWrites` arms the permit (`gpv2Permit`, held by `assertGpv2Permit`) and the order (`gpv2Order`: every field as
+  the plan's, re-read by `assertGpv2Order` when the wallet is asked); the order's `appData` may differ only once this
+  arm's permit went to the wallet (the hook that carries it). The gate names each CoW signature as it lets it through
+  (`createSwapGate(chain, onSign)`): the engine has no phase for them, the progress sheet needs one.
+- **Wrappers.** `delegate` now forwards `applyPermit`, `buildCancel`, `registerCancel` and `cancelTargets`: without
+  `applyPermit` the engine silently takes the approval path instead of the permit.
+- **Screens.** A gasless quote (`Quote.gasless`, no txRequest) is `WebRoute.gasless {permit}`: no swap gas
+  (`routeGasUnits`: the approval only, none with a permit), the row reads "no gas · signed permit", the review's
+  approval row "Signed permit" and its wallet line ends "sign the order — no gas". A CoW token sale is signed-only
+  (`SIGNED_ONLY`, never a deposit address). Records carry `order`: "Sign the order" → "A solver fills X → Y" (no
+  separate delivery step), "Waiting for a solver", an expired order "Not filled — nothing was swapped".
+- **Not yet.** Cancelling an order from the page (`cancelSwap2`, off-chain or on-chain) — an unfilled order expires
+  by itself; the router's `sourceGasUsd` (the page ranks with its own gas term, D4).
+- **Tests.** `tests/unit/execute/cowGate.test.ts` (the plan rules, the armed permit and order, appData only after the
+  permit, eth-flow), `tests/unit/swap/cow.test.ts` (gas, scope, spender, wrappers forward the permit, review lines,
+  progress), opt-in `tests/unit/execute/cow.live.test.ts` (SWAP_LIVE=1: a live Base order reaches the wallet only
+  through the gate — the permit, then the order with the permit's appData, and eth-flow's `createOrder`; the fake
+  wallet rejects, nothing is signed with funds or placed).
+
 ## 5. Conventions
 
 - **TypeScript**: strict, `noUncheckedIndexedAccess`, `verbatimModuleSyntax` (use `import type`). Named exports

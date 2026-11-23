@@ -133,6 +133,7 @@ export const PREVIEW_VENUES: ReadonlySet<string> = new Set([
   "fynd",
   "zeroex",
   "across",
+  "cow",
 ]);
 
 /**

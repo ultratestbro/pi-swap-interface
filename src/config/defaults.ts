@@ -79,6 +79,7 @@ export const DEFAULT_PROVIDERS: Readonly<Record<ProviderName, boolean>> = {
   curve: true,
   balancer: true,
   wrap: true,
+  cow: true,
   usdt0: true,
   stargate: true,
   cctp: true,
@@ -124,7 +125,7 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
   cctp: {mode: "auto"},
   thorchain: {clientId: "cp0x-swap"},
   omniston: {maxUsd: 1000, evmSource: true},
-  pacing: {symbiosisGapMs: 1100, jupiterGapMs: 2100},
+  pacing: {symbiosisGapMs: 1100, jupiterGapMs: 2100, cowGapMs: 1100},
   // Five preview rounds at once, then one per 20 s per tab (D29): typing pauses, a few refreshes, never a poll.
   preview: {enabled: true, roundsBurst: 5, roundRefillMs: 20_000},
   walletConnect: {projectId: ""},

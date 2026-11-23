@@ -53,11 +53,13 @@ const etaPart = (seconds: number): string | null => {
  */
 export function routeMeta(r: WebRoute): string {
   const feeUsd = r.feeUsd + (r.bridgeFeeUsd ?? 0);
+  // A signed order (CoW, D48): the network cost is in its price; a token with a permit needs no approval transaction.
+  const permit = r.gasless?.permit === true && !!r.approvalSpender;
   return [
     etaPart(r.etaSeconds),
-    feeUsd > 0 ? `fees ${formatUsd(feeUsd)}` : r.gasUsd === null ? "fees in price" : null,
+    feeUsd > 0 ? `fees ${formatUsd(feeUsd)}` : r.gasless && r.gasUsd === null ? "no gas" : r.gasUsd === null ? "fees in price" : null,
     r.gasUsd !== null ? gasBound(r.gasUsd) : null,
-    r.approvalSpender ? "approval" : null,
+    permit ? "signed permit" : r.approvalSpender ? "approval" : null,
   ]
     .filter(Boolean)
     .join(" · ");

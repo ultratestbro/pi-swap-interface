@@ -277,6 +277,16 @@ const RULES: readonly Rule[] = [
   },
   {category: "busy", re: new RegExp(`${RATE_LIMITED.source}|too many deposits`, "i"), short: RETRY, detail: BUSY},
 
+  // CoW (protocol-swap2-cow 0.1.0, D48): "cow: the orderbook is unreachable (TypeError)" when its fetch fails — the
+  // browser never reached api.cow.fi, as the transport rule below reads it (a 5xx reads "unavailable" by its reason).
+  {
+    provider: "cow",
+    category: "unreachable",
+    re: /the orderbook is unreachable/,
+    short: "Couldn't reach it — tap refresh",
+    detail: "Your browser couldn't connect to CoW's orderbook — an ad blocker, VPN or network filter can cause this.",
+  },
+
   // ── the browser never got an answer ──
   {
     category: "unreachable",

@@ -10,7 +10,7 @@ import type {SwapToken} from "../../contracts/domain";
 import type {QuoteRequest, WebRoute} from "../../contracts/routes";
 import type {ReviewRow} from "../../contracts/ui";
 import {formatUsd, shortAddress} from "../../catalog";
-import {FLOOR_TOLERANCE_BPS, PERMIT2_VENUES, TWO_PHASE, etaLabel, formatRate, gasBound, impliedSlippagePct, providerName, rate, routeFloor, routeName, usdOf} from "../../swap";
+import {FLOOR_TOLERANCE_BPS, ORDER_VENUES, PERMIT2_VENUES, TWO_PHASE, etaLabel, formatRate, gasBound, impliedSlippagePct, providerName, rate, routeFloor, routeName, usdOf} from "../../swap";
 import {ProviderLogo, VenueBadge, venueTrustText} from "../../ui";
 import {bpsLabel} from "../form/FormParts";
 import {amountText} from "../labels";
@@ -79,7 +79,12 @@ export function reviewRows({req, route, from, to, native, slippage}: ReviewRowsI
     {
       k: "Fees",
       v: route.feeUsd > 0 ? formatUsd(route.feeUsd) : "In the price",
-      note: route.gasUsd !== null ? `+ ${gasBound(route.gasUsd)} in ${nativeSymbol}` : `+ network fee in ${nativeSymbol}`,
+      note:
+        route.gasUsd !== null
+          ? `+ ${gasBound(route.gasUsd)} in ${nativeSymbol}`
+          : route.gasless
+            ? "no gas — a solver sends it"
+            : `+ network fee in ${nativeSymbol}`,
     },
     ...(route.nativeFee > 0n && native ? [{k: "Bridge fee", v: amountText(route.nativeFee, native.decimals, native.symbol), note: "on top of the amount"}] : []),
     ...(qr
@@ -87,13 +92,24 @@ export function reviewRows({req, route, from, to, native, slippage}: ReviewRowsI
       : [
           {
             k: "Approval",
-            v: route.approvalSpender ? `Exact ${amountText(req.amountIn, from.decimals, from.symbol)}` : "Not needed",
+            v: route.approvalSpender
+              ? route.gasless?.permit
+                ? `Signed permit, ${amountText(req.amountIn, from.decimals, from.symbol)}`
+                : ORDER_VENUES.has(route.provider)
+                  ? // A CoW allowance also covers the wallet's other open CoW orders of this token (D48).
+                    `${amountText(req.amountIn, from.decimals, from.symbol)} + your open CoW orders`
+                  : `Exact ${amountText(req.amountIn, from.decimals, from.symbol)}`
+              : "Not needed",
             // 0x (D38): the allowance goes to Permit2 only, and a one-time signature for exactly this amount spends it.
             ...(route.approvalSpender
               ? {
                   note: PERMIT2_VENUES.has(route.provider)
                     ? `Permit2 ${shortAddress(route.approvalSpender, 8, 6)} + a one-time signature`
-                    : `spender ${shortAddress(route.approvalSpender, 8, 6)}`,
+                    : ORDER_VENUES.has(route.provider)
+                      ? route.gasless?.permit
+                        ? `CoW vault relayer ${shortAddress(route.approvalSpender, 8, 6)}, no transaction`
+                        : `CoW vault relayer ${shortAddress(route.approvalSpender, 8, 6)} — or a gas-free permit`
+                      : `spender ${shortAddress(route.approvalSpender, 8, 6)}`,
                 }
               : {}),
             testId: "swap-review-approval",

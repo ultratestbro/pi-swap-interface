@@ -36,6 +36,12 @@ export function delegate(p: CrossChainProvider, overrides: Partial<Omit<CrossCha
     preflightDeposit: p.preflightDeposit?.bind(p),
     notifyDeposit: p.notifyDeposit?.bind(p),
     registerSignedOrder: p.registerSignedOrder?.bind(p),
+    // core 0.17: a CoW order's permit and cancel steps (D48). The engine signs a permit only when `applyPermit` is
+    // there; a copy without it would always send an approval transaction instead.
+    applyPermit: p.applyPermit?.bind(p),
+    buildCancel: p.buildCancel?.bind(p),
+    registerCancel: p.registerCancel?.bind(p),
+    cancelTargets: p.cancelTargets?.bind(p),
     buildClaim: p.buildClaim?.bind(p),
     claimTargets: p.claimTargets?.bind(p),
     callTargets: p.callTargets?.bind(p),

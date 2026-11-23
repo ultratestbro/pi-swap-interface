@@ -70,6 +70,11 @@ export interface SwapRecord {
   approvals?: number;
   /** The route signs a one-time Permit2 transfer before its approval (a Permit2 venue's token sale, D38). */
   permit?: boolean;
+  /**
+   * The swap is a signed order that solvers fill (a CoW token sale, D48): the wallet signs it (and maybe a gas-free
+   * permit) instead of sending a swap transaction; nothing leaves the wallet until a solver settles it.
+   */
+  order?: boolean;
   approved?: boolean;
   /** Why it stopped before broadcast (`not-sent`), in the user's words (swapErrorText). */
   error?: string;
@@ -145,6 +150,8 @@ export interface NewRecordInput {
   deposit?: SwapRecord["deposit"];
   usdIn?: number;
   slippageBps?: number;
+  /** A signed order (SwapRecord.order, D48). */
+  order?: boolean;
 }
 
 export interface StatusView {

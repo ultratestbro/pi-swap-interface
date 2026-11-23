@@ -56,6 +56,11 @@ MIT, above), rendered here (2026-11-15) the way Curve's is: the mark at 72 % of 
 64 px. 0x's and Across's trademarks, used nominatively to name each venue; no endorsement is implied, and they are not
 relicensed here.
 
+`cow.png`, `cow@2x.png` (CoW Protocol) — CoW Swap's mark on its blue tile as web3icons draws it for the exchange
+(`dist/svgs/exchanges/background/cowswap.svg` of `@web3icons/core` 4.0.59, MIT, above), rendered here (2026-11-23) to
+32 / 64 px with the tile filling the square. CoW DAO's trademark, used nominatively to name the venue; no endorsement
+is implied, and it is not relicensed here.
+
 ## `walletconnect.svg` — WalletConnect's icon
 
 `Icon/Blue (Default)/Icon.svg` from WalletConnect's brand toolkit, https://github.com/WalletConnect/walletconnect-assets

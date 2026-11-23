@@ -33,7 +33,7 @@ export type QuoteLike = Pick<
   | "relativeValue"
   | "netValueUsd"
 > &
-  Partial<Pick<RankedQuote, "fees" | "txRequest" | "providerData">>;
+  Partial<Pick<RankedQuote, "fees" | "txRequest" | "providerData" | "gasless">>;
 
 const big = (v: string | undefined): bigint => (v && /^\d+$/.test(v) ? BigInt(v) : 0n);
 
@@ -68,6 +68,8 @@ export function toRouteView(q: QuoteLike, source?: {chain: string; isToken: bool
     nativeFee: big(q.txRequest ? q.txRequest.nativeFee : q.providerData?.nativeFee),
     validUntilMs: q.validUntilMs ?? 0,
     gasUsd: gas > 0 ? gas : null,
+    // protocol-swap2-cow 0.1.0 names it "offered" or "none" (both truthy as strings).
+    ...(q.gasless && !q.txRequest ? {gasless: {permit: q.providerData?.permit === "offered"}} : {}),
   };
 }
 

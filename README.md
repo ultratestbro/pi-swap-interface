@@ -96,6 +96,7 @@ The venues are independent services with their own rules, and cp0x cannot change
 | Curve | same-chain swaps over a pinned list of checked pools (Ethereum, Arbitrum, Base, OP Mainnet, Gnosis, Monad, Plasma, X Layer) | Router NG `get_dy`, over your RPC | ON-CHAIN | on |
 | Balancer v2 | same-chain swaps | Vault `queryBatchSwap`, over your RPC; paths from the Balancer API | ON-CHAIN | on |
 | Wrap | native coin ⇄ wrapped native (ETH ⇄ WETH, …) | WETH9-style contract | ON-CHAIN | on |
+| CoW Protocol | same-chain swaps on Ethereum, Arbitrum and Base as signed orders that solvers fill: a token sale costs no gas (a gas-free permit where the token has one, else an exact approval), ETH is sold through CoW's eth-flow contract | CoW's public orderbook API, straight from your browser; the order is rebuilt and checked here | API | on |
 | USDT0 | USDT0 between chains (LayerZero OFT) | OFT `quoteSend`, over your RPC; LayerZero Scan for status | ON-CHAIN | on |
 | Circle CCTP V2 | USDC between chains (burn, then mint on the destination) | contracts; Circle's attestation API to mint | ON-CHAIN | on |
 | THORChain | native cross-chain swaps (BTC, ETH, …) | THORNode API; two node operators cross-check the vault | NODE | on |
@@ -118,7 +119,12 @@ off in the runtime config, and a viewer for their own browser in Settings (a ven
 off). Fynd runs only in the hosted build's Standard mode, while cp0x holds a key for it: its API
 answers no browser directly (no CORS) and needs a key, so cp0x's proxy carries the request and adds the key. Its
 routes settle only through the Tycho router, as the Fynd License requires, and the review of a Fynd route says so
-(the licence asks for that notice); the app charges no fee on them. 0x and Across run the same way, only in Standard
+(the licence asks for that notice); the app charges no fee on them. CoW Protocol needs no key and no proxy: your
+browser asks CoW's orderbook for a price, then builds the order itself from your request (your exact amount, at least
+the minimum you reviewed, to your address, CoW's settlement contract on that chain, about 20 minutes to fill) and
+checks it again before your wallet signs it; the allowance goes only to CoW's vault relayer. An order no solver fills
+simply expires: a token never leaves your wallet, and ETH held by the eth-flow contract is returned. 0x and Across run
+the same way as Fynd, only in Standard
 mode while cp0x holds their keys: both APIs want a key on every request, and a key can't ship in a web page. Their
 providers still run in your browser with every check: the 0x provider reads the Settler from 0x's on-chain registry,
 decodes the transaction and rebuilds the Permit2 signature it asks for (one signature for exactly your amount, to that
@@ -278,7 +284,7 @@ key in it.** An RPC key is only acceptable if its provider restricts it to your 
 | key | default | what it does |
 |---|---|---|
 | `demo` | `false` | Fixtures only: no wallets, no network. |
-| `providers.<name>` | `true` | Build that venue at all (`false` switches it off). Names: `uniswap curve balancer wrap usdt0 cctp thorchain chainflip near_intents lifi relay symbiosis jupiter omniston fynd zeroex across` (`fynd`, `zeroex` and `across` are built only in Standard mode). |
+| `providers.<name>` | `true` | Build that venue at all (`false` switches it off). Names: `uniswap curve balancer wrap cow usdt0 cctp thorchain chainflip near_intents lifi relay symbiosis jupiter omniston fynd zeroex across` (`fynd`, `zeroex` and `across` are built only in Standard mode). |
 | `evmRpc.<chainId>` | public RPCs per chain | JSON-RPC URLs tried in order. Used for balances, simulation, provider reads and the wallet's chain definitions. |
 | `solanaRpc` | publicnode, solanavibestation | Solana RPCs tried in order. `api.mainnet-beta.solana.com` is left out because it refuses browser origins. |
 | `nearRpc` | FastNear | NEAR RPCs tried in order, asked directly in every mode, only once a NEAR wallet is connected. `[]` = no NEAR reads: balances stay unknown and a NEAR wallet's deposits are refused before signing. |
@@ -303,6 +309,7 @@ key in it.** An RPC key is only acceptable if its provider restricts it to your 
 | `omniston.evmSource` | `true` | Allow EVM sources on Omniston. |
 | `pacing.symbiosisGapMs` | `1100` | Minimum gap between Symbiosis requests (its limit is 1 per second). |
 | `pacing.jupiterGapMs` | `2100` | Minimum gap between Jupiter quotes (keyless limit 0.5 per second). |
+| `pacing.cowGapMs` | `1100` | Minimum gap between CoW quotes (its orderbook allows 1 per second per IP; never under 1000). |
 | `preview.enabled` | `true` | Show preview prices before a wallet is connected or an address is typed. They are never reviewable; the live quote follows. A viewer's Settings can only turn it off. |
 | `preview.roundsBurst` | `5` | Preview rounds a tab may run back to back (1–20). |
 | `preview.roundRefillMs` | `20000` | One more preview round per this many ms (5000–600000). Advisory: each visitor asks the venues from their own IP. |

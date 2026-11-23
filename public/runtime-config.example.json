@@ -5,6 +5,7 @@
     "curve": true,
     "balancer": true,
     "wrap": true,
+    "cow": true,
     "usdt0": true,
     "stargate": true,
     "cctp": true,
@@ -94,7 +95,8 @@
   },
   "pacing": {
     "symbiosisGapMs": 1100,
-    "jupiterGapMs": 2100
+    "jupiterGapMs": 2100,
+    "cowGapMs": 1100
   },
   "preview": {
     "enabled": true,

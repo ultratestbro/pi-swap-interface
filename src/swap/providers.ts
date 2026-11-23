@@ -39,6 +39,8 @@ import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider";
 import type {SettlerResolver} from "@anywalletkit/protocol-swap2-0x/settler";
 import {zeroExChain, zeroExChainId, ZEROEX_CHAINS} from "@anywalletkit/protocol-swap2-0x/chains";
 import {acrossProvider} from "@anywalletkit/protocol-swap2-across/provider";
+import {cowProvider} from "@anywalletkit/protocol-swap2-cow/provider";
+import {COW_DEPLOYMENTS} from "@anywalletkit/protocol-swap2-cow";
 import {ACROSS_CHAINS} from "@anywalletkit/protocol-swap2-across/config";
 import type {ProviderName, RuntimeConfig, VenueKeys} from "../contracts/config";
 import {getRuntimeConfig, standardFetch, standardProxyOnly, venueKeys, type ProxyOnlySlot} from "../config";
@@ -59,6 +61,7 @@ export const DEFAULT_ON_PROVIDERS: readonly ProviderName[] = [
   "curve",
   "balancer",
   "wrap",
+  "cow",
   "usdt0",
   "stargate",
   "cctp",
@@ -81,6 +84,9 @@ export const STANDARD_ONLY_PROVIDERS: readonly ProviderName[] = ["fynd", "zeroex
  * `Authorization: Bearer`), here cp0x's proxy slot, which drops it and adds cp0x's own. It reaches neither venue.
  */
 export const PROXY_KEY_PLACEHOLDER = "cp0x-swap-web-proxy-adds-the-key";
+
+/** How CoW's explorer names orders from this page (appData `appCode`; the orderbook asks integrations to name themselves). */
+export const COW_APP_CODE = "cp0x Swap";
 
 /** How long a firm 0x quote is offered (the module's default is 45 s): long enough to outlive an Ethereum approval. */
 export const ZEROEX_QUOTE_TTL_MS = 120_000;
@@ -161,6 +167,16 @@ export function buildProviders(
   // The SOR (its API) only suggests paths; the Vault prices them on-chain over the RPC table (queryBatchSwap).
   if (on.balancer) out.push(balancerProvider({rpcUrls: evm, apiUrl: config.api.balancer}));
   if (on.wrap) out.push(narrowRoute(wrapProvider({rpcUrls: evm}), isWrapPair));
+  // CoW Protocol (D48): same-network sells on Ethereum, Arbitrum and Base as signed orders that solvers fill — keyless,
+  // straight from this browser to CoW's public orderbook (never through cp0x's proxy: the module refuses to run behind
+  // a remote stub). The order is rebuilt and checked here, then again by the in-page gate (gpv2Problem). Its RPCs
+  // (the token's permit, eth-flow reads, a native payout's receiver) are the page's. The orderbook allows about one
+  // quote a second and 500 an hour per IP: one quote per 1.1 s from this page, and a 429 cools the venue down.
+  if (on.cow) {
+    const rpcUrls = Object.fromEntries(Object.keys(COW_DEPLOYMENTS).flatMap((id) => (evm[Number(id)]?.length ? [[Number(id), [...evm[Number(id)]!]]] : [])));
+    const cow = cowProvider({enabled: true, rpcUrls, appCode: COW_APP_CODE});
+    out.push(coolDownOnRateLimit(withQuoteGap(cow, config.pacing.cowGapMs)));
+  }
   // The Legacy Mesh into TON and Tron (Ethereum USDT, Arbitrum USDT0) is named here, not left to the SDK's default
   // (TON only). Tron's LayerZero fee is above the engine's native-fee cap: execute.ts nativeFeeCeiling raises it for
   // that route alone (usdt0 0.5.0, core 0.11.0). A TON payout counts as delivered only once the operator's TonAPI shows

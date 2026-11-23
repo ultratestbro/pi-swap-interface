@@ -132,6 +132,7 @@ as side-effectful. Subpaths used:
 | `zeroex` | `import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider"` | `/chains`: `ZEROEX_CHAINS`, `ZEROEX_PERMIT2`, `zeroExChain(Id)`; `/settler`: `SettlerResolver`, `ZEROEX_MAX_PERMIT_SECONDS` |
 | `across` | `import {acrossProvider} from "@anywalletkit/protocol-swap2-across/provider"` | `/config`: `ACROSS_CHAINS`, `ACROSS_NATIVE`, `acrossRouteOf`; `/pricing`: `acrossRouteUnpriced`; `/verify`: `acrossPins` |
 | `wrap` | `import {wrapProvider, WRAPPED_NATIVE, type WrapProviderConfig} from "@anywalletkit/protocol-swap2-wrap/provider"` | |
+| `cow` | `import {cowProvider} from "@anywalletkit/protocol-swap2-cow/provider"` | root: `COW_DEPLOYMENTS`, `COW_VAULT_RELAYER`, `COW_ETH_FLOW`, `deploymentOf`, `decodeEthFlowCall`; swap2-core root: `assertGpv2Order`, `assertGpv2Permit`, `isGpv2Order`, `GPV2_VAULT_RELAYER` (ARCHITECTURE D48) |
 | `jupiter` | `import {jupiterProvider, type JupiterProviderConfig} from "@anywalletkit/protocol-swap2-jupiter/provider"` | |
 | `symbiosis` | `import {symbiosisProvider, type SymbiosisProviderConfig} from "@anywalletkit/protocol-swap2-symbiosis/provider"` | `/config`: `symbiosisChain` |
 | `balancer` | `import {balancerProvider, BALANCER_V2_CHAINS, type BalancerProviderConfig} from "@anywalletkit/protocol-swap2-balancer/provider"` | |
@@ -246,7 +247,7 @@ viewer's own keys (`VenueKeys`, this browser's storage) go straight into their v
 export type ProviderName =
   | "near_intents" | "lifi" | "thorchain" | "cctp" | "usdt0" | "chainflip" | "relay"
   | "uniswap" | "curve" | "wrap" | "jupiter" | "fynd"
-  | "symbiosis" | "balancer" | "omniston" | "zeroex" | "across";
+  | "symbiosis" | "balancer" | "omniston" | "zeroex" | "across" | "cow";
 
 export interface RuntimeConfig {
   /** Construct the provider at all. Every one default true (fynd, zeroex, across: Standard mode only). */
