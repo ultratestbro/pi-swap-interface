@@ -22,7 +22,7 @@ import type {WebRoute} from "../../contracts/routes";
 import type {WalletFamily, WalletsApi} from "../../contracts/wallets";
 import {savedOverrides, usePorts} from "../../config";
 import {chainBySlugWeb, destTokenId} from "../../catalog";
-import {FYND_LICENSE_URL, PERMIT2_VENUES, balanceProblem, fyndRouterNotice, gasInNative, isStale, nativeShortfall, routeFloor} from "../../swap";
+import {FYND_LICENSE_URL, ORDER_VENUES, PERMIT2_VENUES, balanceProblem, fyndRouterNotice, gasInNative, isStale, nativeShortfall, routeFloor} from "../../swap";
 import {swapErrorText, swapFeeCap, uncappedFeeText} from "../../execute";
 import {statusView, swapSteps, wasInterrupted} from "../../activity";
 import {Button, Icon, ReviewSkeleton, Sheet, SheetHeader, SwapSteps, Text, TokenIcon, TxReviewCard, formatCountdown, showToast} from "../../ui";
@@ -58,8 +58,14 @@ export const BACKGROUND_AFTER_MS = 20_000;
 export function walletSteps(route: Pick<WebRoute, "provider" | "approvalSpender"> | null | undefined, amount: string): string {
   if (!route?.approvalSpender) return "";
   if (PERMIT2_VENUES.has(route.provider)) return `, then to sign a one-time Permit2 transfer of exactly ${amount}, then to approve Permit2 for it unless it already may`;
+  // CoW (D48): the token's gas-free permit when it has one, else an exact approval; the order is signed after.
+  if (ORDER_VENUES.has(route.provider)) return `, then to approve ${amount} for CoW (or sign a gas-free permit) unless it already may`;
   return `, then to approve exactly ${amount}`;
 }
+
+/** The wallet's last prompt: a CoW token sale signs its order (no gas), every other route signs the swap (D48). */
+export const finalStep = (route: Pick<WebRoute, "provider" | "approvalSpender"> | null | undefined): string =>
+  route && ORDER_VENUES.has(route.provider) && route.approvalSpender ? "sign the order — no gas" : "sign the swap";
 
 /**
  * Where the review goes once the record it follows moves (ui-port.md §5.8): the status once the swap itself is out —
@@ -490,7 +496,7 @@ function ReviewBody({draft, from, native, slippage, route, gone, failed, problem
         />
         {executing ? (
           <Text as="p" variant="meta" color="var(--muted)" className={s.fine} role="status">
-            {`Check your wallet: it may ask to switch to ${from.chainName} first${walletSteps(route, amountText(req.amountIn, from.decimals, from.symbol))}, then to sign the swap.`}
+            {`Check your wallet: it may ask to switch to ${from.chainName} first${walletSteps(route, amountText(req.amountIn, from.decimals, from.symbol))}, then to ${finalStep(route)}.`}
           </Text>
         ) : null}
         {executing && leave === "cancel" ? <Button block kind="ghost" height={40} title="Cancel" onClick={onLeave} data-testid="swap-review-cancel" /> : null}

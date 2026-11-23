@@ -104,7 +104,7 @@ export function gateAccount<T extends object>(inner: T, gate: SwapGate, window?:
       if (!gate.consume({chain: gate.chain, method, raw})) throw new SwapGateRefusal();
       const rest = args.slice(1).map(snapshot);
       const approve = method === "sendTransaction" ? readApprove((raw as {data?: unknown} | null)?.data) : null;
-      const grant = approve && approve.amount > 0n ? () => gate.recordGrant(String((raw as {to: unknown}).to), approve.spender) : null;
+      const grant = approve && approve.amount > 0n ? () => gate.recordGrant(String((raw as {to: unknown}).to), approve.spender, approve.amount) : null;
       window?.open();
       try {
         const res = (await (fn as (...a: unknown[]) => Promise<{hash?: unknown}>).apply(inner, [raw, ...rest])) ?? {};

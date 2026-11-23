@@ -37,6 +37,8 @@ export const VENUE_TRUST: Readonly<Record<string, VenueTrust>> = {
   zeroex: "provider-api",
   // Across API V5 prices through cp0x's proxy; the SpokePool deposit is encoded and verified here.
   across: "provider-api",
+  // CoW's public orderbook quotes; the signed order is rebuilt here from the request and held to it, contracts pinned.
+  cow: "provider-api",
 };
 
 /** A venue's badge level; an unknown venue counts as its own API. */

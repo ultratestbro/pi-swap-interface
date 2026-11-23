@@ -26,7 +26,8 @@ export type ProviderName =
   | "balancer"
   | "omniston"
   | "zeroex"
-  | "across";
+  | "across"
+  | "cow";
 
 export interface RuntimeConfig {
   /** Render fixtures only: no wallets, no network (also `?demo=1` in the hash query). */
@@ -72,7 +73,7 @@ export interface RuntimeConfig {
   cctp: {mode: "auto" | "fast" | "standard"};
   thorchain: {clientId: string};
   omniston: {maxUsd: number; evmSource: boolean};
-  pacing: {symbiosisGapMs: number; jupiterGapMs: number};
+  pacing: {symbiosisGapMs: number; jupiterGapMs: number; cowGapMs: number};
   /**
    * Preview prices before a wallet or address exists (D7, D29): on by default; a viewer's saved settings may only
    * turn it off. Each tab spends one of `roundsBurst` preview rounds per quote, one back every `roundRefillMs`.

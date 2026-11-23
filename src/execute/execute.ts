@@ -48,6 +48,7 @@ import {
   createSwapGate,
   executionConstraints,
   planWrites,
+  type Revoke,
   same,
   SwapReviewMismatch,
   TON_BODY_GAS,
@@ -206,7 +207,8 @@ export async function executeSwap(input: ExecuteSwapInput, deps: ExecuteDeps = {
   assertCoherent(input);
   const {from, to, reviewed} = input;
   return withSwapLock(swapLockName(reviewed.fromChain, reviewed.refundAddress), async () => {
-    const gate = createSwapGate(reviewed.fromChain);
+    // A CoW signature (D48) has no engine phase of its own: the gate names it as the wallet is asked.
+    const gate = createSwapGate(reviewed.fromChain, (kind) => input.onPhase?.("signing", kind === "gpv2Permit" ? {permit: true} : undefined));
     const signWindow = signingWindow();
     const account = await openAccount(input, gate, signWindow, deps);
     // A TON payer's cell body (D35): the BoC the engine is handed is what is checked, armed and signed.
@@ -215,14 +217,14 @@ export async function executeSwap(input: ExecuteSwapInput, deps: ExecuteDeps = {
     const rule = (deps.venueRule ?? venueRule)(reviewed.provider);
     const tron = (deps.tronRule ?? tronRule)(reviewed.provider);
     let depositTo: string | undefined;
-    let revokes: {token: string; spender: string}[] = [];
+    let revokes: Revoke[] = [];
     const arm = async (plan: Swap2ExecutionPlan) => {
       // The BoC the plan carries, read once: the plan check, the venue's binding and the armed write all see these bytes.
       const boc = tonBody?.boc();
       const why = checkPlanBrowser(plan, reviewed, rule, tron, tonBody) ?? (await checkTonCallBinding(plan, reviewed, boc));
       if (why) throw new SwapReviewMismatch(why);
       if (tonBody?.boc() !== boc) throw new SwapReviewMismatch("the TON contract call's body changed while it was checked");
-      const planned = planWrites(plan, boc);
+      const planned = planWrites(plan, boc, reviewed);
       const s = plan.source;
       depositTo = s.kind === "call" ? s.to : s.kind === "token-transfer" ? s.recipient : undefined;
       // The re-quote pass spends the allowance the first pass granted: its revoke stays armed.

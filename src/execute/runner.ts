@@ -51,6 +51,8 @@ export function startSwap(input: StartSwapInput, deps: ExecuteDeps = {}): Promis
     // For the swap report (D41): its value by the page's prices and its slippage.
     ...(usdIn !== undefined ? {usdIn} : {}),
     slippageBps: reviewed.slippageBps,
+    // A CoW token sale is a signed order (D48); its native sale is an eth-flow transaction like any other.
+    ...(reviewed.provider === "cow" && reviewed.fromContract !== null ? {order: true} : {}),
   };
   let started = false;
   // A Permit2 venue's token sale (0x, D38; the gate takes a permit from nothing else) signs its one-time Permit2
@@ -61,7 +63,7 @@ export function startSwap(input: StartSwapInput, deps: ExecuteDeps = {}): Promis
 
   return new Promise<string>((resolve, reject) => {
     const step = (phase: ExecutionPhase, detail?: ExecutionPhaseDetail) => {
-      const stage: ExecStage = permit && phase === "signing" && (last === undefined || last === "requoting") ? "permit" : phase;
+      const stage: ExecStage = detail?.permit || (permit && phase === "signing" && (last === undefined || last === "requoting")) ? "permit" : phase;
       last = stage;
       const total = stage === "approving" ? detail?.total : undefined;
       // The engine names the wallet's hash the moment it broadcasts. Kept at once: a tab that dies while the engine
@@ -75,7 +77,8 @@ export function startSwap(input: StartSwapInput, deps: ExecuteDeps = {}): Promis
           ...newRecord({...base, id: localId}, now),
           status: "submitting",
           stage,
-          approvals: total ?? (reviewed.approvalSpender ? 1 : 0),
+          // A CoW order's allowance may come as a gas-free permit (D48): it has an approval step only once the engine sends one.
+          approvals: total ?? (reviewed.approvalSpender && !base.order ? 1 : 0),
           ...(permit ? {permit: true} : {}),
           localId,
           heartbeatAt: now,

@@ -18,6 +18,10 @@
  *      message, all of it), and the swap call carrying exactly the signature
  *      the wallet returned for it (`data ++ uint256(len) ++ sig`) — nothing
  *      else typed is signed, and the call matches no other appended bytes.
+ *   5. A CoW order (GPv2, D48) arms its EIP-2612 permit when the plan has one (this owner, the source token, the
+ *      vault relayer, exactly the plan's allowance, the order's own expiry) and the order itself: every field as
+ *      the plan's order, re-held to the review by the SDK's own GPv2 reader — its `appData` may change only after
+ *      that permit was signed (the hook that carries it). A native-coin sale is one eth-flow `createOrder` call.
  *
  * Pure (viem's ABI codec, and the catalog's address checks for TON) — unit-tested in tests/unit/execute/gate.test.ts.
  */
@@ -25,6 +29,8 @@ import {decodeFunctionData, encodeFunctionData, erc20Abi} from "viem";
 import type {Swap2ExecutionPlan} from "@anywalletkit/protocol-swap2-core/swap2/base";
 import type {RemotePins} from "@anywalletkit/protocol-swap2-core/types";
 import {PERMIT2_ADDRESS, PERMIT2_TRANSFER_TYPES, appendPermit2Signature} from "@anywalletkit/protocol-swap2-core/util";
+import {GPV2_ORDER_FIELDS, GPV2_VAULT_RELAYER, assertGpv2Order, assertGpv2Permit, isGpv2Order} from "@anywalletkit/protocol-swap2-core";
+import {COW_DEPLOYMENTS, decodeEthFlowCall, deploymentOf} from "@anywalletkit/protocol-swap2-cow";
 import type {ChainFamily} from "../contracts/domain";
 import type {ReviewedSwap} from "../contracts/execution";
 import {checkTonPlan, type TonBodyCheck} from "./tonPlan";
@@ -47,7 +53,26 @@ export type ArmedWrite =
   /** signTypedData: a gasless order; the message as stable JSON. */
   | {kind: "typed"; message: string}
   /** signTypedData: a Permit2 PermitTransferFrom (swap2-core 0.13.0, D38); the WHOLE payload (domain, types, primaryType, message) as stable JSON. */
-  | {kind: "permit2"; typedData: string};
+  | {kind: "permit2"; typedData: string}
+  /** signTypedData: a CoW order's EIP-2612 permit (swap2-core 0.17.0, D48), held to exactly these values by the SDK's reader. */
+  | {kind: "gpv2Permit"; owner: string; token: string; value: bigint; chainId: number; deadline: number}
+  /**
+   * signTypedData: a CoW (GPv2) order (D48). `expect`: what the SDK's reader holds it to (the plan's own order binds
+   * the rest); `fields`: the plan's order, every field but `appData`, as stable JSON; `appData`: the plan's — another
+   * one matches only once this arm's permit was signed.
+   */
+  | {kind: "gpv2Order"; expect: Gpv2Expect; fields: string; appData: string};
+
+/** assertGpv2Order's expectation without its clock (the gate reads the time when the wallet is asked). */
+export interface Gpv2Expect {
+  self: string;
+  token: string;
+  amount: string;
+  chainId: number;
+  recipient: string;
+  destToken: string;
+  minDest: string;
+}
 
 /** The engine account methods that write, as the gate names them. */
 export type WriteMethod = "sendTransaction" | "transfer" | "sendSerialized" | "signTypedData";
@@ -64,6 +89,13 @@ export interface WriteIntent {
  * 15 minutes from each (re)arm — mobile's 5 minutes would expire under a user reading a prompt.
  */
 export const ARM_TTL_MS = 15 * 60_000;
+
+/** An allowance this execution may take back: to 0, or — `lower`, a CoW order's restore (D48) — to anything below what it granted. */
+export interface Revoke {
+  token: string;
+  spender: string;
+  lower?: true;
+}
 
 /** A write reached the account that the reviewed plan did not arm: refused before the wallet saw it. `answered`: nothing was sent. */
 export class SwapGateRefusal extends Error {
@@ -128,7 +160,7 @@ function signedCalldata(data: string | undefined, signature: string | undefined)
  * returned for this execution's armed Permit2 permit, the only bytes a `permit2Signed` call may carry after its data.
  * Exported for the tests.
  */
-export function matches(w: ArmedWrite, method: string, raw: unknown, permitSignature?: string): boolean {
+export function matches(w: ArmedWrite, method: string, raw: unknown, permitSignature?: string, permitSigned = false, nowMs = Date.now()): boolean {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   switch (w.kind) {
     case "call": {
@@ -163,7 +195,31 @@ export function matches(w: ArmedWrite, method: string, raw: unknown, permitSigna
       return method === "signTypedData" && stableJson(r.message) === w.message;
     case "permit2":
       return method === "signTypedData" && stableJson(raw) === w.typedData;
+    case "gpv2Permit":
+      if (method !== "signTypedData" || r.primaryType !== "Permit") return false;
+      try {
+        const p = assertGpv2Permit(stableJson(raw), {self: w.owner, token: w.token, value: w.value, chainId: w.chainId, deadline: w.deadline});
+        return p.amount === w.value && p.deadline === w.deadline;
+      } catch {
+        return false;
+      }
+    case "gpv2Order": {
+      if (method !== "signTypedData" || r.primaryType !== "Order") return false;
+      let order: {appData: string; message: Record<string, unknown>};
+      try {
+        order = assertGpv2Order(stableJson(raw), GPV2_VAULT_RELAYER, {...w.expect, now: Math.floor(nowMs / 1000)});
+      } catch {
+        return false;
+      }
+      if (gpv2Fields(order.message) !== w.fields) return false;
+      return order.appData.toLowerCase() === w.appData.toLowerCase() || permitSigned;
+    }
   }
+}
+
+/** A GPv2 order's fields but `appData`, lowercased, as stable JSON: two builds of one order compare equal. */
+function gpv2Fields(message: Record<string, unknown>): string {
+  return stableJson(Object.fromEntries(GPV2_ORDER_FIELDS.filter((f) => f.name !== "appData").map((f) => [f.name, String(message[f.name]).toLowerCase()])));
 }
 
 /** approve(spender, amount) calldata — byte-identical to the engine's own approveData. */
@@ -190,14 +246,18 @@ export function readApprove(data: unknown): {spender: string; amount: bigint} | 
 export function planWrites(
   plan: Swap2ExecutionPlan,
   tonBodyBoc?: string,
-): {writes: ArmedWrite[]; revokes: {token: string; spender: string}[]} {
+  reviewed?: Pick<ReviewedSwap, "fromContract" | "refundAddress">,
+): {writes: ArmedWrite[]; revokes: Revoke[]} {
   const writes: ArmedWrite[] = plan.approvals.map((a) => ({
     kind: "call" as const,
     to: a.token,
     data: approveData(a.spender, a.amount),
     value: 0n,
   }));
-  const revokes = plan.approvals.map((a) => ({token: a.token, spender: a.spender}));
+  // A CoW order's cleanup puts the allowance back where it was (swap2-core 0.17.0), which may be above 0: it may lower
+  // what this execution granted, never raise it (D48).
+  const lower = plan.source.kind === "typed-order" && isGpv2Order(plan.source.typedData);
+  const revokes = plan.approvals.map((a) => ({token: a.token, spender: a.spender, ...(lower ? {lower: true as const} : {})}));
   const s = plan.source;
   const ton = plan.fromChain.startsWith("ton:");
   switch (s.kind) {
@@ -237,6 +297,10 @@ export function planWrites(
       writes.push({kind: "serialized", tx: s.serializedTx});
       break;
     case "typed-order": {
+      if (isGpv2Order(s.typedData)) {
+        writes.push(...gpv2Writes(plan, s.typedData, reviewed));
+        break;
+      }
       let td: {message?: unknown};
       try {
         td = JSON.parse(s.typedData) as {message?: unknown};
@@ -248,6 +312,32 @@ export function planWrites(
     }
   }
   return {writes, revokes};
+}
+
+/**
+ * A CoW order's writes (D48): its permit first when the plan has one, then the order. checkPlanBrowser accepted the
+ * plan (gpv2Problem); the order's expectation is the plan's own, which checkPlan held to the review.
+ */
+function gpv2Writes(plan: Swap2ExecutionPlan, typedData: string, r: Pick<ReviewedSwap, "fromContract" | "refundAddress"> | undefined): ArmedWrite[] {
+  const chainId = evmChainId(plan.fromChain);
+  if (!r?.fromContract || chainId === null) throw new SwapReviewMismatch("an order signature for a swap this page can't hold it to");
+  const expect: Gpv2Expect = {
+    self: r.refundAddress,
+    token: r.fromContract,
+    amount: plan.sourceAmount.toString(),
+    chainId,
+    recipient: plan.recipient,
+    destToken: plan.destToken,
+    minDest: plan.minDestAmount.toString(),
+  };
+  let order: {appData: string; message: Record<string, unknown>};
+  try {
+    order = assertGpv2Order(typedData, GPV2_VAULT_RELAYER, {...expect, now: Math.floor(Date.now() / 1000)});
+  } catch (e) {
+    throw new SwapReviewMismatch(`the order to sign is not the reviewed swap (${e instanceof Error ? e.message : "unreadable"})`);
+  }
+  const permits: ArmedWrite[] = (plan.permits ?? []).map((p) => ({kind: "gpv2Permit", owner: r.refundAddress, token: p.token, value: p.amount, chainId, deadline: p.deadline}));
+  return [...permits, {kind: "gpv2Order", expect, fields: gpv2Fields(order.message), appData: order.appData}];
 }
 
 /**
@@ -275,10 +365,13 @@ export function checkPlan(plan: Swap2ExecutionPlan, r: ReviewedSwap): string | n
   if (!same(plan.refundAddress, r.refundAddress)) return "the refund address changed";
   if (plan.sourceAmount !== r.amountIn) return "the amount changed";
   if (plan.minDestAmount < r.minOut) return "the guaranteed output dropped below what you reviewed";
+  // A CoW order's allowance also covers the account's other open orders of the token (swap2-core 0.17.0, D48): never
+  // less than the input. Only the GPv2 vault relayer takes one (gpv2Problem), and it moves nothing without a signed order.
+  const gpv2 = plan.source.kind === "typed-order" && isGpv2Order(plan.source.typedData);
   for (const a of plan.approvals) {
     if (!r.fromContract || !same(a.token, r.fromContract)) return "an approval for another token";
     if (!r.approvalSpender || !same(a.spender, r.approvalSpender)) return "an approval for a spender you didn't review";
-    if (a.amount !== r.amountIn && a.amount !== 0n) return "an approval for another amount";
+    if (a.amount !== r.amountIn && a.amount !== 0n && !(gpv2 && a.amount > r.amountIn && a.amount < GPV2_ALLOWANCE_CEILING)) return "an approval for another amount";
   }
   const s = plan.source;
   // Bridge messaging fees move a little between quotes; twice the reviewed one is the ceiling.
@@ -300,9 +393,11 @@ export function checkPlan(plan: Swap2ExecutionPlan, r: ReviewedSwap): string | n
  *   signature transfer (0x, D38) — held by permit2Problem to Permit2's own PermitTransferFrom for exactly this swap,
  *   its deadline no further than `maxSeconds` away (the package's own bound); a venue without it never gets one;
  * - `deposit`: it only pays a deposit address (NEAR Intents) — a bare value send or the engine's exact ERC-20
- *   `transfer(depositAddress, amountIn)`, never an approval or other calldata.
+ *   `transfer(depositAddress, amountIn)`, never an approval or other calldata;
+ * - `gpv2`: CoW Protocol (D48) — a signed GPv2 order for a token sale, an eth-flow `createOrder` for a native one
+ *   (gpv2Problem), the canonical vault relayer as the only spender, by approval or by EIP-2612 permit.
  */
-export type VenueRule = {kind: "pins"; pins: Pick<RemotePins, "callTargets" | "spenders">; permit2?: {maxSeconds: number}} | {kind: "deposit"};
+export type VenueRule = {kind: "pins"; pins: Pick<RemotePins, "callTargets" | "spenders">; permit2?: {maxSeconds: number}} | {kind: "deposit"} | {kind: "gpv2"};
 
 const plainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const exactKeys = (o: Record<string, unknown>, keys: readonly string[]): boolean => {
@@ -411,6 +506,11 @@ export function checkPlanBrowser(plan: Swap2ExecutionPlan, r: ReviewedSwap, venu
   if (base) return base;
   // The venue's route the review showed (D47): CCTP's Standard for Fast (or back) is another delivery and fee.
   if (plan.routeId !== r.routeId) return `the route moved to ${plan.routeId ?? "the venue's default"} from ${r.routeId ?? "the venue's default"}`;
+  // An EIP-2612 permit only funds a CoW order (D48); no other venue's plan carries one.
+  if (plan.permits?.length && venue?.kind !== "gpv2") return `a permit signature from a venue that never asks for one (${plan.provider})`;
+  // A CoW venue is held to its own rule on every network, and only it signs a GPv2 order.
+  if (venue?.kind === "gpv2") return gpv2Problem(plan, r);
+  if (plan.source.kind === "typed-order" && isGpv2Order(plan.source.typedData)) return `a CoW order from a venue that isn't CoW (${plan.provider})`;
   const ns = plan.fromChain.split(":")[0];
   const s = plan.source;
   if (s.kind === "serialized" && ns !== "solana") return "a provider-built transaction on a network that doesn't take one";
@@ -475,6 +575,81 @@ export function checkPlanBrowser(plan: Swap2ExecutionPlan, r: ReviewedSwap, venu
   return null;
 }
 
+/** Never an "unlimited" allowance for a CoW order (D48): the SDK's own bound (below 2^255), never MAX_UINT-style. */
+export const GPV2_ALLOWANCE_CEILING = 1n << 255n;
+
+/** How far a CoW order's expiry may be (D48): the module's longest lifetime (1500 s) and the orderbook's 5-minute clock leeway. */
+export const GPV2_MAX_LIFETIME_S = 1_800;
+
+/**
+ * A CoW plan beyond checkPlan (D48), or null. On a chain the app's CoW package serves:
+ * - a token sale is a GPv2 order the SDK's own reader binds to the review (this owner's exact input of the reviewed
+ *   token, at least the reviewed minimum of the reviewed token to the reviewed recipient, no fee, fill-or-kill, plain
+ *   balances, GPv2Settlement on this chain) expiring within GPV2_MAX_LIFETIME_S, whose allowance goes only to the vault
+ *   relayer — by approvals, or by at most one EIP-2612 permit for that token, at least the input, expiring with the order;
+ * - a native sale is one eth-flow `createOrder` call (the package's pinned contract), sending exactly the input, for
+ *   the reviewed token, recipient and at least the reviewed minimum, with no approval and no permit.
+ */
+export function gpv2Problem(plan: Swap2ExecutionPlan, r: ReviewedSwap, nowMs = Date.now()): string | null {
+  const id = evmChainId(plan.fromChain);
+  const deployment = id === null ? null : deploymentOf(COW_DEPLOYMENTS, id);
+  if (id === null || !deployment) return "a CoW order on a network the app doesn't take one on";
+  if (plan.destChain !== plan.fromChain || r.destChain !== r.fromChain) return "a CoW order to another network";
+  const now = Math.floor(nowMs / 1000);
+  const s = plan.source;
+  for (const a of plan.approvals) {
+    if (a.chainId !== undefined && a.chainId !== id) return "an approval on another network";
+    if (!same(a.spender, GPV2_VAULT_RELAYER)) return "an approval for a contract the app doesn't trust";
+  }
+  if (s.kind === "typed-order") {
+    if (!r.fromContract) return "an order signature on a native-coin sale";
+    if (!isGpv2Order(s.typedData)) return "an order signature of another kind than a CoW order";
+    let validTo: number;
+    try {
+      validTo = assertGpv2Order(s.typedData, GPV2_VAULT_RELAYER, {
+        self: r.refundAddress,
+        token: r.fromContract,
+        amount: r.amountIn.toString(),
+        chainId: id,
+        recipient: r.recipient,
+        destToken: r.destToken,
+        minDest: r.minOut.toString(),
+        now,
+      }).validTo;
+    } catch (e) {
+      return `the order is not the reviewed swap (${e instanceof Error ? e.message : "unreadable"})`;
+    }
+    if (validTo > now + GPV2_MAX_LIFETIME_S) return "an order that stays open too long";
+    const permits = plan.permits ?? [];
+    if (permits.length > 1) return "more than one permit signature";
+    for (const p of permits) {
+      if (!same(p.token, r.fromContract)) return "a permit for another token";
+      if (!same(p.spender, GPV2_VAULT_RELAYER)) return "a permit for a spender you didn't review";
+      if (p.amount < r.amountIn) return "a permit for less than the swap";
+      if (p.amount >= GPV2_ALLOWANCE_CEILING) return "a permit without a limit";
+      if (p.deadline !== validTo) return "a permit that outlives the order";
+      if (p.chainId !== undefined && p.chainId !== id) return "a permit on another network";
+    }
+    if (permits.length && plan.approvals.some((a) => a.amount !== 0n)) return "both an approval and a permit";
+    return null;
+  }
+  if (s.kind !== "call") return "a payment CoW never makes";
+  if (s.chainId !== undefined && s.chainId !== id) return "a transaction for another network";
+  if (s.memo !== undefined || s.cellBody || s.permit2Transfer !== undefined) return "a payload this network doesn't carry";
+  if (plan.approvals.length || plan.permits?.length) return "an approval on a native-coin sale";
+  if (r.fromContract) return "a contract call where a CoW order was expected";
+  if (!same(s.to, deployment.ethFlow)) return "a call to a contract the app doesn't trust";
+  const call = s.data === undefined ? null : decodeEthFlowCall(s.data);
+  if (!call || call.method !== "createOrder") return "a call that doesn't place a CoW order";
+  const o = call.order;
+  if (s.value !== r.amountIn || o.sellAmount !== r.amountIn.toString()) return "the order doesn't sell exactly the reviewed amount";
+  if (!same(o.buyToken, r.destToken)) return "an order for another token";
+  if (!same(o.receiver, r.recipient)) return "an order that pays someone else";
+  if (decimalUint(o.buyAmount) === null || BigInt(o.buyAmount) < r.minOut) return "an order below the minimum you reviewed";
+  if (o.validTo <= now || o.validTo > now + GPV2_MAX_LIFETIME_S) return "an order that stays open too long";
+  return null;
+}
+
 /** transfer(to, amount) calldata, decoded, or null. */
 function readTransfer(data: string): {to: string; amount: bigint} | null {
   if (!data.toLowerCase().startsWith("0xa9059cbb")) return null;
@@ -490,7 +665,7 @@ function readTransfer(data: string): {to: string; amount: bigint} | null {
 
 interface Armed {
   writes: {w: ArmedWrite; used: boolean}[];
-  revokes: {token: string; spender: string}[];
+  revokes: Revoke[];
   until: number;
 }
 
@@ -500,26 +675,31 @@ interface Armed {
  * `recordSignature` after the wallet signed the armed Permit2 permit: the only bytes the armed swap call may then carry
  * after its data (D38).
  */
-export function createSwapGate(chain: string) {
+export function createSwapGate(chain: string, onSign?: (kind: "gpv2Permit" | "gpv2Order") => void) {
   let armed: Armed | null = null;
-  const grants = new Set<string>();
+  /** token|spender → the largest allowance this execution sent the wallet to grant. */
+  const grants = new Map<string, bigint>();
   /** The armed Permit2 permit was consumed and its signature not recorded yet. */
   let awaitingSignature = false;
   /** What the wallet returned for this arm's Permit2 permit. */
   let permitSignature: string | undefined;
+  /** This arm's CoW permit went to the wallet (D48): its order may now carry the appData that holds it. */
+  let gpv2Permitted = false;
   const key = (token: string, spender: string) => `${token.toLowerCase()}|${spender.toLowerCase()}`;
   return {
     chain,
-    arm(writes: readonly ArmedWrite[], revokes: readonly {token: string; spender: string}[] = [], now = Date.now()): void {
+    arm(writes: readonly ArmedWrite[], revokes: readonly Revoke[] = [], now = Date.now()): void {
       armed = {writes: writes.map((w) => ({w, used: false})), revokes: [...revokes], until: now + ARM_TTL_MS};
       // A re-armed plan (the engine's re-quote pass) carries a new permit: the old signature spends nothing here.
       awaitingSignature = false;
       permitSignature = undefined;
+      gpv2Permitted = false;
     },
     disarm(): void {
       armed = null;
       awaitingSignature = false;
       permitSignature = undefined;
+      gpv2Permitted = false;
     },
     /** Port of mobile consumeSwapWrite without the kit `revoke` intent. */
     consume(intent: WriteIntent, now = Date.now()): boolean {
@@ -532,11 +712,26 @@ export function createSwapGate(chain: string) {
         )
       )
         return true;
+      // A CoW order's restore (D48): approve(spender, n) below what this run granted on that token — it only lowers it.
+      if (intent.method === "sendTransaction") {
+        const r = (intent.raw && typeof intent.raw === "object" ? intent.raw : {}) as Record<string, unknown>;
+        const ap = readApprove(r.data);
+        const granted = ap && typeof r.to === "string" ? grants.get(key(r.to, ap.spender)) : undefined;
+        if (
+          ap &&
+          granted !== undefined &&
+          ap.amount < granted &&
+          toBig(r.value) === 0n &&
+          a.revokes.some((x) => x.lower && same(x.token, String(r.to)) && same(x.spender, ap.spender)) &&
+          matches({kind: "call", to: String(r.to), data: approveData(ap.spender, ap.amount), value: 0n}, intent.method, intent.raw)
+        )
+          return true;
+      }
       if (a.until < now) {
         for (const e of a.writes) e.used = true;
         return false;
       }
-      const hit = a.writes.find((e) => !e.used && matches(e.w, intent.method, intent.raw, permitSignature));
+      const hit = a.writes.find((e) => !e.used && matches(e.w, intent.method, intent.raw, permitSignature, gpv2Permitted, now));
       if (!hit) {
         // One stray write disarms the rest (revokes stay possible).
         for (const e of a.writes) e.used = true;
@@ -544,6 +739,9 @@ export function createSwapGate(chain: string) {
       }
       hit.used = true;
       if (hit.w.kind === "permit2") awaitingSignature = true;
+      if (hit.w.kind === "gpv2Permit") gpv2Permitted = true;
+      // The wallet is about to be asked for a CoW signature: the engine names no phase for it, the progress sheet needs one.
+      if (hit.w.kind === "gpv2Permit" || hit.w.kind === "gpv2Order") onSign?.(hit.w.kind);
       return true;
     },
     /**
@@ -556,8 +754,10 @@ export function createSwapGate(chain: string) {
       if (typeof signature === "string") permitSignature = signature;
     },
     /** An approve(token → spender, > 0) went to the wallet and may have landed: its revoke is now allowed. */
-    recordGrant(token: string, spender: string): void {
-      grants.add(key(token, spender));
+    recordGrant(token: string, spender: string, amount = 0n): void {
+      const k = key(token, spender);
+      const had = grants.get(k);
+      grants.set(k, had === undefined || amount > had ? amount : had);
     },
     /** Armed writes not consumed yet (tests, diagnostics). */
     remaining(): number {

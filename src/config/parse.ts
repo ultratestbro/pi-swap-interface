@@ -200,9 +200,11 @@ export function parseRuntimeConfig(raw: unknown, base: RuntimeConfig = DEFAULT_R
   );
 
   section("pacing", (o) =>
-    eachKey("pacing", o, ["symbiosisGapMs", "jupiterGapMs"], (k, v) => {
-      if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 10_000) c.pacing[k as keyof RuntimeConfig["pacing"]] = v;
-      else warn(`pacing.${k}`, "is not a number of ms in 0..10000");
+    eachKey("pacing", o, ["symbiosisGapMs", "jupiterGapMs", "cowGapMs"], (k, v) => {
+      // CoW's orderbook allows one quote a second per IP (D48): its gap never goes under that.
+      const min = k === "cowGapMs" ? 1_000 : 0;
+      if (typeof v === "number" && Number.isFinite(v) && v >= min && v <= 10_000) c.pacing[k as keyof RuntimeConfig["pacing"]] = v;
+      else warn(`pacing.${k}`, `is not a number of ms in ${min}..10000`);
     }),
   );
 

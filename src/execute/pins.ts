@@ -36,6 +36,8 @@ import {wrapPins} from "@anywalletkit/protocol-swap2-wrap/provider";
 import {ZEROEX_CHAINS, ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
 import {ZEROEX_MAX_PERMIT_SECONDS} from "@anywalletkit/protocol-swap2-0x/settler";
 import {acrossPins} from "@anywalletkit/protocol-swap2-across/verify";
+import {GPV2_VAULT_RELAYER} from "@anywalletkit/protocol-swap2-core";
+import {COW_DEPLOYMENTS, deploymentOf} from "@anywalletkit/protocol-swap2-cow";
 import {appProviders, orderSpender, zeroExSettlers} from "../swap";
 import type {TronRule, VenueRule} from "./gate";
 
@@ -95,8 +97,15 @@ export const VENUE_RULES: Readonly<Record<string, VenueRule>> = {
   zeroex: {kind: "pins", pins: zeroExPins, permit2: {maxSeconds: ZEROEX_MAX_PERMIT_SECONDS}},
   // The pinned SpokePool per chain: the deposit's call target and its one spender.
   across: pinned(acrossPins),
+  // CoW Protocol (D48): a signed GPv2 order for a token sale, eth-flow's createOrder for a native one, the vault relayer
+  // as the only spender — held by gate.ts gpv2Problem to the package's pinned deployments.
+  cow: {kind: "gpv2"},
   near_intents: {kind: "deposit"},
 };
+
+/** CoW's spender on `caip2`: the canonical GPv2 vault relayer where the app's CoW package serves the network. */
+const cowSpenders = (caip2: string): readonly string[] =>
+  caip2.startsWith("eip155:") && deploymentOf(COW_DEPLOYMENTS, Number(caip2.slice("eip155:".length))) ? [GPV2_VAULT_RELAYER] : [];
 
 /** The rule checkPlanBrowser holds `provider`'s live plan to (undefined = none: calldata refused). */
 export const venueRule = (provider: string): VenueRule | undefined => VENUE_RULES[provider];
@@ -109,10 +118,10 @@ export const venueRule = (provider: string): VenueRule | undefined => VENUE_RULE
 export function pinnedVenueOf(caip2: string, address: string): string | null {
   const a = address.toLowerCase();
   for (const [venue, rule] of Object.entries(VENUE_RULES)) {
-    if (rule.kind !== "pins") continue;
+    if (rule.kind === "deposit") continue;
     let listed: readonly string[] = [];
     try {
-      listed = rule.pins.spenders(caip2);
+      listed = rule.kind === "gpv2" ? cowSpenders(caip2) : rule.pins.spenders(caip2);
     } catch {
       // A rule that doesn't know the network lists nothing on it.
     }

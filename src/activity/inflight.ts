@@ -30,16 +30,23 @@ const mmss = (ms: number) => {
 /** How a record reads in the drawer and the status sheet. `now` only moves a QR deposit's countdown. */
 export function statusView(
   r: Pick<SwapRecord, "status" | "toSymbol" | "maybeSent"> &
-    Partial<Pick<SwapRecord, "id" | "stage" | "fromSymbol" | "error" | "approved" | "provider" | "mode" | "deposit" | "sourceHash">>,
+    Partial<Pick<SwapRecord, "id" | "stage" | "fromSymbol" | "error" | "approved" | "provider" | "mode" | "deposit" | "sourceHash" | "order">>,
   toChainName: string,
   now: number = Date.now(),
 ): StatusView {
   switch (r.status) {
     case "submitting":
       return {
-        label: r.stage ? STAGE_LABEL[r.stage](r.fromSymbol ?? "") : "Starting",
+        label:
+          r.order && r.stage === "signing"
+            ? "Signing the order"
+            : r.order && r.stage === "permit"
+              ? `Signing the ${r.fromSymbol ?? ""} permit`
+              : r.stage
+                ? STAGE_LABEL[r.stage](r.fromSymbol ?? "")
+                : "Starting",
         tone: "progress",
-        detail: "Keep this tab open until the swap is sent.",
+        detail: r.order ? "Keep this tab open until the order is signed." : "Keep this tab open until the swap is sent.",
       };
     case "not-sent":
       return {
@@ -64,6 +71,13 @@ export function statusView(
         return r.sourceHash
           ? {label: "Sent — not tracked", tone: "warn", detail: r.error ?? UNTRACKED_SENT_TEXT}
           : {label: "Check your wallet", tone: "warn", detail: r.error ?? UNTRACKED_MAYBE_TEXT};
+      // A CoW order (D48): it rests at the orderbook until a solver settles it or it expires.
+      if (r.provider === "cow" && !r.maybeSent)
+        return {
+          label: "Waiting for a solver",
+          tone: "progress",
+          detail: `CoW solvers are filling your order for ${r.toSymbol}. It can trade for about 20 minutes; you can close this tab — tracking picks up when you come back.`,
+        };
       return r.maybeSent
         ? {
             label: "Checking",
@@ -115,9 +129,17 @@ export function statusView(
             : "Only part of the swap was delivered; the rest was refunded.",
       };
     case "expired":
+      if (r.provider === "cow")
+        return {
+          label: "Not filled",
+          tone: "bad",
+          detail: r.order
+            ? "No solver filled the order before it expired — nothing was swapped, and your tokens never left your wallet."
+            : "No solver filled the order before it expired — nothing was swapped. CoW returns the coins its order contract held.",
+        };
       return {label: "Expired", tone: "bad", detail: "The route expired before the deposit was seen."};
     case "cancelled":
-      return {label: "Cancelled", tone: "bad", detail: "The provider cancelled the swap."};
+      return {label: "Cancelled", tone: "bad", detail: r.provider === "cow" ? "The order was cancelled — nothing was swapped." : "The provider cancelled the swap."};
     case "failed":
       return {label: "Failed", tone: "bad", detail: "The swap failed. If funds left your wallet, the provider refunds them."};
   }
@@ -369,6 +391,7 @@ export function newRecord(x: NewRecordInput, now = Date.now()): SwapRecord {
     ...(x.deposit ? {deposit: x.deposit} : {}),
     ...(x.usdIn !== undefined && Number.isFinite(x.usdIn) ? {usdIn: x.usdIn} : {}),
     ...(x.slippageBps !== undefined ? {slippageBps: x.slippageBps} : {}),
+    ...(x.order ? {order: true} : {}),
     status: "pending",
     createdAt: now,
     updatedAt: now,
@@ -441,6 +464,16 @@ export function swapSteps(r: SwapRecord, toChainName: string): SwapStep[] {
       // A stop at the permit never reached the approval.
       state: pastApproval ? "done" : stopped ? (atPermit ? "todo" : "failed") : approving ? "active" : "todo",
     });
+  }
+  // A CoW order (D48): its gas-free permit (stage "permit"), then the order itself, are one step — both signatures.
+  if (r.order) {
+    steps.push({
+      key: "confirm",
+      label: sent ? "You signed the order" : atPermit ? `Sign the ${r.fromSymbol} permit, then the order` : "Sign the order",
+      state: sent ? "done" : stopped ? (pastApproval || atPermit || !(r.approvals ?? 0) ? "failed" : "todo") : unsure || ((pastApproval || atPermit) && !approving) ? "active" : "todo",
+    });
+    steps.push({key: "swap", label: `A solver fills ${r.fromSymbol} → ${r.toSymbol}`, state: delivered ? "done" : bad ? "failed" : sent ? "active" : "todo"});
+    return steps;
   }
   steps.push({
     key: "confirm",

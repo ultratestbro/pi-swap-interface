@@ -39,6 +39,12 @@ export interface RouteView {
   validUntilMs: number;
   /** Source gas in USD at most (approval included); null = not counted (non-EVM / unknown). */
   gasUsd: number | null;
+  /**
+   * A signed order a solver sends (swap2-core 0.17.0 `Quote.gasless`, CoW's token sale, D48): no swap gas. `permit`:
+   * the token offers a gas-free EIP-2612 permit for the allowance, so no approval transaction either (unless an open
+   * order of the same token already holds one, decided at Confirm).
+   */
+  gasless?: {permit: boolean};
 }
 
 /** How the payer executes a route: the wallet signs a call / provider-built tx, or the payer sends to a deposit address. */

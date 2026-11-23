@@ -1,4 +1,4 @@
-// Copied from cp0x-elysium apps/mobile/lib/swap/gas.ts @756b115 (verbatim).
+// Copied from cp0x-elysium apps/mobile/lib/swap/gas.ts @756b115, plus gasless orders (CoW, D48).
 /**
  * What a route costs in source-chain gas, for the auction and the route list.
  * The router ranked routes on their guaranteed output alone, so on Ethereum a
@@ -18,11 +18,19 @@ export const CALL_GAS = 200_000n;
 
 export interface QuoteGasLike {
   txRequest?: {gasLimit?: string; approvalAddress?: string; to?: string} | undefined;
+  /** swap2-core 0.17.0: the user signs the source leg and a solver sends it (a CoW order): no swap gas. */
+  gasless?: boolean;
+  /** A gasless order's spender (CoW's vault relayer) and whether a gas-free EIP-2612 permit replaces its approval ("offered" | "none"). */
+  providerData?: {approvalAddress?: string; permit?: string} | undefined;
 }
 
-/** Gas units the route's source transactions take at most (approval included when the route names a spender). */
+/**
+ * Gas units the route's source transactions take at most (approval included when the route names a spender). A
+ * gasless order (CoW, D48) costs the user nothing but its approval, which a permit the token offers spares too.
+ */
 export function routeGasUnits(q: QuoteGasLike, sourceIsToken: boolean): bigint {
   const t = q.txRequest;
+  if (q.gasless && !t) return sourceIsToken && q.providerData?.permit !== "offered" ? APPROVE_GAS : 0n;
   const limit = t?.gasLimit && /^\d+$/.test(t.gasLimit) ? BigInt(t.gasLimit) : null;
   const main = limit ?? (t?.to ? CALL_GAS : sourceIsToken ? TOKEN_TRANSFER_GAS : NATIVE_TRANSFER_GAS);
   return main + (sourceIsToken && t?.approvalAddress ? APPROVE_GAS : 0n);
