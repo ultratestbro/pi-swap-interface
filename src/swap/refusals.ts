@@ -689,6 +689,9 @@ const CHECK_TAGS: readonly (readonly [tag: string, re: RegExp])[] = [
   ["origin", /redirect|another origin/i],
   // What the venue built.
   ["memo", /\bmemo\b|\bnote\b/i],
+  // Relay's deposit that first swaps through a router ("… go through a router and are not signed by this module"):
+  // the router, not a signature — its "signed by" would otherwise land under signature.
+  ["router", /through a router/i],
   ["signature", /permit|typed (?:data|order)|EIP712|signature|signed by|\bnonce\b|\btypes\b|witness/i],
   ["approval", /approv|allowance|spender|transfer_?from/i],
   ["fees", /fee|affiliate/i],

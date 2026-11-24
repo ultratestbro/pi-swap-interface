@@ -460,6 +460,8 @@ describe("gateCode (the swap statistics' code for a safety refusal)", () => {
     // Other venues.
     expect(gateCode("policy_refused", "across: the fill deadline is 30000 s away, past the 21600 s the SpokePool allows")).toBe("policy_refused:deadline");
     expect(gateCode("policy_refused", "symbiosis: Symbiosis built a transaction for chain 1, not 8453")).toBe("policy_refused:chain");
+    expect(gateCode("vault_mismatch", "relay: the deposit calls 0x5567954cd026cebfe486062cb75848e0f1c12e58, not the Ethereum depository 0x4cd00e387622c35bddb9b4c962c136462338bc31 — routes that first swap on the source chain go through a router and are not signed by this module [tx-target]")).toBe("vault_mismatch:router");
+    expect(gateCode("recipient_unverifiable", "relay: the order is signed by 0xab12, not by its solver 0xcd34")).toBe("recipient_unverifiable:signature");
     expect(gateCode("recipient_mismatch", "relay: the deposit is credited to 0xab12, not to the sender 0xcd34")).toBe("recipient_mismatch:recipient");
     expect(gateCode("policy_refused", "core: swap2: remote provider 'x' asks to approve 0xab on 1, which the app did not pin as a spender")).toBe("policy_refused:approval");
     expect(gateCode("policy_refused", "curve: the route has 9 steps, more than 5")).toBe("policy_refused:route");
