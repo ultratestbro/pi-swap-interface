@@ -30,7 +30,7 @@ const mmss = (ms: number) => {
 /** How a record reads in the drawer and the status sheet. `now` only moves a QR deposit's countdown. */
 export function statusView(
   r: Pick<SwapRecord, "status" | "toSymbol" | "maybeSent"> &
-    Partial<Pick<SwapRecord, "id" | "stage" | "fromSymbol" | "error" | "approved" | "provider" | "mode" | "deposit" | "sourceHash" | "order">>,
+    Partial<Pick<SwapRecord, "id" | "stage" | "fromSymbol" | "error" | "approved" | "provider" | "mode" | "deposit" | "sourceHash" | "order" | "cancelRequestedAt" | "cancelHash" | "claimHash">>,
   toChainName: string,
   now: number = Date.now(),
 ): StatusView {
@@ -72,6 +72,18 @@ export function statusView(
           ? {label: "Sent — not tracked", tone: "warn", detail: r.error ?? UNTRACKED_SENT_TEXT}
           : {label: "Check your wallet", tone: "warn", detail: r.error ?? UNTRACKED_MAYBE_TEXT};
       // A CoW order (D48): it rests at the orderbook until a solver settles it or it expires.
+      // Its cancellation (D49): the orderbook took it, or the transaction went out — it may still have filled first.
+      // An unfilled eth-flow order's refund went out (the claim path, D49): it returns the coin once mined.
+      if (r.provider === "cow" && !r.maybeSent && r.claimHash)
+        return {label: "Refund sent", tone: "progress", detail: `The refund is on its way to ${toChainName}. It returns your ${r.fromSymbol} to the wallet that placed the order.`};
+      if (r.provider === "cow" && !r.maybeSent && (r.cancelRequestedAt || r.cancelHash))
+        return {
+          label: "Cancelling",
+          tone: "warn",
+          detail: r.cancelHash
+            ? `The cancellation is on its way to ${toChainName}. It returns your ${r.fromSymbol} — unless a solver filled the order first. This updates on its own.`
+            : "CoW took the cancellation. A solver that already picked the order up may still fill it — this updates on its own.",
+        };
       if (r.provider === "cow" && !r.maybeSent)
         return {
           label: "Waiting for a solver",
@@ -90,6 +102,13 @@ export function statusView(
             detail: `Delivering ${r.toSymbol} on ${toChainName}. You can close this tab — tracking picks up when you come back.`,
           };
     case "action-required":
+      // An eth-flow order that didn't fill (D49): its coin waits in CoW's order contract.
+      if (r.provider === "cow")
+        return {
+          label: "Not filled",
+          tone: "action",
+          detail: `No solver filled the order in time. CoW's refund service usually returns your ${r.fromSymbol} within minutes; if it doesn't, send the refund yourself — it costs a little gas.`,
+        };
       return {
         label: "Claim needed",
         tone: "action",
@@ -113,7 +132,11 @@ export function statusView(
         label: "Refunded",
         tone: "warn",
         detail:
-          r.provider === "symbiosis"
+          r.provider === "cow"
+            ? r.cancelHash
+              ? `You cancelled the order — nothing was swapped, and your ${r.fromSymbol} went back to your wallet.`
+              : `No solver filled the order — nothing was swapped, and your ${r.fromSymbol} went back to your wallet.`
+            : r.provider === "symbiosis"
             ? "The route couldn't complete — the token that crossed the bridge was returned on the source chain, less the bridge fee."
             : r.mode === "deposit"
               ? "The route couldn't complete — your funds were returned to the refund address."
@@ -292,6 +315,8 @@ export function parseStored(raw: string | null | undefined): SwapRecord[] {
       status: asStatus(t.status),
       ...(s(t.destHash) ? {destHash: t.destHash} : {}),
       ...(s(t.claimHash) ? {claimHash: t.claimHash} : {}),
+      ...(n(t.cancelRequestedAt) ? {cancelRequestedAt: t.cancelRequestedAt} : {}),
+      ...(s(t.cancelHash) ? {cancelHash: t.cancelHash} : {}),
       ...(s(t.trackId) ? {trackId: t.trackId} : {}),
       createdAt: t.createdAt,
       updatedAt: n(t.updatedAt) ? t.updatedAt : t.createdAt,
@@ -301,6 +326,8 @@ export function parseStored(raw: string | null | undefined): SwapRecord[] {
       ...(typeof t.stage === "string" && t.stage in STAGE_LABEL ? {stage: t.stage as ExecStage} : {}),
       ...(n(t.approvals) ? {approvals: t.approvals} : {}),
       ...(t.permit === true ? {permit: true} : {}),
+      // A CoW token order (D48): its own step labels; dropped here before D49, so a reloaded order lost them.
+      ...(t.order === true ? {order: true} : {}),
       ...(t.approved === true ? {approved: true} : {}),
       ...(s(t.error) ? {error: t.error} : {}),
       ...(s(t.localId) ? {localId: t.localId} : {}),
@@ -419,7 +446,12 @@ export function swapSteps(r: SwapRecord, toChainName: string): SwapStep[] {
   const bad = r.status === "failed" || r.status === "refunded" || r.status === "expired" || r.status === "cancelled";
   const deliver = (sent: boolean): SwapStep => ({
     key: "deliver",
-    label: `${r.status === "action-required" ? "Claim" : "Deliver"} ${r.toSymbol} on ${toChainName}`,
+    label:
+      r.status === "action-required"
+        ? r.provider === "cow"
+          ? `Get your ${r.fromSymbol} back`
+          : `Claim ${r.toSymbol} on ${toChainName}`
+        : `Deliver ${r.toSymbol} on ${toChainName}`,
     state: delivered ? "done" : bad ? "failed" : sent ? "active" : "todo",
   });
   if (r.mode === "deposit") {

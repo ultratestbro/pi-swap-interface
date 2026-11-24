@@ -3,7 +3,7 @@
 import {describe, expect, it} from "vitest";
 import {GPV2_VAULT_RELAYER} from "@anywalletkit/protocol-swap2-core";
 import type {SwapRecord} from "../../../src/contracts/activity";
-import {newRecord, statusView, swapSteps} from "../../../src/activity/inflight";
+import {newRecord, parseStored, statusView, swapSteps} from "../../../src/activity/inflight";
 import {APPROVE_GAS, routeGasUnits} from "../../../src/swap/gas";
 import {ORDER_VENUES, cowServes, orderSpender, providerName, venueScope} from "../../../src/swap/providerMeta";
 import {executionOf} from "../../../src/swap/webRoute";
@@ -102,5 +102,29 @@ describe("a CoW order's progress", () => {
       ["Sign the USDC permit, then the order", "active"],
       ["A solver fills USDC → WETH", "todo"],
     ]);
+  });
+
+  it("keeps its order flag across a reload (it was dropped before D49)", () => {
+    const [back] = parseStored(JSON.stringify([order({cancelRequestedAt: 5, cancelHash: "0xabc"})]));
+    expect(back).toMatchObject({order: true, cancelRequestedAt: 5, cancelHash: "0xabc"});
+  });
+
+  it("a cancellation on its way reads as Cancelling (D49) — it may still fill first", () => {
+    expect(statusView(order({cancelRequestedAt: 1}), "Base")).toMatchObject({label: "Cancelling", detail: expect.stringMatching(/may still fill/)});
+    const flow = order({order: undefined, fromSymbol: "ETH", cancelHash: "0xabc"});
+    expect(statusView(flow, "Base")).toMatchObject({label: "Cancelling", detail: expect.stringMatching(/returns your ETH/)});
+  });
+
+  it("an eth-flow order that didn't fill is a refund to send, not a claim (D49)", () => {
+    const flow = order({order: undefined, fromSymbol: "ETH", status: "action-required"});
+    expect(statusView(flow, "Base")).toMatchObject({label: "Not filled", tone: "action", detail: expect.stringMatching(/refund service/)});
+    expect(swapSteps(flow, "Base").at(-1)?.label).toBe("Get your ETH back");
+  });
+
+  it("after the refund was sent: Refund sent, then a refunded order reads as unfilled or cancelled", () => {
+    const flow = order({order: undefined, fromSymbol: "ETH"});
+    expect(statusView({...flow, claimHash: "0xabc"}, "Base").label).toBe("Refund sent");
+    expect(statusView({...flow, status: "refunded"}, "Base").detail).toMatch(/No solver filled the order/);
+    expect(statusView({...flow, status: "refunded", cancelHash: "0xabc"}, "Base").detail).toMatch(/You cancelled the order/);
   });
 });

@@ -210,6 +210,18 @@ export interface ClaimPreview {
   value: bigint;
 }
 
+/**
+ * Cancelling a resting CoW order (D49), read-only, shown before the user confirms. Off-chain: a free signature for
+ * the orderbook naming only `uid` (`to` = GPv2Settlement, the domain it is signed for). On-chain: eth-flow's
+ * `invalidateOrder` (a native-coin order), which also returns the coin — it costs gas.
+ */
+export type CancelPreview =
+  | {chain: string; mode: "offchain"; to: string; uid: string}
+  | {chain: string; mode: "onchain"; to: string; data: string};
+
+/** cancelSwap2's answer. */
+export type CancelResult = {mode: "offchain"; chain: string} | {mode: "onchain"; chain: string; hash: string};
+
 /** claimSwap2's answer: poll the NEW id from here on. */
 export interface ClaimResult {
   hash: string;

@@ -231,7 +231,7 @@ export interface ActivityModule {
   activityPort: ActivityPort;
   statusView(
     r: Pick<SwapRecord, "status" | "toSymbol" | "maybeSent"> &
-      Partial<Pick<SwapRecord, "id" | "stage" | "fromSymbol" | "error" | "approved" | "provider" | "mode" | "deposit" | "sourceHash">>,
+      Partial<Pick<SwapRecord, "id" | "stage" | "fromSymbol" | "error" | "approved" | "provider" | "mode" | "deposit" | "sourceHash" | "order" | "cancelRequestedAt" | "cancelHash" | "claimHash">>,
     toChainName: string,
   ): StatusView;
   swapSteps(r: SwapRecord, toChainName: string): SwapStep[];
