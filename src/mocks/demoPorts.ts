@@ -11,6 +11,8 @@ import {createElement, Fragment, useEffect, useMemo, useState, useSyncExternalSt
 import type {ActivityItem, ActivityState, ActivityUrgency, StatusView, SwapRecord} from "../contracts/activity";
 import type {Owners, PriceMap, SwapToken, Token, TokenLookup} from "../contracts/domain";
 import type {
+  CancelPreview,
+  CancelResult,
   ClaimPreview,
   ClaimResult,
   DepositTicket,
@@ -726,6 +728,28 @@ export const demoExecutePort: ExecutePort = {
     if (r) patchRecord(id, (x) => ({...x, status: "pending", claimHash: hash, trackId: next, updatedAt: Date.now()}));
     setTimeout(() => patchRecord(id, (x) => ({...x, status: "completed", updatedAt: Date.now()})), 4000);
     return {hash, chain: r?.toChain ?? "eip155:8453", id: next};
+  },
+  async previewCancel(id: string): Promise<CancelPreview | null> {
+    await sleep(400);
+    const r = recordList().find((x) => x.id === id);
+    if (!r) return null;
+    return r.order
+      ? {chain: r.fromChain, mode: "offchain", to: "0x9008D19f58AAbD9eD0D60971565AA8510560ab41", uid: `0x${"ab".repeat(56)}`}
+      : {chain: r.fromChain, mode: "onchain", to: "0xbA3cB449bD2B4ADddBc894D8697F5170800EAdeC", data: "0x7bc41b96"};
+  },
+  async cancelOrder(id: string): Promise<CancelResult> {
+    await sleep(1200);
+    const r = recordList().find((x) => x.id === id);
+    const chain = r?.fromChain ?? "eip155:8453";
+    if (r?.order) {
+      patchRecord(id, (x) => ({...x, cancelRequestedAt: Date.now(), updatedAt: Date.now()}));
+      setTimeout(() => patchRecord(id, (x) => ({...x, status: "cancelled", updatedAt: Date.now()})), 3000);
+      return {mode: "offchain", chain};
+    }
+    const hash = fakeHash();
+    patchRecord(id, (x) => ({...x, cancelHash: hash, updatedAt: Date.now()}));
+    setTimeout(() => patchRecord(id, (x) => ({...x, status: "refunded", updatedAt: Date.now()})), 4000);
+    return {mode: "onchain", chain, hash};
   },
   revoke: (input) => demoRevoke(input),
 };

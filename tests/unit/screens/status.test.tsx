@@ -2,7 +2,7 @@
 // and steps, the secondary actions two to a row — and one button look: the explorer links are real links in the
 // secondary 48 px look of "Refresh status" and "Done"; only "Continue in background", "Try again" and "Claim" are primary.
 import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
-import {cleanup, render, screen, within} from "@testing-library/react";
+import {cleanup, fireEvent, render, screen, within} from "@testing-library/react";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {DEFAULT_RUNTIME_CONFIG, PortsProvider, setRuntimeConfig} from "../../../src/config";
 import type {SwapRecord} from "../../../src/contracts/activity";
@@ -36,8 +36,8 @@ const record = (over: Partial<SwapRecord> = {}): SwapRecord => ({
 
 const wallets: WalletsApi = {evm: null, solana: null, tron: null, ton: null, near: null, owners: {}, options: [], connecting: null, pairingUri: null, error: null, connect: vi.fn(), disconnect: vi.fn()};
 
-function renderStatus(r: SwapRecord, w: WalletsApi = wallets) {
-  const ports: AppPorts = {...demoPorts, activity: {...demoPorts.activity, useSwap: () => r}};
+function renderStatus(r: SwapRecord, w: WalletsApi = wallets, execute: Partial<AppPorts["execute"]> = {}) {
+  const ports: AppPorts = {...demoPorts, activity: {...demoPorts.activity, useSwap: () => r}, execute: {...demoPorts.execute, ...execute}};
   const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
   render(
     <QueryClientProvider client={client}>
@@ -189,3 +189,55 @@ describe("the status view while the wallet holds a 0x permit (D38)", () => {
     expect(within(view).getByText("Signing the Permit2 transfer")).toBeTruthy();
   });
 });
+
+describe("cancelling a resting CoW order (D49)", () => {
+  const evm = {family: "evm", address: DEMO_EVM_ADDRESS, chainId: 8453, walletName: "MetaMask", transport: "injected"} as const;
+  const cowOrder = (over: Partial<SwapRecord> = {}): SwapRecord =>
+    record({
+      id: `awk1.cow.o%3A8453%3A0x${"11".repeat(56)}`,
+      provider: "cow",
+      fromChain: "eip155:8453",
+      toChain: "eip155:8453",
+      fromSymbol: "USDC",
+      toSymbol: "WETH",
+      order: true,
+      sourceHash: undefined,
+      ...over,
+    });
+
+  it("offers Cancel order to the wallet that placed it, and shows the free signature before the wallet is asked", async () => {
+    const previewCancel = vi.fn(async () => ({chain: "eip155:8453", mode: "offchain" as const, to: "0x9008D19f58AAbD9eD0D60971565AA8510560ab41", uid: "0x11"}));
+    const cancelOrder = vi.fn(async () => ({mode: "offchain" as const, chain: "eip155:8453"}));
+    const view = renderStatus(cowOrder(), {...wallets, evm}, {previewCancel, cancelOrder});
+    fireEvent.click(within(view).getByTestId("swap-cancel"));
+    const card = await within(view).findByTestId("swap-cancel-confirm");
+    expect(previewCancel).toHaveBeenCalledWith(cowOrder().id, DEMO_EVM_ADDRESS);
+    expect(card.textContent).toMatch(/free, nothing is sent/);
+    expect(cancelOrder).not.toHaveBeenCalled();
+  });
+
+  it("no Cancel order for another wallet, an order already being cancelled, or one that ended", () => {
+    let view = renderStatus(cowOrder());
+    expect(within(view).queryByTestId("swap-cancel")).toBeNull();
+    expect(view.textContent).toMatch(/Connect the wallet that placed this order/);
+    expect(within(view).getByTestId("swap-cancel-connect")).toBeTruthy();
+    cleanup();
+    view = renderStatus(cowOrder({cancelRequestedAt: 1}), {...wallets, evm});
+    expect(within(view).queryByTestId("swap-cancel")).toBeNull();
+    expect(within(view).getByTestId("swap-status").textContent).toBe("Cancelling");
+    cleanup();
+    view = renderStatus(cowOrder({status: "completed"}), {...wallets, evm});
+    expect(within(view).queryByTestId("swap-cancel")).toBeNull();
+    cleanup();
+    view = renderStatus(cowOrder({order: undefined, fromSymbol: "ETH", claimHash: DEST}), {...wallets, evm});
+    expect(within(view).queryByTestId("swap-cancel")).toBeNull();
+    expect(within(view).getByTestId("swap-status").textContent).toBe("Refund sent");
+  });
+
+  it("an eth-flow order that didn't fill offers its refund through the claim, worded as a refund", () => {
+    const view = renderStatus(cowOrder({order: undefined, fromSymbol: "ETH", status: "action-required"}), {...wallets, evm});
+    expect(within(view).getByTestId("swap-claim").textContent).toBe("Get ETH back");
+    expect(within(view).queryByTestId("swap-cancel")).toBeNull();
+  });
+});
+

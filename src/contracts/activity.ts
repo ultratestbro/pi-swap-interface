@@ -55,6 +55,10 @@ export interface SwapRecord {
   destHash?: string;
   /** Two-phase routes: the claim transaction sent on the destination chain. */
   claimHash?: string;
+  /** A CoW order (D49): when its off-chain cancellation reached the orderbook (ms) — it may still fill. */
+  cancelRequestedAt?: number;
+  /** A CoW order (D49): the on-chain cancellation sent on the source chain (eth-flow's, which also refunds). */
+  cancelHash?: string;
   /** The id to poll with once it differs from `id` (a claim answers with one). */
   trackId?: string;
   createdAt: number;

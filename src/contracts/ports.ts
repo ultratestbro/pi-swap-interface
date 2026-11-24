@@ -13,6 +13,8 @@ import type {ComponentType, ReactNode} from "react";
 import type {ActivityState, SwapRecord} from "./activity";
 import type {Balance, Chain, Owners, PriceMap, SwapToken, Token, TokenLookup} from "./domain";
 import type {
+  CancelPreview,
+  CancelResult,
   ClaimPreview,
   ClaimResult,
   DepositTicket,
@@ -124,6 +126,10 @@ export interface ExecutePort {
   previewClaim(id: string): Promise<ClaimPreview | null>;
   /** Sends the claim from an EVM signer already on the destination chain; updates the record (claimHash, trackId). */
   claimSwap(id: string, signer: SourceSigner): Promise<ClaimResult>;
+  /** Read-only: what cancelling a resting CoW order takes now, for `owner` (null = nothing left to cancel; D49). */
+  previewCancel(id: string, owner: string): Promise<CancelPreview | null>;
+  /** Cancels a resting CoW order from the EVM wallet that placed it, already on its network (D49). */
+  cancelOrder(id: string, signer: SourceSigner): Promise<CancelResult>;
   /**
    * Revokes one token approval from an EVM signer already on its network (D46: accounts/revoke.ts, the Approvals
    * section's only write); resolves with the hash once it is mined. Throws an answered Error when refused.

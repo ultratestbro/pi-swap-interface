@@ -1885,13 +1885,45 @@ the source's finality — about 15–19 minutes from Ethereum and the L2s, hours
   approval row "Signed permit" and its wallet line ends "sign the order — no gas". A CoW token sale is signed-only
   (`SIGNED_ONLY`, never a deposit address). Records carry `order`: "Sign the order" → "A solver fills X → Y" (no
   separate delivery step), "Waiting for a solver", an expired order "Not filled — nothing was swapped".
-- **Not yet.** Cancelling an order from the page (`cancelSwap2`, off-chain or on-chain) — an unfilled order expires
-  by itself; the router's `sourceGasUsd` (the page ranks with its own gas term, D4).
+- **Not yet.** The router's `sourceGasUsd` (the page ranks with its own gas term, D4). Cancelling: D49.
 - **Tests.** `tests/unit/execute/cowGate.test.ts` (the plan rules, the armed permit and order, appData only after the
   permit, eth-flow), `tests/unit/swap/cow.test.ts` (gas, scope, spender, wrappers forward the permit, review lines,
   progress), opt-in `tests/unit/execute/cow.live.test.ts` (SWAP_LIVE=1: a live Base order reaches the wallet only
   through the gate — the permit, then the order with the permit's appData, and eth-flow's `createOrder`; the fake
   wallet rejects, nothing is signed with funds or placed).
+
+**D49 — Cancelling a CoW order, and an unfilled eth-flow order's refund (owner, 2026-11-24, CS-28).** The activity
+view of a resting CoW order (`pending`, not maybe-sent) offers "Cancel order" to the EVM wallet that placed it
+(`execute/cancel.ts`, the claim's shape: a read-only preview shown first, then one write armed on a fresh gate and sent
+by the engine's `cancelSwap2` through the gated account).
+
+- **Which cancellation.** A token sale (`o:<chain>:<uid>`): the free off-chain `OrderCancellations`, handed to the
+  orderbook — best effort, a solver that already holds the order may still settle it. A native-coin sale (eth-flow,
+  `e:<chain>:<order>`): only on chain, eth-flow's `invalidateOrder`, which also returns the coin — it costs gas. A
+  token order's on-chain cancel (`GPv2Settlement.invalidateOrder`) is not offered: it costs gas for what the free one
+  and the 20-minute expiry already do.
+- **Bound to the record, not the venue's answer.** What is armed is built from the swap's own id and the pinned
+  contracts: the UID it names, or `encodeInvalidateOrder` of the eth-flow order it carries, to `COW_ETH_FLOW`. The
+  preview refuses before the wallet is asked unless the provider's `buildCancel` is that kind on that network with no
+  value — on chain, the same target and calldata byte for byte; off chain, the UID is bound at the gate. The gate's new write `gpv2Cancel` matches only an `OrderCancellations` that the SDK's
+  `assertGpv2Cancellation` holds to this owner and network, naming exactly that one UID; the on-chain one is a plain
+  armed `call` (no value).
+- **The record.** Off-chain: `cancelRequestedAt` once the orderbook took it; on-chain: `cancelHash` (a "Cancel tx"
+  link on the source network). Both read "Cancelling" until tracking settles the order (`cancelled`, `refunded`, or
+  `completed` if a solver was first); the button is gone meanwhile, and after a refund was sent ("Refund sent"). An
+  on-chain cancel handed over without a definitive answer (WalletConnect's maybe-sent) is recorded the same way, so
+  the page never offers a second one; an off-chain one may be asked again (the orderbook never got it). A refunded
+  CoW order reads as cancelled or unfilled, with the coin back in the wallet.
+- **An eth-flow order that didn't fill.** The SDK reports it `action-required` with a claim (its `buildClaim` is the
+  same `invalidateOrder`): the existing claim path sends it, worded as a refund — "Not filled", "Get ETH back", "Send
+  refund", a "Refund tx" link. CoW's refund service usually returns the coin first; the claim's preview then answers
+  null and the view says there is nothing to refund.
+- **Fixed alongside.** `parseStored` dropped a record's `order` flag (D48), so a reloaded token order lost its own
+  step labels.
+- **Tests.** `tests/unit/execute/cowCancel.test.ts` (the gate's `gpv2Cancel`, the preview's binding, cancelSwap2
+  end to end off- and on-chain through a fake wallet, a rebuilt cancellation for more orders refused before the
+  wallet), `tests/unit/swap/cow.test.ts` (labels, the flag across a reload), `tests/unit/screens/status.test.tsx`
+  (who sees the button, the confirm card, the refund wording).
 
 ## 5. Conventions
 

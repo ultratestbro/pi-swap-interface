@@ -3,11 +3,13 @@
  * §5.10): its steps while the runner sends it and the tracker follows it, its
  * transactions with explorer links, a QR deposit's address while it waits,
  * and — for two-phase routes (CCTP) — the claim on the destination chain,
- * shown (contract, recipient, who pays gas) before the wallet is asked.
+ * shown (contract, recipient, who pays gas) before the wallet is asked. A
+ * resting CoW order (D49) can be cancelled from the wallet that placed it, and
+ * an eth-flow order that didn't fill refunded through the same claim path.
  */
 import {useState} from "react";
 import type {SwapRecord} from "../../contracts/activity";
-import type {ClaimPreview} from "../../contracts/execution";
+import type {CancelPreview, ClaimPreview} from "../../contracts/execution";
 import type {ReviewRow} from "../../contracts/ui";
 import type {WalletFamily, WalletsApi} from "../../contracts/wallets";
 import {usePorts} from "../../config";
@@ -30,7 +32,7 @@ export function activeDetail(r: SwapRecord): string | undefined {
     if (r.stage === "broadcast") return "Sending";
     return "Waiting for your wallet";
   }
-  if (r.status === "action-required") return "Attested — claim it to finish";
+  if (r.status === "action-required") return r.provider === "cow" ? "Not filled — CoW usually refunds it on its own" : "Attested — claim it to finish";
   if (r.status === "pending") {
     if (r.mode === "deposit" && !r.sourceHash) return "Waiting for your deposit to arrive";
     if (r.maybeSent && isLocalId(r.id)) return r.sourceHash ? "Sent — follow it on the explorer" : "Only your wallet knows whether it went out";
@@ -56,9 +58,10 @@ export interface StatusViewProps {
 export function StatusView({id, wallets, onClose, onBack, onTryAgain, onConnect}: StatusViewProps) {
   const ports = usePorts();
   const r = ports.activity.useSwap(id);
-  const [busy, setBusy] = useState<"refresh" | "claim" | null>(null);
+  const [busy, setBusy] = useState<"refresh" | "claim" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ClaimPreview | null>(null);
+  const [cancelPreview, setCancelPreview] = useState<CancelPreview | null>(null);
 
   if (!r) {
     return (
@@ -80,10 +83,13 @@ export function StatusView({id, wallets, onClose, onBack, onTryAgain, onConnect}
   const destHash = r.claimHash ?? r.destHash;
   const srcUrl = r.sourceHash ? txUrl(r.fromChain, r.sourceHash) : undefined;
   const destUrl = destHash ? txUrl(r.toChain, destHash) : undefined;
-  const destLabel = r.claimHash ? "Claim tx" : "Delivery tx";
+  const cow = r.provider === "cow";
+  const destLabel = r.claimHash ? (cow ? "Refund tx" : "Claim tx") : "Delivery tx";
+  const cancelUrl = r.cancelHash ? txUrl(r.fromChain, r.cancelHash) : undefined;
   const submitting = r.status === "submitting";
   const stopped = r.status === "not-sent";
   const toNative = toChain?.native.symbol ?? "the native coin";
+  const fromNative = fromChain?.native.symbol ?? "the native coin";
   const waitingDeposit = r.mode === "deposit" && r.status === "pending" && !r.sourceHash && !!r.deposit;
   // Nothing polls a `local.` maybe-sent record: the viewer settles it after looking at the wallet (never a retry offer).
   const untracked = isUntrackedMaybeSent(r);
@@ -93,6 +99,10 @@ export function StatusView({id, wallets, onClose, onBack, onTryAgain, onConnect}
   const conn = destFamily ? wallets[destFamily] : null;
   const same = (a: string, b: string) => (destFamily === "evm" ? a.toLowerCase() === b.toLowerCase() : a === b);
   const owner = !!conn && (same(conn.address, payerOf(r.accountId)) || same(conn.address, r.recipient));
+  // A resting CoW order (D49): only the wallet that placed it may cancel it (CoW's networks are EVM, one network a swap).
+  const cancellable = cow && r.status === "pending" && !r.maybeSent && !r.cancelRequestedAt && !r.cancelHash && !r.claimHash && !isLocalId(r.id);
+  const evm = wallets.evm;
+  const placer = !!evm && evm.address.toLowerCase() === payerOf(r.accountId).toLowerCase();
 
   async function refresh() {
     setBusy("refresh");
@@ -107,7 +117,10 @@ export function StatusView({id, wallets, onClose, onBack, onTryAgain, onConnect}
       // Read-only: what the claim will call, shown before the wallet is asked.
       const tx = await ports.execute.previewClaim(r!.trackId ?? r!.id);
       if (tx) setPreview(tx);
-      else setError("The claim isn't ready yet — the attestation is still pending. Try again in a minute.");
+      else if (cow) {
+        setError("Nothing to refund now — CoW may have returned it already.");
+        void ports.activity.pollSwap(r!.id).catch(() => undefined);
+      } else setError("The claim isn't ready yet — the attestation is still pending. Try again in a minute.");
     } catch (e) {
       setError(swapErrorText(e, toNative));
     } finally {
@@ -122,8 +135,42 @@ export function StatusView({id, wallets, onClose, onBack, onTryAgain, onConnect}
       const signer = await ports.wallets.getSigner(r!.toChain);
       await ports.execute.claimSwap(r!.trackId ?? r!.id, signer);
       setPreview(null);
+      void ports.activity.pollSwap(r!.id).catch(() => undefined);
     } catch (e) {
       setError(swapErrorText(e, toNative));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function askCancel() {
+    setError(null);
+    setBusy("cancel");
+    try {
+      // Read-only: what the cancellation signs or calls, shown before the wallet is asked.
+      const c = await ports.execute.previewCancel(r!.trackId ?? r!.id, evm!.address);
+      if (c) setCancelPreview(c);
+      else {
+        setError("Nothing to cancel right now — the order filled, expired or was cancelled already, or hasn't reached the network yet.");
+        void ports.activity.pollSwap(r!.id).catch(() => undefined);
+      }
+    } catch (e) {
+      setError(swapErrorText(e, fromNative));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function cancel() {
+    setError(null);
+    setBusy("cancel");
+    try {
+      const signer = await ports.wallets.getSigner(r!.fromChain);
+      await ports.execute.cancelOrder(r!.trackId ?? r!.id, signer);
+      setCancelPreview(null);
+      void ports.activity.pollSwap(r!.id).catch(() => undefined);
+    } catch (e) {
+      setError(swapErrorText(e, fromNative));
     } finally {
       setBusy(null);
     }
@@ -146,8 +193,9 @@ export function StatusView({id, wallets, onClose, onBack, onTryAgain, onConnect}
     {k: "To", v: shortAddress(r.recipient, 8, 6)},
     ...(r.sourceHash ? [{k: "Source tx", v: shortAddress(r.sourceHash, 8, 6), color: "var(--accent)"}] : []),
     ...(destHash ? [{k: destLabel, v: shortAddress(destHash, 8, 6), color: "var(--accent)"}] : []),
+    ...(r.cancelHash ? [{k: "Cancel tx", v: shortAddress(r.cancelHash, 8, 6), color: "var(--accent)"}] : []),
   ];
-  const links = (srcUrl ? 1 : 0) + (destUrl ? 1 : 0);
+  const links = (srcUrl ? 1 : 0) + (destUrl ? 1 : 0) + (cancelUrl ? 1 : 0);
   const refreshButton =
     !isFinal(r.status) && !submitting && !isLocalId(r.id) ? (
       <Button
@@ -191,15 +239,31 @@ export function StatusView({id, wallets, onClose, onBack, onTryAgain, onConnect}
           {error}
         </Text>
       ) : null}
-      {preview && toChain ? (
+      {preview && toChain && r.status === "action-required" ? (
         <div className={s.confirm} role="group" aria-label="Confirm the claim" data-testid="swap-claim-confirm">
-          <Text variant="bodyStrong">{`Claim ${r.toSymbol} on ${toChain.name}`}</Text>
+          <Text variant="bodyStrong">{cow ? `Get your ${r.fromSymbol} back` : `Claim ${r.toSymbol} on ${toChain.name}`}</Text>
           <Text as="p" variant="small" color="var(--ink2)" selectable>
-            {`Calls ${shortAddress(preview.to, 8, 6)} on ${toChain.name} to mint your ${r.toSymbol} to ${shortAddress(r.recipient, 8, 6)}. You pay the network fee in ${toNative}.`}
+            {cow
+              ? `Calls CoW's order contract ${shortAddress(preview.to, 8, 6)} on ${toChain.name} to return the ${r.fromSymbol} it holds to the wallet that placed the order. You pay the network fee in ${toNative}.`
+              : `Calls ${shortAddress(preview.to, 8, 6)} on ${toChain.name} to mint your ${r.toSymbol} to ${shortAddress(r.recipient, 8, 6)}. You pay the network fee in ${toNative}.`}
           </Text>
           <div className={s.confirmButtons}>
             <Button kind="secondary" title="Cancel" onClick={() => setPreview(null)} disabled={busy === "claim"} />
-            <Button title="Claim" loading={busy === "claim"} onClick={() => void claim()} data-testid="swap-claim-confirm-button" />
+            <Button title={cow ? "Send refund" : "Claim"} loading={busy === "claim"} onClick={() => void claim()} data-testid="swap-claim-confirm-button" />
+          </div>
+        </div>
+      ) : null}
+      {cancelPreview && cancellable ? (
+        <div className={s.confirm} role="group" aria-label="Confirm the cancellation" data-testid="swap-cancel-confirm">
+          <Text variant="bodyStrong">{cancelPreview.mode === "offchain" ? "Cancel this order" : `Cancel and get your ${r.fromSymbol} back`}</Text>
+          <Text as="p" variant="small" color="var(--ink2)" selectable>
+            {cancelPreview.mode === "offchain"
+              ? "Your wallet signs a cancellation for CoW's orderbook — free, nothing is sent. A solver that already picked the order up may still fill it."
+              : `Calls CoW's order contract ${shortAddress(cancelPreview.to, 8, 6)} on ${fromName} to cancel the order and return the ${r.fromSymbol} it holds to your wallet. You pay the network fee in ${fromNative}.`}
+          </Text>
+          <div className={s.confirmButtons}>
+            <Button kind="secondary" title="Keep order" onClick={() => setCancelPreview(null)} disabled={busy === "cancel"} />
+            <Button title="Cancel order" loading={busy === "cancel"} onClick={() => void cancel()} data-testid="swap-cancel-confirm-button" />
           </div>
         </div>
       ) : null}
@@ -207,12 +271,23 @@ export function StatusView({id, wallets, onClose, onBack, onTryAgain, onConnect}
         {submitting ? <Button block title="Continue in background" onClick={onClose} data-testid="swap-background" /> : null}
         {stopped && r.fromKey && r.toKey ? <Button block title="Try again" onClick={() => onTryAgain(r)} data-testid="swap-try-again" /> : null}
         {r.status === "action-required" && owner && !preview ? (
-          <Button block title={`Claim on ${toName}`} loading={busy === "claim"} onClick={() => void askClaim()} data-testid="swap-claim" />
+          <Button block title={cow ? `Get ${r.fromSymbol} back` : `Claim on ${toName}`} loading={busy === "claim"} onClick={() => void askClaim()} data-testid="swap-claim" />
+        ) : null}
+        {cancellable && placer && !cancelPreview ? (
+          <Button block kind="secondary" height={48} title="Cancel order" loading={busy === "cancel"} onClick={() => void askCancel()} data-testid="swap-cancel" />
+        ) : null}
+        {cancellable && !placer ? (
+          <>
+            <Text as="p" variant="meta" color="var(--muted)">
+              Connect the wallet that placed this order to cancel it.
+            </Text>
+            <Button block kind="secondary" title="Connect wallet" icon="wallet" iconPosition="left" onClick={() => onConnect("evm")} data-testid="swap-cancel-connect" />
+          </>
         ) : null}
         {r.status === "action-required" && !owner ? (
           <>
             <Text as="p" variant="meta" color="var(--amber)">
-              Connect the wallet that made this swap to claim it.
+              {cow ? "Connect the wallet that placed this order to get its refund." : "Connect the wallet that made this swap to claim it."}
             </Text>
             {destFamily ? <Button block kind="secondary" title="Connect wallet" icon="wallet" iconPosition="left" onClick={() => onConnect(destFamily)} /> : null}
           </>
@@ -234,7 +309,8 @@ export function StatusView({id, wallets, onClose, onBack, onTryAgain, onConnect}
             {links < 2 ? refreshButton : null}
             {srcUrl ? <LinkButton block title="Source tx" href={srcUrl} aria-label="Source tx on the explorer" data-testid="swap-explorer-source" /> : null}
             {destUrl ? <LinkButton block title={destLabel} href={destUrl} aria-label={`${destLabel} on the explorer`} data-testid="swap-explorer-dest" /> : null}
-            {links === 2 ? refreshButton : null}
+            {cancelUrl ? <LinkButton block title="Cancel tx" href={cancelUrl} aria-label="Cancel tx on the explorer" data-testid="swap-explorer-cancel" /> : null}
+            {links >= 2 ? refreshButton : null}
             {!submitting ? <Button block kind="secondary" height={48} title={stopped ? "Close" : "Done"} onClick={onClose} data-testid="swap-done" /> : null}
           </div>
         ) : null}

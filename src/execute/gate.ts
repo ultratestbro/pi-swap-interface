@@ -22,6 +22,8 @@
  *      vault relayer, exactly the plan's allowance, the order's own expiry) and the order itself: every field as
  *      the plan's order, re-held to the review by the SDK's own GPv2 reader — its `appData` may change only after
  *      that permit was signed (the hook that carries it). A native-coin sale is one eth-flow `createOrder` call.
+ *   6. Cancelling a CoW order (D49) arms one write on a fresh gate: the off-chain `OrderCancellations` naming only
+ *      that order's UID (from the record's own id), or the on-chain `invalidateOrder` call, exactly, with no value.
  *
  * Pure (viem's ABI codec, and the catalog's address checks for TON) — unit-tested in tests/unit/execute/gate.test.ts.
  */
@@ -29,7 +31,7 @@ import {decodeFunctionData, encodeFunctionData, erc20Abi} from "viem";
 import type {Swap2ExecutionPlan} from "@anywalletkit/protocol-swap2-core/swap2/base";
 import type {RemotePins} from "@anywalletkit/protocol-swap2-core/types";
 import {PERMIT2_ADDRESS, PERMIT2_TRANSFER_TYPES, appendPermit2Signature} from "@anywalletkit/protocol-swap2-core/util";
-import {GPV2_ORDER_FIELDS, GPV2_VAULT_RELAYER, assertGpv2Order, assertGpv2Permit, isGpv2Order} from "@anywalletkit/protocol-swap2-core";
+import {GPV2_ORDER_FIELDS, GPV2_VAULT_RELAYER, assertGpv2Cancellation, assertGpv2Order, assertGpv2Permit, isGpv2Order} from "@anywalletkit/protocol-swap2-core";
 import {COW_DEPLOYMENTS, decodeEthFlowCall, deploymentOf} from "@anywalletkit/protocol-swap2-cow";
 import type {ChainFamily} from "../contracts/domain";
 import type {ReviewedSwap} from "../contracts/execution";
@@ -61,7 +63,12 @@ export type ArmedWrite =
    * the rest); `fields`: the plan's order, every field but `appData`, as stable JSON; `appData`: the plan's — another
    * one matches only once this arm's permit was signed.
    */
-  | {kind: "gpv2Order"; expect: Gpv2Expect; fields: string; appData: string};
+  | {kind: "gpv2Order"; expect: Gpv2Expect; fields: string; appData: string}
+  /**
+   * signTypedData: the off-chain cancellation of ONE CoW order this account owns (D49) — `OrderCancellations` for
+   * GPv2Settlement on `chainId`, held by the SDK's reader, naming exactly `uid` (lowercase) and nothing else.
+   */
+  | {kind: "gpv2Cancel"; owner: string; chainId: number; uid: string};
 
 /** assertGpv2Order's expectation without its clock (the gate reads the time when the wallet is asked). */
 export interface Gpv2Expect {
@@ -213,6 +220,16 @@ export function matches(w: ArmedWrite, method: string, raw: unknown, permitSigna
       }
       if (gpv2Fields(order.message) !== w.fields) return false;
       return order.appData.toLowerCase() === w.appData.toLowerCase() || permitSigned;
+    }
+    case "gpv2Cancel": {
+      if (method !== "signTypedData" || r.primaryType !== "OrderCancellations") return false;
+      try {
+        assertGpv2Cancellation(stableJson(raw), {self: w.owner, chainId: w.chainId});
+      } catch {
+        return false;
+      }
+      const uids = (r.message && typeof r.message === "object" ? (r.message as Record<string, unknown>).orderUids : undefined) as unknown;
+      return Array.isArray(uids) && uids.length === 1 && typeof uids[0] === "string" && uids[0].toLowerCase() === w.uid.toLowerCase();
     }
   }
 }
