@@ -3,7 +3,9 @@ import {describe, expect, it} from "vitest";
 import {AUDITED_OMNISTON_EVM_ORDER_PROTOCOLS} from "@anywalletkit/protocol-swap2-omniston/validators";
 import {CF_VAULTS} from "@anywalletkit/protocol-swap2-chainflip/config";
 import {DEFAULT_ON_PROVIDERS, STANDARD_ONLY_PROVIDERS} from "../../../src/swap/providers";
-import {ZEROEX_CHAINS, ZEROEX_PERMIT2} from "@anywalletkit/protocol-swap2-0x/chains";
+import {ZEROEX_CHAINS, ZEROEX_PERMIT2, ZEROEX_SETTLER_REGISTRY} from "@anywalletkit/protocol-swap2-0x/chains";
+import {zeroExSettlerAddress} from "@anywalletkit/protocol-swap2-0x/settler";
+import {WEB_ZEROEX_CHAINS, ZEROEX_EXTRA_CHAINS} from "../../../src/swap/zeroexChains";
 import {OMNISTON_ORDER_PROTOCOL, PERMIT2_VENUES, PROVIDER_NAMES, TWO_PHASE, orderSpender, providerName, routeName, venueScope} from "../../../src/swap/providerMeta";
 import {VENUE_TRUST, venueTrustText} from "../../../src/swap/venues";
 
@@ -35,6 +37,20 @@ describe("orderSpender", () => {
     // Across's dry quote names its pinned SpokePool itself (txRequest.approvalAddress): nothing to name here.
     expect(orderSpender("across", "eip155:8453")).toBeNull();
     expect([...PERMIT2_VENUES]).toEqual(["zeroex"]);
+  });
+  it("0x on Monad (D51): Permit2 there too; the pin is the registry's pair read on 2026-11-26, the rest the module's own", () => {
+    expect(orderSpender("zeroex", "eip155:143")).toBe(ZEROEX_PERMIT2);
+    // The app's entry replaces any the module adds for 143: once it pins Monad itself (maybe with newer Settlers), drop
+    // ZEROEX_EXTRA_CHAINS' entry rather than let the page put back its older pins.
+    for (const id of Object.keys(ZEROEX_EXTRA_CHAINS)) expect(ZEROEX_CHAINS[Number(id)], `protocol-swap2-0x now pins chain ${id}: drop it from zeroexChains.ts`).toBeUndefined();
+    expect(Object.keys(ZEROEX_EXTRA_CHAINS)).toEqual(["143"]);
+    expect(Object.keys(WEB_ZEROEX_CHAINS).map(Number).sort((a, b) => a - b)).toEqual([1, 10, 56, 137, 143, 8453, 42161, 43114]);
+    for (const id of Object.keys(ZEROEX_CHAINS)) expect(WEB_ZEROEX_CHAINS[Number(id)]).toEqual(ZEROEX_CHAINS[Number(id)]);
+    const monad = WEB_ZEROEX_CHAINS[143]!;
+    expect(monad).toEqual({name: "Monad", registry: ZEROEX_SETTLER_REGISTRY, newestLiveNonce: 12, previousLiveNonce: 11, wrappedNative: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"});
+    // ownerOf(2) and prev(2) as the registry answered on Monad: the module derives the same Settler addresses.
+    expect(zeroExSettlerAddress(143, 12)).toBe("0xF16D1df42E368e4dd873b1f92ED0670FF4c987eB");
+    expect(zeroExSettlerAddress(143, 11)).toBe("0x031D28683fFc9936903a31670bC618b8Bc9b65dD");
   });
 });
 

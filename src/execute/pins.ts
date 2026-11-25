@@ -33,12 +33,12 @@ import {uniswapPins} from "@anywalletkit/protocol-swap2-uniswap";
 import {usdt0Pins} from "@anywalletkit/protocol-swap2-usdt0/config";
 import {stargateRegistry} from "@anywalletkit/protocol-swap2-stargate/deployments";
 import {wrapPins} from "@anywalletkit/protocol-swap2-wrap/provider";
-import {ZEROEX_CHAINS, ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
+import {ZEROEX_PERMIT2} from "@anywalletkit/protocol-swap2-0x/chains";
 import {ZEROEX_MAX_PERMIT_SECONDS} from "@anywalletkit/protocol-swap2-0x/settler";
 import {acrossPins} from "@anywalletkit/protocol-swap2-across/verify";
 import {GPV2_VAULT_RELAYER} from "@anywalletkit/protocol-swap2-core";
 import {COW_DEPLOYMENTS, deploymentOf} from "@anywalletkit/protocol-swap2-cow";
-import {appProviders, orderSpender, zeroExSettlers} from "../swap";
+import {appProviders, orderSpender, zeroExServes, zeroExSettlers} from "../swap";
 import type {TronRule, VenueRule} from "./gate";
 
 type Pins = Pick<RemotePins, "callTargets" | "spenders">;
@@ -66,7 +66,7 @@ const omnistonPins: Pins = {
  */
 const zeroExPins: Pins = {
   callTargets: (c) => zeroExSettlers(appProviders(), c),
-  spenders: (c) => (zeroExChain(ZEROEX_CHAINS, zeroExChainId(c)) ? [ZEROEX_PERMIT2] : []),
+  spenders: (c) => (zeroExServes(c) ? [ZEROEX_PERMIT2] : []),
 };
 
 /** Stargate: its reviewed deployments' pools / OFTs and messaging contracts as call targets, ERC-20 pools as spenders. */

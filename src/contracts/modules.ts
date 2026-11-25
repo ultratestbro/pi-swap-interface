@@ -160,6 +160,8 @@ export interface SwapModule {
   VENUE_TRUST: Readonly<Record<string, VenueTrust>>;
   /** The spender a dry quote leaves unnamed (chainflip → CF_VAULTS, omniston → order protocol, zeroex → Permit2), or null. */
   orderSpender(provider: string, chain: string): string | null;
+  /** 0x serves this EVM network on this page (the module's chains and Monad, D51): Permit2 is its one spender there. */
+  zeroExServes(chain: string): boolean;
   /** Why an enabled venue isn't asked for this pair, in one line ("Same-network swaps only"). */
   venueScope(
     provider: string,
