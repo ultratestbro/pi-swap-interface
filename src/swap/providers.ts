@@ -37,7 +37,8 @@ import {stargateProvider} from "@anywalletkit/protocol-swap2-stargate/provider";
 import {wrapProvider} from "@anywalletkit/protocol-swap2-wrap/provider";
 import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider";
 import type {SettlerResolver} from "@anywalletkit/protocol-swap2-0x/settler";
-import {zeroExChain, zeroExChainId, ZEROEX_CHAINS} from "@anywalletkit/protocol-swap2-0x/chains";
+import {zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
+import {WEB_ZEROEX_CHAINS, ZEROEX_EXTRA_CHAINS} from "./zeroexChains";
 import {acrossProvider} from "@anywalletkit/protocol-swap2-across/provider";
 import {cowProvider} from "@anywalletkit/protocol-swap2-cow/provider";
 import {COW_DEPLOYMENTS} from "@anywalletkit/protocol-swap2-cow";
@@ -101,7 +102,7 @@ const settlerResolvers = new WeakMap<CrossChainProvider, SettlerResolver>();
  */
 export function zeroExSettlers(providers: readonly CrossChainProvider[], chain: string): readonly string[] {
   const id = zeroExChainId(chain);
-  if (!zeroExChain(ZEROEX_CHAINS, id)) return [];
+  if (!zeroExChain(WEB_ZEROEX_CHAINS, id)) return [];
   for (const p of providers) {
     const r = p.name === "zeroex" ? settlerResolvers.get(p) : undefined;
     if (r) return r.known(id);
@@ -266,7 +267,7 @@ export function buildProviders(
     out.push(whileLive(fyndProvider({selfHosted, rpcUrls: evm}), slot.live));
   }
   if (on.zeroex && extras.zeroex) {
-    // 0x Swap API v2, Permit2 flow, same network on its 7 chains (D38). The module's LOCAL provider runs here, so every
+    // 0x Swap API v2, Permit2 flow, same network on its 7 chains and Monad (D38, D51). The module's LOCAL provider runs here, so every
     // check runs on this device: the Settler read from 0x's on-chain registry over the page's RPCs (CREATE3 + pinned
     // window + code), the transaction decoded and held to the request, the Permit2 payload rebuilt. Its `baseUrl` is
     // cp0x's slot, which forwards `/swap/permit2/{price,quote}` to api.0x.org with cp0x's key in place of the
@@ -278,7 +279,8 @@ export function buildProviders(
     // (the wallet's prompt, then a block or two) asked for the permit twice: permit, approve, permit. 0x's permits
     // run 300 s and the module keeps a quote 20 s inside that; the Settler still holds the swap to the minimum.
     const slot = extras.zeroex;
-    const zeroex = zeroExProvider({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: slot.base, rpcUrls: evm, quoteTtlMs: ZEROEX_QUOTE_TTL_MS});
+    // chains: the module's seven plus Monad, pinned from the chain (zeroexChains.ts, D51).
+    const zeroex = zeroExProvider({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: slot.base, rpcUrls: evm, quoteTtlMs: ZEROEX_QUOTE_TTL_MS, chains: ZEROEX_EXTRA_CHAINS});
     const live = whileLive(zeroex, slot.live);
     settlerResolvers.set(live, zeroex.settlerResolver);
     out.push(live);

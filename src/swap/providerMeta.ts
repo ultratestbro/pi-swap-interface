@@ -7,7 +7,8 @@
 import {ACROSS_NATIVE, acrossRouteOf} from "@anywalletkit/protocol-swap2-across/config";
 import {acrossRouteUnpriced} from "@anywalletkit/protocol-swap2-across/pricing";
 import {CF_VAULTS} from "@anywalletkit/protocol-swap2-chainflip/config";
-import {ZEROEX_CHAINS, ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
+import {ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
+import {WEB_ZEROEX_CHAINS} from "./zeroexChains";
 import {stargateRegistry} from "@anywalletkit/protocol-swap2-stargate/deployments";
 import {COW_DEPLOYMENTS, COW_VAULT_RELAYER, deploymentOf} from "@anywalletkit/protocol-swap2-cow";
 import {chainByCaip2Web} from "../catalog";
@@ -76,8 +77,8 @@ export const OMNISTON_ORDER_PROTOCOL: Readonly<Record<string, string>> = {
   "eip155:999": "0xD84778bbeEC5D2a8d17c6424249C438EC0b1ABE3",
 };
 
-/** 0x serves this EVM network (its chain table: Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, BNB Chain). */
-const zeroExServes = (chain: string): boolean => !!zeroExChain(ZEROEX_CHAINS, zeroExChainId(chain));
+/** 0x serves this EVM network (the page's table: Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, BNB Chain, Monad). */
+export const zeroExServes = (chain: string): boolean => !!zeroExChain(WEB_ZEROEX_CHAINS, zeroExChainId(chain));
 
 /** CoW serves this EVM network (its package's deployments: Ethereum, Arbitrum, Base). */
 export const cowServes = (chain: string): boolean => chain.startsWith("eip155:") && !!deploymentOf(COW_DEPLOYMENTS, Number(chain.slice("eip155:".length)));
@@ -257,7 +258,7 @@ function usualScope(provider: string, from: ScopeSide, to: ScopeSide): string {
     case "fynd":
       return sameNet ? "Not on this network" : "Same-network swaps only";
     case "zeroex":
-      // Same network only, on its 7 chains (Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, BNB Chain).
+      // Same network only, on its 8 chains here (the module's seven and Monad, D51).
       if (!sameNet) return "Same-network swaps only";
       return zeroExServes(from.caip2) ? "Doesn't cover this pair" : "Not on this network";
     case "across":

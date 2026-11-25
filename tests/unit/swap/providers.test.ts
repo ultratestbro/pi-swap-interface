@@ -18,6 +18,7 @@ import {usdt0Provider} from "@anywalletkit/protocol-swap2-usdt0/provider";
 import {stargateProvider} from "@anywalletkit/protocol-swap2-stargate/provider";
 import {wrapProvider} from "@anywalletkit/protocol-swap2-wrap/provider";
 import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider";
+import {ZEROEX_EXTRA_CHAINS} from "../../../src/swap/zeroexChains";
 import {acrossProvider} from "@anywalletkit/protocol-swap2-across/provider";
 import {ACROSS_CHAINS} from "@anywalletkit/protocol-swap2-across/config";
 import {encodeFunctionData, zeroAddress} from "viem";
@@ -665,7 +666,9 @@ describe("0x and Across: Standard only, through cp0x's proxy, while health keys 
     const names = buildProviders(config, stores(true), {fynd: slot(FYND_BASE, () => true), zeroex: slot(ZEROEX_BASE, () => true), across: slot(ACROSS_BASE, () => true)}).map((p) => p.name);
     expect(names.slice(-3)).toEqual(["fynd", "zeroex", "across"]);
     const zx = lastConfig(zeroExProvider);
-    expect(Object.keys(zx).sort()).toEqual(["apiKey", "baseUrl", "quoteTtlMs", "rpcUrls"]);
+    expect(Object.keys(zx).sort()).toEqual(["apiKey", "baseUrl", "chains", "quoteTtlMs", "rpcUrls"]);
+    // The module's seven chains plus Monad, pinned from the chain (D51): nothing else is added or replaced.
+    expect(zx.chains).toBe(ZEROEX_EXTRA_CHAINS);
     expect(zx).toMatchObject({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: ZEROEX_BASE});
     // A firm quote outlives an Ethereum approval, so the engine doesn't re-quote and ask for a second permit; 0x's
     // permits run 300 s and the module keeps a quote 20 s inside that.
@@ -682,7 +685,7 @@ describe("0x and Across: Standard only, through cp0x's proxy, while health keys 
     expect(rpc["eip155:8453"]).toBe(`${BASE}/rpc/8453`);
     for (const c of Object.keys(rpc)) expect(Object.keys(ACROSS_CHAINS)).toContain(c);
     // No fee option, no suggestedFeesUrl override (its keyless relayer-fee quote stays direct), no real key anywhere.
-    expect(JSON.stringify({zx: {...zx, rpcUrls: undefined}, ac: {...ac, rpcUrls: undefined, fetchImpl: undefined}})).not.toMatch(/fee|integrator|suggestedFeesUrl|0x\.org|across\.to/i);
+    expect(JSON.stringify({zx: {...zx, rpcUrls: undefined, chains: undefined}, ac: {...ac, rpcUrls: undefined, fetchImpl: undefined}})).not.toMatch(/fee|integrator|suggestedFeesUrl|0x\.org|across\.to/i);
     expect(PROXY_KEY_PLACEHOLDER).toMatch(/^[\x21-\x7e]+$/);
   });
 
@@ -706,6 +709,8 @@ describe("0x and Across: Standard only, through cp0x's proxy, while health keys 
     expect(zeroex.supportsRoute(sameBase[0], {chain: "eip155:42161", token: USDC_ARB_ADDR})).toBe(false);
     // 0x is not on Gnosis, Across never on one network nor into Ethereum (not priced yet), and only the same asset.
     expect(zeroex.supportsRoute({chain: "eip155:100", token: "XDAI"}, {chain: "eip155:100", token: "0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83"})).toBe(false);
+    // Monad (D51): MON → AUSD, the pair 0x led on Matcha.
+    expect(zeroex.supportsRoute({chain: "eip155:143", token: "MON"}, {chain: "eip155:143", token: "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a"})).toBe(true);
     expect(across.supportsRoute(...baseToArb)).toBe(true);
     expect(across.supportsRoute({chain: "eip155:8453", token: "USDC"}, {chain: "eip155:1", token: USDC_ETH})).toBe(false);
     expect(across.supportsRoute({chain: "eip155:8453", token: "USDC"}, {chain: "eip155:8453", token: USDC_BASE_ADDR})).toBe(false);
@@ -724,6 +729,9 @@ describe("0x and Across: Standard only, through cp0x's proxy, while health keys 
       expect(zeroExSettlers(providers, "eip155:8453")).toEqual(["0x103502909141F7025a94b7b99A276dCD128e21a8"]);
       expect(known).toHaveBeenCalledWith(8453);
       expect(zeroExSettlers(providers, "eip155:100")).toEqual([]);
+      known.mockReturnValue(["0xF16D1df42E368e4dd873b1f92ED0670FF4c987eB"]);
+      expect(zeroExSettlers(providers, "eip155:143")).toEqual(["0xF16D1df42E368e4dd873b1f92ED0670FF4c987eB"]);
+      expect(known).toHaveBeenLastCalledWith(143);
       expect(zeroExSettlers(providers, "solana:mainnet")).toEqual([]);
       expect(zeroExSettlers(buildProviders(DEFAULT_RUNTIME_CONFIG, stores(true), {}), "eip155:8453")).toEqual([]);
       expect(fetchSpy).not.toHaveBeenCalled();

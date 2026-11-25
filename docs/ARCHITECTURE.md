@@ -1905,6 +1905,18 @@ more, or when, at the page's spot prices (router `quoteValues`), it delivers 5% 
 route of the round delivers 5% more. A small swap whose every route pays over 5% in fees keeps its routes, and nothing
 is hidden on a guess (no measured impact, no priced alternative). The wallet's rule (show and warn, never block —
 2026-10-16) is the phone's; on the web a route like this one is never worth offering.
+**D51 — 0x on Monad (owner, 2026-11-26).** 62 000 MON → AUSD: Matcha's best was 0x (719.92 AUSD) while this page never
+asked 0x — protocol-swap2-0x pins seven chains and Monad isn't one. Its `chains` option takes more, each entry read
+from the chain: `swap/zeroexChains.ts` adds Monad (143) with the shared Settler registry, the taker Settlers the
+registry named on 2026-11-26 (`ownerOf(2)` = deployment 12, `prev(2)` = 11; both hold code and equal
+`zeroExSettlerAddress(143, n)`), canonical Permit2 (has code) and WMON. Every check of the module is unchanged — the
+Settler is read from the registry per quote, native sales go to deployments 12/11 only, token sales also to 13–14 once
+they hold code, the transaction is decoded and held to the request, Permit2 is the one spender. One table
+(`WEB_ZEROEX_CHAINS`) feeds the provider, `orderSpender`/`venueScope` and the execute pins. cp0x-api's 0x slot must list 143 among its chains
+(`ZEROEX_CHAIN_IDS`, deployed first): a cp0x-api without it answers Monad's 0x calls 400 and the row reads as not
+quoting. A newer Settler on Monad is refused until this pin is raised; once protocol-swap2-0x pins Monad itself, a unit
+test fails so the page's entry is dropped rather than overriding newer pins. Activity labels (`describeZeroExActivity`)
+read the module's default table, so a Monad 0x swap isn't labelled there — cosmetic.
 
 ## 5. Conventions
 
