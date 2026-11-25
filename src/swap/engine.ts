@@ -37,6 +37,7 @@ import {reportRefused} from "../activity/counter";
 import {orderRoutes, parseRejections, tagRoutes} from "./routes";
 import {createProviderStores} from "./stores";
 import {sourceParams} from "./source";
+import {dropLossy} from "./valueGuard";
 import {preferSoonBest, toWebRoute} from "./webRoute";
 
 type Prices = Readonly<Record<string, number>>;
@@ -286,20 +287,25 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
     // several routes on its own (D47), and a venue with a route on screen hasn't refused the pair.
     const onePerVenue = (rows: RouteSnapshot["rejections"], quoted: ReadonlySet<string>) =>
       rows.filter((x, i) => !(x.provider && quoted.has(x.provider)) && (!x.provider || rows.findIndex((y) => y.provider === x.provider) === i));
-    const view = (quotes: RouteSet["quotes"], pending: string[], refusals: readonly Swap2Refusal[]): RouteSnapshot => ({
-      mode,
-      // The default pick is never a route of over an hour while a sooner one exists (D47: CCTP's Standard from Linea).
-      routes: orderRoutes(preferSoonBest(quotes.map((q) => shown(toWebRoute(q, source, gas, native, req.slippageBps))))),
-      pending,
-      rejections: onePerVenue(
-        parseRejections(scrub ? refusals.map((x) => ({message: scrub(x.message), ...(x.reason ? {reason: x.reason} : {})})) : refusals, req.from).map((x) =>
-          skipped.has(x.provider) ? {...x, skipped: true as const} : x,
+    const view = (quotes: RouteSet["quotes"], pending: string[], venueRefusals: readonly Swap2Refusal[]): RouteSnapshot => {
+      // A route that would lose most of the swap to thin pools is filed as its venue's refusal instead (D50, valueGuard).
+      const {kept, dropped} = dropLossy(quotes, params, prices);
+      const refusals = dropped.length ? [...venueRefusals, ...dropped] : venueRefusals;
+      return {
+        mode,
+        // The default pick is never a route of over an hour while a sooner one exists (D47: CCTP's Standard from Linea).
+        routes: orderRoutes(preferSoonBest(kept.map((q) => shown(toWebRoute(q, source, gas, native, req.slippageBps))))),
+        pending,
+        rejections: onePerVenue(
+          parseRejections(scrub ? refusals.map((x) => ({message: scrub(x.message), ...(x.reason ? {reason: x.reason} : {})})) : refusals, req.from).map((x) =>
+            skipped.has(x.provider) ? {...x, skipped: true as const} : x,
+          ),
+          new Set(kept.map((q) => q.provider)),
         ),
-        new Set(quotes.map((q) => q.provider)),
-      ),
-      asked,
-      venues,
-    });
+        asked,
+        venues,
+      };
+    };
 
     // Per round, each provider is observed through a delegate (same shared instance underneath): the router aborts a
     // provider's signal right after it settles, which is the moment its row leaves "pending" — whether it quoted,
@@ -399,7 +405,11 @@ export function createQuoteEngine(deps: QuoteEngineDeps): QuoteEngine {
     // A venue with several routes is asked for the reviewed one by its routeId (the router then calls getQuote with
     // it): never its list, whose best — CCTP's Standard, free — would replace the Fast the user picked (D47).
     const set = await one.getQuotes(routeId !== undefined ? {...quoteParams(req), routeId} : quoteParams(req));
-    const q = set?.quotes.find((x) => x.provider === provider && x.routeId === routeId);
+    const found = set?.quotes.find((x) => x.provider === provider && x.routeId === routeId);
+    // The review's fresh quote passes the same price-impact check as the list's (D50): no better route to compare here.
+    const lossy = found ? dropLossy([found], quoteParams(req), prices).dropped[0] : undefined;
+    if (lossy) return {route: null, reason: parseRejections([lossy], req.from)[0]?.reason ?? "No route right now"};
+    const q = found;
     if (q) return {route: tagRoutes([toWebRoute(q, {chain: req.from.caip2, isToken: req.from.contract !== null}, gas, native, req.slippageBps)])[0]!, reason: null};
     return {route: null, reason: parseRejections(one.lastRefusals, req.from)[0]?.reason ?? "No route right now"};
   }

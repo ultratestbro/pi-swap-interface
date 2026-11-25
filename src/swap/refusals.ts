@@ -105,6 +105,13 @@ export const RETRY_WAIT = String.raw`retry (?:in|after) ~?(\d+(?:\.\d+)?)\s*(hou
 
 /** The table, in match order. Each line was checked against the SDK texts in refusals.test.ts. */
 const RULES: readonly Rule[] = [
+  // ── the page's own: a route left out for what thin pools would take (valueGuard.ts lossText, D50) ──
+  {
+    category: "amount",
+    re: /^loses ([\d.]+)% of the value to price impact/,
+    short: (m) => `Loses ${m[1]}% to price impact`,
+    detail: "Its pools are too thin for this amount — you'd get far less than you pay, so we left it out. A smaller amount may work.",
+  },
   // ── venue codes that mean something else elsewhere ──
   {
     provider: "relay",
