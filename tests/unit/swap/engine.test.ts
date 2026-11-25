@@ -240,6 +240,36 @@ describe("quoteRoutes", () => {
     expect(cross!.routes.find((r) => r.provider === "a")!.tags).toContain("fastest");
   });
 
+  it("a route that loses most of the swap to thin pools is its venue's refusal, never a route (D50)", async () => {
+    const same = {from: USDT_ETH, to: USDC_ETH, amountIn: 3_000_000n};
+    // Monad, 2026-11-26: Uniswap v3's quoter probe measured 99.82% for 62 000 MON → AUSD.
+    const thin = venue("uniswap", {min: "5000", sameChain: true});
+    const quote = thin.getQuote.bind(thin);
+    thin.getQuote = async (p, sig) => {
+      const q = await quote(p, sig);
+      return q ? {...q, providerData: {priceImpactBps: "9982"}} : q;
+    };
+    const providers = [thin, venue("lifi", {min: "2990000", sameChain: true})];
+    for (const prices of [undefined, {USDC: 1, USDT: 1, ETH: 2300}]) {
+      const snap = await engineOver(providers).quoteRoutes(live(same), () => {}, prices);
+      expect(snap!.routes.map((r) => r.provider)).toEqual(["lifi"]);
+      expect(snap!.rejections).toEqual([expect.objectContaining({provider: "uniswap", category: "amount", reason: "Loses 99.8% to price impact"})]);
+    }
+  });
+
+  it("priced: a route 5% or more under what is paid AND under another route is left out; with no better route it stays", async () => {
+    const same = {from: USDT_ETH, to: USDC_ETH, amountIn: 3_000_000n};
+    const prices = {USDC: 1, USDT: 1, ETH: 2300};
+    const worse = await engineOver([venue("thin", {min: "1500000", sameChain: true}), venue("deep", {min: "2990000", sameChain: true})]).quoteRoutes(live(same), () => {}, prices);
+    expect(worse!.routes.map((r) => r.provider)).toEqual(["deep"]);
+    expect(worse!.rejections).toEqual([expect.objectContaining({provider: "thin", reason: "Loses 50.0% to price impact"})]);
+    // A small swap whose every route loses over 5% (fees) keeps them all; so does a round without prices.
+    const all = [venue("a", {min: "2700000", sameChain: true}), venue("b", {min: "2650000", sameChain: true})];
+    expect((await engineOver(all).quoteRoutes(live(same), () => {}, prices))!.routes).toHaveLength(2);
+    const unpriced = [venue("thin", {min: "1500000", sameChain: true}), venue("deep", {min: "2990000", sameChain: true})];
+    expect((await engineOver(unpriced).quoteRoutes(live(same), () => {}))!.routes).toHaveLength(2);
+  });
+
   it("runs on the shared instances and never closes them", async () => {
     const v = venue("v", {min: "1"});
     const engine = engineOver([v]);
@@ -308,6 +338,17 @@ describe("requoteRoute", () => {
     const res = await engineOver([venue("near_intents", {refuse: "an odd new text 4242", refuseReason: "chain_halted"})]).requoteRoute(request(), {provider: "near_intents"});
     expect(res).toEqual({route: null, reason: "Paused on this network for now"});
   });
+  it("a fresh quote that now loses most of the swap to thin pools: no route, that reason (D50)", async () => {
+    const thin = venue("uniswap", {min: "5000", sameChain: true});
+    const quote = thin.getQuote.bind(thin);
+    thin.getQuote = async (p, sig) => {
+      const q = await quote(p, sig);
+      return q ? {...q, providerData: {priceImpactBps: "2130"}} : q;
+    };
+    const res = await engineOver([thin]).requoteRoute(request({from: USDT_ETH, to: USDC_ETH, amountIn: 3_000_000n}), {provider: "uniswap"});
+    expect(res).toEqual({route: null, reason: "Loses 21.3% to price impact"});
+  });
+
   it("a venue that isn't built here", async () => {
     expect(await engineOver([venue("lifi", {min: "1"})]).requoteRoute(request(), {provider: "relay"})).toEqual({route: null, reason: "Not available in this browser right now"});
   });

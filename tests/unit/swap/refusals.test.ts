@@ -279,6 +279,8 @@ const SAMPLES: readonly [raw: string, category: RefusalCategory, short: string, 
   // the router itself
   ["near_intents: quote timed out after 8000ms", "unreachable", "Didn't answer in time — tap refresh"],
   ["lifi: rejected by validation (minDest=1 vs floor=2, validUntil=0, now=1)", "safety", "Didn't match what was asked"],
+  // the page's own: a route left out for thin pools (valueGuard.ts, D50)
+  ["uniswap: loses 99.8% of the value to price impact — its pools are too thin for this amount", "amount", "Loses 99.8% to price impact"],
 ];
 
 const HAS_HOURS = /retry in ~?\d+(?:\.\d+)?\s*h/i;

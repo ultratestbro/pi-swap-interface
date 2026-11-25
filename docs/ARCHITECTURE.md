@@ -1896,6 +1896,16 @@ the source's finality — about 15–19 minutes from Ethereum and the L2s, hours
   through the gate — the permit, then the order with the permit's appData, and eth-flow's `createOrder`; the fake
   wallet rejects, nothing is signed with funds or placed).
 
+**D50 — Routes that lose most of the swap to thin pools are refusals, not routes (owner, 2026-11-26).** 62 000 MON →
+AUSD on Monad: Uniswap's v3 pools there (the module asks v3 only) quoted 1.13 AUSD for ≈ $720 — its own quoter probe
+measured a 99.82% price impact — and the list showed it as an ordinary route under LI.FI's 718.66. `swap/valueGuard.ts`
+`dropLossy` now runs on every snapshot (engine `view`) and on the review's re-quote: a quote is filed as its venue's
+refusal under "amount" ("Loses 99.8% to price impact") when the venue's own `providerData.priceImpactBps` is 500 or
+more, or when, at the page's spot prices (router `quoteValues`), it delivers 5% or more under what is paid AND another
+route of the round delivers 5% more. A small swap whose every route pays over 5% in fees keeps its routes, and nothing
+is hidden on a guess (no measured impact, no priced alternative). The wallet's rule (show and warn, never block —
+2026-10-16) is the phone's; on the web a route like this one is never worth offering.
+
 ## 5. Conventions
 
 - **TypeScript**: strict, `noUncheckedIndexedAccess`, `verbatimModuleSyntax` (use `import type`). Named exports
