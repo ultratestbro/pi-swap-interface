@@ -294,6 +294,24 @@ const RULES: readonly Rule[] = [
     detail: "Your browser couldn't connect to CoW's orderbook — an ad blocker, VPN or network filter can cause this.",
   },
 
+  // KyberSwap (protocol-swap2-kyberswap 0.1.0, D52): "kyberswap: API unreachable (TypeError)" when its fetch fails —
+  // the browser never reached KyberSwap (or cp0x's slot); its RPC reads (the simulations) say "no RPC answered on chain".
+  {
+    provider: "kyberswap",
+    category: "unreachable",
+    re: /API unreachable/,
+    short: "Couldn't reach it — tap refresh",
+    detail: "Your browser couldn't connect to KyberSwap's API — an ad blocker, VPN or network filter can cause this.",
+  },
+  {
+    provider: "kyberswap",
+    category: "unreachable",
+    re: /no RPC answered on chain|cannot be simulated \(no RPC answered\)/,
+    short: "No RPC answered — tap refresh",
+    detail: "KyberSwap's swap is simulated over this network's RPCs before you sign, and none of them answered this time.",
+  },
+  {provider: "kyberswap", category: "setup", re: /no RPC configured for/, short: "Needs an RPC for this network", detail: "KyberSwap's swap is simulated before you sign: add a working RPC for this network in Settings."},
+
   // ── the browser never got an answer ──
   {
     category: "unreachable",

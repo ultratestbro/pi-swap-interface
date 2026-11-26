@@ -281,6 +281,10 @@ const SAMPLES: readonly [raw: string, category: RefusalCategory, short: string, 
   ["lifi: rejected by validation (minDest=1 vs floor=2, validUntil=0, now=1)", "safety", "Didn't match what was asked"],
   // the page's own: a route left out for thin pools (valueGuard.ts, D50)
   ["uniswap: loses 99.8% of the value to price impact — its pools are too thin for this amount", "amount", "Loses 99.8% to price impact"],
+  // KyberSwap (D52)
+  ["kyberswap: API unreachable (TypeError)", "unreachable", "Couldn't reach it — tap refresh"],
+  ["kyberswap: kyberswap: no RPC answered on chain 8453 (HTTP 503)", "unreachable", "No RPC answered — tap refresh"],
+  ["kyberswap: no RPC configured for Base: a KyberSwap swap is simulated before it is signed", "setup", "Needs an RPC for this network"],
 ];
 
 const HAS_HOURS = /retry in ~?\d+(?:\.\d+)?\s*h/i;
