@@ -15,8 +15,8 @@ importers:
         specifier: 0.6.1
         version: 0.6.1(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-0x':
-        specifier: 0.1.5
-        version: 0.1.5(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.1.6
+        version: 0.1.6(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-across':
         specifier: 0.1.4
         version: 0.1.4(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
@@ -223,8 +223,8 @@ packages:
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-0x@0.1.5':
-    resolution: {integrity: sha512-gXKgHZQmF7IejLhAj5C3+jpRDc0u+kLfgag7j0eKwS00c8+skm9U3TCjN7OxRXqrBT0DSYixZJjLARIpOl9rtw==}
+  '@anywalletkit/protocol-swap2-0x@0.1.6':
+    resolution: {integrity: sha512-XFpMXzWmicb6cbkAmxumszJaYj2LW8FlE8VAzNHRCR/pDjSPvCLRFlifr/zNzSzWnmNYwGVvZhPZmi+6hrbarA==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
@@ -3355,7 +3355,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-0x@0.1.5(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-0x@0.1.6(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
       '@anywalletkit/protocol-swap2-core': 0.17.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
