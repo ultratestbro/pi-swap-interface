@@ -16,6 +16,7 @@ import {thorchainProvider} from "@anywalletkit/protocol-swap2-thorchain/provider
 import {uniswapProvider} from "@anywalletkit/protocol-swap2-uniswap/provider";
 import {usdt0Provider} from "@anywalletkit/protocol-swap2-usdt0/provider";
 import {stargateProvider} from "@anywalletkit/protocol-swap2-stargate/provider";
+import {kyberswapProvider} from "@anywalletkit/protocol-swap2-kyberswap/provider";
 import {wrapProvider} from "@anywalletkit/protocol-swap2-wrap/provider";
 import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider";
 import {ZEROEX_EXTRA_CHAINS} from "../../../src/swap/zeroexChains";
@@ -28,7 +29,7 @@ import {createProxyFetch, healthRoutes} from "../../../src/config/standard";
 import type {ProviderName, RuntimeConfig} from "../../../src/contracts/config";
 import {createQuoteEngine, eligibleProviders, enabledVenues} from "../../../src/swap/engine";
 import {createVenueBackoff} from "../../../src/swap/limiter";
-import {DEFAULT_ON_PROVIDERS, PROXY_KEY_PLACEHOLDER, STANDARD_ONLY_PROVIDERS, ZEROEX_QUOTE_TTL_MS, buildProviders, closeProviders, evmRpcByCaip2, zeroExSettlers} from "../../../src/swap/providers";
+import {DEFAULT_ON_PROVIDERS, KYBER_CLIENT_ID, PROXY_KEY_PLACEHOLDER, STANDARD_ONLY_PROVIDERS, ZEROEX_QUOTE_TTL_MS, buildProviders, closeProviders, evmRpcByCaip2, zeroExSettlers} from "../../../src/swap/providers";
 import {classifyRefusal} from "../../../src/swap/refusals";
 import type {ProviderStores} from "../../../src/swap/stores";
 import {request} from "./fixtures";
@@ -81,6 +82,10 @@ vi.mock("@anywalletkit/protocol-swap2-thorchain/provider", async (orig) => {
 vi.mock("@anywalletkit/protocol-swap2-uniswap/provider", async (orig) => {
   const m = await orig<typeof import("@anywalletkit/protocol-swap2-uniswap/provider")>();
   return {...m, uniswapProvider: vi.fn(m.uniswapProvider)};
+});
+vi.mock("@anywalletkit/protocol-swap2-kyberswap/provider", async (orig) => {
+  const m = await orig<typeof import("@anywalletkit/protocol-swap2-kyberswap/provider")>();
+  return {...m, kyberswapProvider: vi.fn(m.kyberswapProvider)};
 });
 vi.mock("@anywalletkit/protocol-swap2-stargate/provider", async (orig) => {
   const m = await orig<typeof import("@anywalletkit/protocol-swap2-stargate/provider")>();
@@ -137,6 +142,7 @@ const FACTORIES = [
   uniswapProvider,
   usdt0Provider,
   stargateProvider,
+  kyberswapProvider,
   wrapProvider,
 ];
 
@@ -642,6 +648,33 @@ function standardRouting(keyed: readonly string[], base: typeof fetch, stopped: 
     version: null,
   });
 }
+
+describe("KyberSwap (D52): cp0x's slot in Standard, its keyless API in Public / Custom, never both", () => {
+  const KYBER_BASE = `${BASE}/venue/kyberswap`;
+
+  it("Standard: the local provider with the slot as baseUrl and a placeholder key, asked only while the slot is live", () => {
+    const config = standardSlots(DEFAULT_RUNTIME_CONFIG, API).config;
+    let live = false;
+    const p = buildProviders(config, stores(true), {kyberswap: {base: KYBER_BASE, live: () => live}, kyberswapDirect: false}).find((x) => x.name === "kyberswap")!;
+    expect(lastConfig(kyberswapProvider)).toEqual({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: KYBER_BASE, rpcUrls: config.evmRpc, clientId: KYBER_CLIENT_ID});
+    const pair = [{chain: "eip155:8453", token: "ETH"}, {chain: "eip155:8453", token: USDC_BASE_ADDR}] as const;
+    expect(p.supportsRoute(...pair)).toBe(false);
+    live = true;
+    expect(p.supportsRoute(...pair)).toBe(true);
+    // The SDK's own hooks survive the wrapper: the simulation before signing and the account's own gas estimate.
+    expect(typeof p.preflightDeposit).toBe("function");
+    expect(p.ownGasEstimate).toBe(true);
+  });
+
+  it("Public / Custom: KyberSwap's keyless public API, no key and no baseUrl; a Standard page without its slot asks nothing", () => {
+    buildProviders(DEFAULT_RUNTIME_CONFIG, stores(true), {kyberswapDirect: true});
+    expect(lastConfig(kyberswapProvider)).toEqual({rpcUrls: DEFAULT_RUNTIME_CONFIG.evmRpc, clientId: KYBER_CLIENT_ID});
+    vi.mocked(kyberswapProvider).mockClear();
+    expect(buildProviders(DEFAULT_RUNTIME_CONFIG, stores(true), {kyberswapDirect: false}).map((p) => p.name)).not.toContain("kyberswap");
+    expect(buildProviders(withFlags({kyberswap: false}), stores(true), {kyberswap: {base: KYBER_BASE, live: () => true}, kyberswapDirect: true}).map((p) => p.name)).not.toContain("kyberswap");
+    expect(kyberswapProvider).not.toHaveBeenCalled();
+  });
+});
 
 describe("0x and Across: Standard only, through cp0x's proxy, while health keys each (D38)", () => {
   const slot = (b: string, live: () => boolean) => ({base: b, live});

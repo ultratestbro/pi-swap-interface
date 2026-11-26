@@ -47,6 +47,7 @@
     "@anywalletkit/protocol-swap2-curve": "0.1.10",
     "@anywalletkit/protocol-swap2-fynd": "0.3.3",
     "@anywalletkit/protocol-swap2-jupiter": "0.3.14",
+    "@anywalletkit/protocol-swap2-kyberswap": "0.1.0",
     "@anywalletkit/protocol-swap2-lifi": "0.8.7",
     "@anywalletkit/protocol-swap2-near-intents": "0.3.11",
     "@anywalletkit/protocol-swap2-omniston": "0.5.13",

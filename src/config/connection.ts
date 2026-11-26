@@ -144,15 +144,17 @@ export function withoutCp0xApi(config: RuntimeConfig, fallback: RuntimeConfig, a
 }
 
 /** The proxy's venues, in the order Settings names them. */
-export const PROXY_VENUES: readonly ProxyVenue[] = ["lifi", "relay", "near_intents", "jupiter", "symbiosis", "fynd", "zeroex", "across"];
+export const PROXY_VENUES: readonly ProxyVenue[] = ["lifi", "relay", "near_intents", "jupiter", "symbiosis", "fynd", "zeroex", "across", "kyberswap"];
 
 /**
  * Venues reachable only through the proxy, so with no public base, no runtime-config base, no Custom key and no direct
  * fallback: Fynd's hosted API sends no CORS headers (checked 2026-11-12) and its key is cp0x's; 0x (Swap API v2,
  * `0x-api-key` on every request) and Across (API V5, `Authorization: Bearer`) want a key that can never ship in a page
- * (D38) — their modules run here with a placeholder the proxy replaces.
+ * (D38) — their modules run here with a placeholder the proxy replaces. KyberSwap (D52) in Standard mode: its keyed
+ * gateway (KyberSwap's terms for cp0x's traffic: the key, never the keyless API, from cp0x's pages), so no direct
+ * fallback there either; Public and Custom pages ask KyberSwap's keyless public API themselves (providers.ts).
  */
-export const PROXY_ONLY: ReadonlySet<ProxyVenue> = new Set(["fynd", "zeroex", "across"]);
+export const PROXY_ONLY: ReadonlySet<ProxyVenue> = new Set(["fynd", "zeroex", "across", "kyberswap"]);
 
 /** The runtime config's `api.*` key (and VenueKeys field) of each proxy venue that has one (not the PROXY_ONLY ones). */
 export const VENUE_API_KEY: Readonly<Partial<Record<ProxyVenue, keyof VenueKeys & keyof RuntimeConfig["api"]>>> = {

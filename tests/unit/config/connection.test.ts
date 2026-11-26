@@ -196,6 +196,7 @@ describe("Standard mode's page config (proxy slots)", () => {
       fynd: null,
       zeroex: null,
       across: null,
+      kyberswap: null,
     });
     // Nothing else moves: Chainflip, CCTP, prices and the rest stay public.
     expect(config.api.chainflip).toBe(D.api.chainflip);
@@ -210,14 +211,22 @@ describe("Standard mode's page config (proxy slots)", () => {
   });
 
   it("0x and Across get proxy-only slots the same way (D38): no public base, no config base, no viewer key; off, none", () => {
-    expect(PROXY_ONLY).toEqual(new Set(["fynd", "zeroex", "across"]));
-    expect(PROXY_VENUES.slice(-3)).toEqual(["fynd", "zeroex", "across"]);
+    expect(PROXY_ONLY).toEqual(new Set(["fynd", "zeroex", "across", "kyberswap"]));
+    expect(PROXY_VENUES.slice(-4)).toEqual(["fynd", "zeroex", "across", "kyberswap"]);
     const local = standardSlots(D, "http://127.0.0.1:3000").plan.venues;
     expect([local.zeroex, local.across]).toEqual([null, null]);
     const off = standardSlots({...D, providers: {...D.providers, zeroex: false, across: false}}, API).plan.venues;
     expect(["zeroex" in off, "across" in off]).toEqual([false, false]);
     expect(VENUE_API_KEY.zeroex).toBeUndefined();
     expect(VENUE_API_KEY.across).toBeUndefined();
+  });
+
+  it("KyberSwap gets a proxy-only slot on a Standard page (D52): cp0x's gateway key, never its keyless API from there", () => {
+    expect(PROXY_ONLY.has("kyberswap")).toBe(true);
+    expect(PROXY_VENUES.at(-1)).toBe("kyberswap");
+    expect(standardSlots(D, API).plan.venues.kyberswap).toBeNull();
+    expect("kyberswap" in standardSlots({...D, providers: {...D.providers, kyberswap: false}}, API).plan.venues).toBe(false);
+    expect(VENUE_API_KEY.kyberswap).toBeUndefined();
   });
 
   it("puts the proxy RPC FIRST in every list, the public URLs after it; an emptied list stays empty", () => {

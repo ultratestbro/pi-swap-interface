@@ -21,7 +21,7 @@ import {
   type WriteIntent,
   type WriteMethod,
 } from "../../../src/execute/gate";
-import {venueRule, VENUE_RULES} from "../../../src/execute/pins";
+import {pinnedVenueOf, venueRule, VENUE_RULES} from "../../../src/execute/pins";
 import {encodeFunctionData, erc20Abi} from "viem";
 import E from "./omnistonEscrow.fixture.json";
 
@@ -31,6 +31,7 @@ const SPENDER = "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d"; // CCTP TokenMesse
 const ROUTER = "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"; // LI.FI Diamond (pinned for lifi)
 const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const EVIL = "0x000000000000000000000000000000000000dEaD";
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
 
 const reviewed: ReviewedSwap = {
   provider: "cctp",
@@ -179,6 +180,25 @@ describe("checkPlanBrowser: the browser's checks on top", () => {
     expect(checkPlanBrowser(plan({approvals: [{token: USDC, spender: EVIL, amount: 100_000_000n}]}), evilReview, cctp)).toMatch(/doesn't trust/);
     expect(checkPlanBrowser(plan({source: {kind: "call", to: EVIL, data: "0x01", value: 0n}}), reviewed, cctp)).toMatch(/doesn't trust/);
     expect(checkPlanBrowser(plan({approvals: [], source: {kind: "call", to: SPENDER, value: 0n}}), reviewed, cctp)).toMatch(/plain transfer/);
+  });
+  describe("KyberSwap: MetaAggregationRouterV2 only (kyberPins, D52)", () => {
+    const ky = venueRule("kyberswap");
+    const ROUTER_V2 = "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5";
+    const review = {...reviewed, provider: "kyberswap", fromChain: "eip155:8453", fromContract: BASE_USDC, destChain: "eip155:8453", destToken: ZERO_ADDR, amountIn: 1_000_000n, minOut: 590_000_000_000_000n, approvalSpender: ROUTER_V2};
+    const kyPlan = (over: Partial<Swap2ExecutionPlan> = {}) =>
+      plan({provider: "kyberswap", fromChain: "eip155:8453", destChain: "eip155:8453", destToken: ZERO_ADDR, sourceAmount: 1_000_000n, destAmount: 595_000_000_000_000n, minDestAmount: 590_000_000_000_000n, approvals: [{token: BASE_USDC, spender: ROUTER_V2, amount: 1_000_000n, chainId: 8453}], source: {kind: "call", to: ROUTER_V2, data: "0xe21fd0e9", value: 0n, chainId: 8453}, ...over});
+    it("accepts swap() on the pinned router, approved to it for exactly the input", () => {
+      expect(checkPlanBrowser(kyPlan(), review, ky)).toBeNull();
+    });
+    it("refuses another call target or spender, and pays no deposit address", () => {
+      expect(checkPlanBrowser(kyPlan({source: {kind: "call", to: EVIL, data: "0xe21fd0e9", value: 0n, chainId: 8453}}), review, ky)).toMatch(/doesn't trust/);
+      expect(checkPlanBrowser(kyPlan({approvals: [{token: BASE_USDC, spender: EVIL, amount: 1_000_000n, chainId: 8453}]}), {...review, approvalSpender: EVIL}, ky)).toMatch(/doesn't trust/);
+      expect(checkPlanBrowser(kyPlan({approvals: [], source: {kind: "call", to: ROUTER_V2, value: 0n, chainId: 8453}}), review, ky)).toMatch(/plain transfer/);
+    });
+    it("the Approvals section calls an allowance on the router verified only where it has no owner whitelist (lite)", () => {
+      expect(pinnedVenueOf("eip155:143", ROUTER_V2)).toBe("kyberswap"); // Monad: lite
+      expect(pinnedVenueOf("eip155:8453", ROUTER_V2)).toBeNull(); // Base: generic (swapGeneric + whitelist)
+    });
   });
   describe("Stargate: its reviewed pools / OFTs only (stargateRegistry)", () => {
     const sg = venueRule("stargate");

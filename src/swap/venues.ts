@@ -39,6 +39,8 @@ export const VENUE_TRUST: Readonly<Record<string, VenueTrust>> = {
   across: "provider-api",
   // CoW's public orderbook quotes; the signed order is rebuilt here from the request and held to it, contracts pinned.
   cow: "provider-api",
+  // KyberSwap's API routes and builds; the router call is decoded here, held to the request and simulated before signing.
+  kyberswap: "provider-api",
 };
 
 /** A venue's badge level; an unknown venue counts as its own API. */

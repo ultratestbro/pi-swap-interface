@@ -6,6 +6,7 @@
     "balancer": true,
     "wrap": true,
     "cow": true,
+    "kyberswap": true,
     "usdt0": true,
     "stargate": true,
     "cctp": true,

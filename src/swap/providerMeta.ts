@@ -11,6 +11,7 @@ import {ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol
 import {WEB_ZEROEX_CHAINS} from "./zeroexChains";
 import {stargateRegistry} from "@anywalletkit/protocol-swap2-stargate/deployments";
 import {COW_DEPLOYMENTS, COW_VAULT_RELAYER, deploymentOf} from "@anywalletkit/protocol-swap2-cow";
+import {kyberChain} from "@anywalletkit/protocol-swap2-kyberswap/router";
 import {chainByCaip2Web} from "../catalog";
 
 /** Mobile lib/swap/providers.ts PROVIDER_NAMES, plus Curve, 0x, Across and CoW. */
@@ -34,6 +35,7 @@ export const PROVIDER_NAMES: Readonly<Record<string, string>> = {
   zeroex: "0x",
   across: "Across",
   cow: "CoW Protocol",
+  kyberswap: "KyberSwap",
 };
 
 /** A venue's display name; unknown names pass through. */
@@ -79,6 +81,9 @@ export const OMNISTON_ORDER_PROTOCOL: Readonly<Record<string, string>> = {
 
 /** 0x serves this EVM network (the page's table: Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, BNB Chain, Monad). */
 export const zeroExServes = (chain: string): boolean => !!zeroExChain(WEB_ZEROEX_CHAINS, zeroExChainId(chain));
+
+/** KyberSwap serves this EVM network (its package's KYBER_CHAINS: 18 networks, D52). */
+export const kyberServes = (chain: string): boolean => chain.startsWith("eip155:") && !!kyberChain(Number(chain.slice("eip155:".length)));
 
 /** CoW serves this EVM network (its package's deployments: Ethereum, Arbitrum, Base). */
 export const cowServes = (chain: string): boolean => chain.startsWith("eip155:") && !!deploymentOf(COW_DEPLOYMENTS, Number(chain.slice("eip155:".length)));
@@ -135,7 +140,7 @@ export interface ScopeSide {
 export const LISTED_ONLY_VENUES: ReadonlySet<string> = new Set(["usdt0", "stargate", "cctp", "thorchain", "chainflip", "near_intents", "symbiosis", "omniston", "across"]);
 
 /** Venues that also swap within one network (their own supportsSameChain); the router asks no other venue then. */
-const SAME_CHAIN_VENUES: ReadonlySet<string> = new Set(["lifi", "uniswap", "curve", "wrap", "balancer", "fynd", "jupiter", "omniston", "zeroex", "cow"]);
+const SAME_CHAIN_VENUES: ReadonlySet<string> = new Set(["lifi", "uniswap", "curve", "wrap", "balancer", "fynd", "jupiter", "omniston", "zeroex", "cow", "kyberswap"]);
 
 const isSymbol = (x: ScopeSide, ...names: string[]) => names.includes(x.symbol.toUpperCase());
 
@@ -267,6 +272,10 @@ function usualScope(provider: string, from: ScopeSide, to: ScopeSide): string {
       // Same network only, on its 3 chains (Ethereum, Arbitrum, Base).
       if (!sameNet) return "Same-network swaps only";
       return cowServes(from.caip2) ? "Doesn't cover this pair" : "Not on this network";
+    case "kyberswap":
+      // Same network only, on its 18 chains; native ⇄ wrapped is the Wrap venue's.
+      if (!sameNet) return "Same-network swaps only";
+      return kyberServes(from.caip2) ? "Doesn't cover this pair" : "Not on this network";
     case "stargate":
       return stargateScope(from, to);
     case "wrap":

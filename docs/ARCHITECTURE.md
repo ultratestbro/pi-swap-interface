@@ -1918,6 +1918,29 @@ quoting. A newer Settler on Monad is refused until this pin is raised; once prot
 test fails so the page's entry is dropped rather than overriding newer pins. Activity labels (`describeZeroExActivity`)
 read the module's default table, so a Monad 0x swap isn't labelled there — cosmetic.
 
+**D52 — KyberSwap (owner, 2026-11-26).** protocol-swap2-kyberswap 0.1.0: KyberSwap Aggregator, same-network exact-input
+swaps on 18 EVM chains, settled only through MetaAggregationRouterV2 (`0x6131…37b5`, pinned per chain). KyberSwap gave
+cp0x written consent to relay its quotes and builds and to show its name and logo as a route's source; cp0x has a
+gateway key (~6 req/s) that lives only in cp0x-api's env. The module's LOCAL provider runs in the page, in every mode:
+- Standard: `baseUrl` = cp0x's `kyberswap` slot and a placeholder key (as 0x, D38); the proxy forwards GET
+  `<slug>/api/v1/routes` and POST `<slug>/api/v1/route/build` to `api.kyberswap.com/swap` with cp0x's key (never
+  `x-client-id`, KyberSwap's rule for keyed traffic), the query and build body held to the SDK's fields (no fee, no
+  `extraFee` in the summary, no permit). Proxy-only (`PROXY_ONLY`): asked only while health keys it, never the keyless
+  API from a cp0x page. The slot is dark until cp0x-api has both `KYBERSWAP_API_KEY` and `KYBERSWAP_ENABLED=1`.
+- Public / Custom: KyberSwap's keyless public API from the browser (3 req/s per IP, a 429 cools it down), so a
+  self-hosted page never contacts cp0x.
+Every check is the module's, on this device: the build's calldata decoded strictly and re-encoded, held to the request
+(router, executor, tokens, amount, receiver, minimum ≥ the quote's and the engine's floor, no fee receivers, no permit,
+flags 0x200 only); the swap simulated before any approval (`approve+swap` in one `eth_simulateV1` block, or the plain
+call) and again before signing (`preflightDeposit`); gas is the account's own estimate (`ownGasEstimate`); the approval
+is exact and spent by the swap. The gate pins the router as the one call target and spender (`kyberPins`). Not
+`LISTED_ONLY` (an imported token is quoted). A dry quote is the route alone (no address needed, so previews ask it) and
+carries KyberSwap's own `priceImpactBps`, which D50's guard reads. `destAmount` is KyberSwap's ceiling; the row shows it
+and the minimum like any aggregator's. Execution is `calldata` (SIGNED_ONLY: a dry quote has no transaction). The
+Approvals section names an allowance on the router "verified" only on `lite` chains: on the 8 `generic` ones the
+router's owner whitelist could spend a leftover allowance, so one there is one to revoke. Refresh stays as it is
+(previews never poll; a live list every 30 s while visible), which fits KyberSwap's ask not to spam quotes.
+
 ## 5. Conventions
 
 - **TypeScript**: strict, `noUncheckedIndexedAccess`, `verbatimModuleSyntax` (use `import type`). Named exports

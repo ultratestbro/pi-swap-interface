@@ -62,7 +62,7 @@ afterEach(() => {
 describe("the health answer", () => {
   it("reads venues, RPC chains and the THORNode flag; anything else is not an answer", () => {
     expect(parseHealth({venues: {lifi: "keyed", relay: "nope"}, rpc: {configured: true, chains: ["1", "solana", "../x", 5]}, thornode: true})).toEqual({
-      venues: {lifi: "keyed", relay: "anonymous", near_intents: "anonymous", jupiter: "anonymous", symbiosis: "anonymous", fynd: "anonymous", zeroex: "anonymous", across: "anonymous"},
+      venues: {lifi: "keyed", relay: "anonymous", near_intents: "anonymous", jupiter: "anonymous", symbiosis: "anonymous", fynd: "anonymous", zeroex: "anonymous", across: "anonymous", kyberswap: "anonymous"},
       rpc: {configured: true, chains: ["1", "solana"]},
       thornode: true,
       etherscan: false,

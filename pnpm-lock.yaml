@@ -44,6 +44,9 @@ importers:
       '@anywalletkit/protocol-swap2-jupiter':
         specifier: 0.3.14
         version: 0.3.14(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-kyberswap':
+        specifier: 0.1.0
+        version: 0.1.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-lifi':
         specifier: 0.8.7
         version: 0.8.7(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
@@ -276,6 +279,12 @@ packages:
 
   '@anywalletkit/protocol-swap2-jupiter@0.3.14':
     resolution: {integrity: sha512-dvsfF4IghLFDG8AERavF+ZeZvfVettafExaclRTASc82NzfCzv8HO09cHB7Nr39E0WPyrc8g8gqCwwEJR7wjWA==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@anywalletkit/core': 0.9.0
+
+  '@anywalletkit/protocol-swap2-kyberswap@0.1.0':
+    resolution: {integrity: sha512-FWaopbbmgR8u+XoKkU8BYtF36TWiviw6Nm8eb2AEF5ZpU8oiJ4mlzogbIdhNck0B+0idCDg6KvUSSkz1JRoebw==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
@@ -3463,6 +3472,19 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - fastestsmallesttextencoderdecoder
+      - typescript
+      - utf-8-validate
+      - zod
+
+  '@anywalletkit/protocol-swap2-kyberswap@0.1.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+    dependencies:
+      '@anywalletkit/core': 0.9.0
+      '@anywalletkit/protocol-swap2-core': 0.17.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/protocol-swap2-wrap': 0.4.8(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+      '@anywalletkit/swap2-assets': 0.3.0
+      viem: 2.57.10(typescript@5.9.3)(zod@3.25.76)
+    transitivePeerDependencies:
+      - bufferutil
       - typescript
       - utf-8-validate
       - zod
