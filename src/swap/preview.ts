@@ -37,7 +37,9 @@
  * and recipient (`ACROSS_PLACEHOLDER`, the EVM sample) and never builds or signs it (protocol-swap2-across 0.1.0
  * verify.ts acrossRequestOf, provider.ts requestOf); stargate prices a dry quote with a blank sender or recipient for
  * its own placeholder, 0x1111…1111, and returns its transaction built for it (protocol-swap2-stargate 0.1.0, checked
- * live 2026-11-17) — never issued: a preview is never reviewable (D7), and a live quote carries the user's addresses.
+ * live 2026-11-17) — never issued: a preview is never reviewable (D7), and a live quote carries the user's addresses;
+ * kyberswap's dry quote is its GET /routes alone, which carries no address at all — it needs one only for the build of a
+ * live quote (protocol-swap2-kyberswap 0.1.0 chunk-DEWODPQQ.js getQuote: `!dry && !isAddr(destAddress)`).
  * The refund address is the user's real one or absent (never "": NEAR reads `refundAddress ?? its placeholder`).
  * Symbiosis' pacer (providers.ts) is the page's one, shared with live rounds: a preview burst queues in it and never
  * goes past its 1 request/s; a superseded round's queued call sends nothing (its signal is aborted).
@@ -134,6 +136,7 @@ export const PREVIEW_VENUES: ReadonlySet<string> = new Set([
   "zeroex",
   "across",
   "cow",
+  "kyberswap",
 ]);
 
 /**

@@ -13,7 +13,10 @@
  * - fynd, zeroex (0x) and across only in Standard mode, through cp0x's proxy and only while health keys each (Fynd's
  *   API takes no browser calls and its key is cp0x's; 0x's and Across's keys can never ship in a page, D38: their
  *   modules run here, every check on this device, with a placeholder key the proxy replaces); never in Public or
- *   Custom.
+ *   Custom;
+ * - kyberswap (D52) in every mode, but in Standard only through cp0x's proxy with cp0x's gateway key (KyberSwap's
+ *   terms for cp0x's traffic) and only while health keys it — never its keyless API from a cp0x page; Public and
+ *   Custom ask KyberSwap's keyless public API from this browser, which never contacts cp0x there.
  * Allowlists (LI.FI targets, THORChain routers, Omniston contracts) are code
  * here or in the SDK, never config.
  */
@@ -41,10 +44,11 @@ import {zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains
 import {WEB_ZEROEX_CHAINS, ZEROEX_EXTRA_CHAINS} from "./zeroexChains";
 import {acrossProvider} from "@anywalletkit/protocol-swap2-across/provider";
 import {cowProvider} from "@anywalletkit/protocol-swap2-cow/provider";
+import {kyberswapProvider} from "@anywalletkit/protocol-swap2-kyberswap/provider";
 import {COW_DEPLOYMENTS} from "@anywalletkit/protocol-swap2-cow";
 import {ACROSS_CHAINS} from "@anywalletkit/protocol-swap2-across/config";
 import type {ProviderName, RuntimeConfig, VenueKeys} from "../contracts/config";
-import {getRuntimeConfig, standardFetch, standardProxyOnly, venueKeys, type ProxyOnlySlot} from "../config";
+import {getRuntimeConfig, pageConnection, standardFetch, standardProxyOnly, venueKeys, type ProxyOnlySlot} from "../config";
 import {lazyOmniston} from "./omnistonLazy";
 import {coolDownOnRateLimit, isWrapPair, narrowRoute, paced, payoutToSigner, whileLive, withQuoteGap} from "./providerWrappers";
 import {rpcFailoverFetch} from "./rpcFailover";
@@ -63,6 +67,7 @@ export const DEFAULT_ON_PROVIDERS: readonly ProviderName[] = [
   "balancer",
   "wrap",
   "cow",
+  "kyberswap",
   "usdt0",
   "stargate",
   "cctp",
@@ -88,6 +93,12 @@ export const PROXY_KEY_PLACEHOLDER = "cp0x-swap-web-proxy-adds-the-key";
 
 /** How CoW's explorer names orders from this page (appData `appCode`; the orderbook asks integrations to name themselves). */
 export const COW_APP_CODE = "cp0x Swap";
+
+/**
+ * KyberSwap's `x-client-id` (keyless) and the build's `source`, which the router call carries on chain (`clientData`):
+ * how KyberSwap attributes this page's swaps.
+ */
+export const KYBER_CLIENT_ID = "cp0x";
 
 /** How long a firm 0x quote is offered (the module's default is 45 s): long enough to outlive an Ethereum approval. */
 export const ZEROEX_QUOTE_TTL_MS = 120_000;
@@ -141,6 +152,10 @@ export interface ProviderExtras {
   fynd?: ProxyOnlySlot;
   zeroex?: ProxyOnlySlot;
   across?: ProxyOnlySlot;
+  /** Standard's KyberSwap slot (its keyed gateway through cp0x's proxy, D52). */
+  kyberswap?: ProxyOnlySlot;
+  /** Public and Custom: KyberSwap's keyless public API straight from this browser (never on a Standard page). */
+  kyberswapDirect?: boolean;
 }
 
 /** The page's provider set. Call once (engine.ts caches it): a second set would lose Relay's issued-quote memory. */
@@ -153,6 +168,8 @@ export function buildProviders(
     fynd: standardProxyOnly("fynd"),
     zeroex: standardProxyOnly("zeroex"),
     across: standardProxyOnly("across"),
+    kyberswap: standardProxyOnly("kyberswap"),
+    kyberswapDirect: pageConnection().mode !== "standard",
   },
 ): CrossChainProvider[] {
   const on = config.providers;
@@ -177,6 +194,21 @@ export function buildProviders(
     const rpcUrls = Object.fromEntries(Object.keys(COW_DEPLOYMENTS).flatMap((id) => (evm[Number(id)]?.length ? [[Number(id), [...evm[Number(id)]!]]] : [])));
     const cow = cowProvider({enabled: true, rpcUrls, appCode: COW_APP_CODE});
     out.push(coolDownOnRateLimit(withQuoteGap(cow, config.pacing.cowGapMs)));
+  }
+  // KyberSwap Aggregator (D52): same-network swaps on its 18 EVM chains (the page's catalog has them all), settled through
+  // the pinned MetaAggregationRouterV2. The module's LOCAL provider runs here, so every check runs on this device: the
+  // build's calldata decoded strictly and held to the request (router, executor, tokens, amount, receiver, minimum, no
+  // fee receivers or permit), simulated over the page's RPCs before anything is approved and again before signing
+  // (preflightDeposit), gas the account's own estimate. Standard: its baseUrl is cp0x's slot, which forwards /routes and
+  // /route/build to KyberSwap's gateway with cp0x's key in place of the placeholder — asked only while the slot is
+  // live, never direct. Public / Custom: the keyless public API (3 requests a second per IP; a 429 cools it down).
+  if (on.kyberswap) {
+    if (extras.kyberswap) {
+      const slot = extras.kyberswap;
+      out.push(whileLive(kyberswapProvider({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: slot.base, rpcUrls: evm, clientId: KYBER_CLIENT_ID}), slot.live));
+    } else if (extras.kyberswapDirect) {
+      out.push(coolDownOnRateLimit(kyberswapProvider({rpcUrls: evm, clientId: KYBER_CLIENT_ID})));
+    }
   }
   // The Legacy Mesh into TON and Tron (Ethereum USDT, Arbitrum USDT0) is named here, not left to the SDK's default
   // (TON only). Tron's LayerZero fee is above the engine's native-fee cap: execute.ts nativeFeeCeiling raises it for

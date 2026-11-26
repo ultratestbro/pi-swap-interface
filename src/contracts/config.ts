@@ -27,7 +27,8 @@ export type ProviderName =
   | "omniston"
   | "zeroex"
   | "across"
-  | "cow";
+  | "cow"
+  | "kyberswap";
 
 export interface RuntimeConfig {
   /** Render fixtures only: no wallets, no network (also `?demo=1` in the hash query). */
@@ -107,7 +108,7 @@ export type ConnectionMode = "standard" | "public" | "custom";
  * reachable only through it: Fynd's API sends no CORS headers, and all three need a key that is cp0x's (0x's
  * `0x-api-key`, Across's V5 `Authorization: Bearer`; D38), so they have no public base and no direct fallback.
  */
-export type ProxyVenue = "lifi" | "relay" | "near_intents" | "jupiter" | "symbiosis" | "fynd" | "zeroex" | "across";
+export type ProxyVenue = "lifi" | "relay" | "near_intents" | "jupiter" | "symbiosis" | "fynd" | "zeroex" | "across" | "kyberswap";
 
 /**
  * The viewer's own venue keys (Custom mode only), each sent only to its venue in a request header: LI.FI

@@ -1401,6 +1401,15 @@ feeHeadroomBps?, compose?, nativeDrop?, …})`. Off in the package until `enable
   proven from finalized receipts on both networks (≈ 15–20 min Arbitrum ↔ Base). Recovery (a cached token, an
   undelivered message) is a separate paid action the app doesn't offer.
 
+### 4.21 KyberSwap, `kyberswap`: every mode (2026-11-26; ARCHITECTURE D52)
+
+`kyberswapProvider` (protocol-swap2-kyberswap 0.1.0), same network only, its 18 `KYBER_CHAINS`. Standard: `{apiKey:
+PROXY_KEY_PLACEHOLDER, baseUrl: <slot>, rpcUrls: evm, clientId: "cp0x"}` behind `whileLive` (cp0x's gateway key, added
+by the proxy). Public / Custom: `{rpcUrls: evm, clientId: "cp0x"}` behind `coolDownOnRateLimit` (keyless public API).
+Gate: `pinned(kyberPins)` (router = call target and spender). Preview: yes (the dry quote needs no address). Scope line:
+"Same-network swaps only" / "Not on this network" / "Doesn't cover this pair". Refusals use the module's reasons
+(`rate_limited`, `simulation_failed`, `price_check_failed`, …); no venue-specific texts yet.
+
 ## 5. Persistent stores (`src/swap/stores.ts`)
 
 ### 5.1 Contract

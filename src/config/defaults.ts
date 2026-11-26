@@ -80,6 +80,7 @@ export const DEFAULT_PROVIDERS: Readonly<Record<ProviderName, boolean>> = {
   balancer: true,
   wrap: true,
   cow: true,
+  kyberswap: true,
   usdt0: true,
   stargate: true,
   cctp: true,

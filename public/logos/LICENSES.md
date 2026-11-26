@@ -61,6 +61,11 @@ relicensed here.
 32 / 64 px with the tile filling the square. CoW DAO's trademark, used nominatively to name the venue; no endorsement
 is implied, and it is not relicensed here.
 
+`kyberswap.png`, `kyberswap@2x.png` (KyberSwap) — Kyber Network's mark (the KNC token's) on its green tile as
+web3icons draws it (`dist/svgs/tokens/background/KNC.svg` of `@web3icons/core` 4.0.59, MIT, above), rendered here
+(2026-11-26) to 32 / 64 px with the tile filling the square. Kyber Network's trademark; KyberSwap agreed in writing to
+cp0x showing its name and logo as a route's source. Not relicensed here.
+
 ## `walletconnect.svg` — WalletConnect's icon
 
 `Icon/Blue (Default)/Icon.svg` from WalletConnect's brand toolkit, https://github.com/WalletConnect/walletconnect-assets

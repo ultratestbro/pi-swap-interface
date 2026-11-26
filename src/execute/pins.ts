@@ -38,6 +38,7 @@ import {ZEROEX_MAX_PERMIT_SECONDS} from "@anywalletkit/protocol-swap2-0x/settler
 import {acrossPins} from "@anywalletkit/protocol-swap2-across/verify";
 import {GPV2_VAULT_RELAYER} from "@anywalletkit/protocol-swap2-core";
 import {COW_DEPLOYMENTS, deploymentOf} from "@anywalletkit/protocol-swap2-cow";
+import {kyberChain, kyberPins} from "@anywalletkit/protocol-swap2-kyberswap/router";
 import {appProviders, orderSpender, zeroExServes, zeroExSettlers} from "../swap";
 import type {TronRule, VenueRule} from "./gate";
 
@@ -100,6 +101,9 @@ export const VENUE_RULES: Readonly<Record<string, VenueRule>> = {
   // CoW Protocol (D48): a signed GPv2 order for a token sale, eth-flow's createOrder for a native one, the vault relayer
   // as the only spender — held by gate.ts gpv2Problem to the package's pinned deployments.
   cow: {kind: "gpv2"},
+  // KyberSwap (D52): MetaAggregationRouterV2 on its 18 chains, the call target and the one spender (exact approval,
+  // spent by the swap itself).
+  kyberswap: pinned(kyberPins),
   near_intents: {kind: "deposit"},
 };
 
@@ -119,6 +123,10 @@ export function pinnedVenueOf(caip2: string, address: string): string | null {
   const a = address.toLowerCase();
   for (const [venue, rule] of Object.entries(VENUE_RULES)) {
     if (rule.kind === "deposit") continue;
+    // KyberSwap's router where it is the 2022 build (`generic`: swapGeneric and an owner-managed whitelist) could be
+    // made to spend an allowance left on it by its owner's key: the swap never leaves one, so one that is there is not
+    // "verified" — it is one to revoke.
+    if (venue === "kyberswap" && kyberChain(Number(caip2.slice("eip155:".length)))?.build !== "lite") continue;
     let listed: readonly string[] = [];
     try {
       listed = rule.kind === "gpv2" ? cowSpenders(caip2) : rule.pins.spenders(caip2);

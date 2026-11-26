@@ -546,7 +546,7 @@ export interface ProxyOnlySlot {
 }
 
 /** The venues only cp0x's proxy reaches (connection.ts PROXY_ONLY), as providers.ts builds them. */
-export type ProxyOnlyVenue = "fynd" | "zeroex" | "across";
+export type ProxyOnlyVenue = "fynd" | "zeroex" | "across" | "kyberswap";
 
 /**
  * A proxy-only venue's slot on this page (Standard only, and only when the page builds that venue), else undefined:

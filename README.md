@@ -97,6 +97,7 @@ The venues are independent services with their own rules, and cp0x cannot change
 | Balancer v2 | same-chain swaps | Vault `queryBatchSwap`, over your RPC; paths from the Balancer API | ON-CHAIN | on |
 | Wrap | native coin ⇄ wrapped native (ETH ⇄ WETH, …) | WETH9-style contract | ON-CHAIN | on |
 | CoW Protocol | same-chain swaps on Ethereum, Arbitrum and Base as signed orders that solvers fill: a token sale costs no gas (a gas-free permit where the token has one, else an exact approval), ETH is sold through CoW's eth-flow contract | CoW's public orderbook API, straight from your browser; the order is rebuilt and checked here | API | on |
+| KyberSwap | same-chain swaps on 18 EVM networks through KyberSwap's aggregator; no integrator fee | KyberSwap's API (through cp0x with cp0x's key in Standard mode, straight from your browser otherwise); its router call is decoded, checked against your request and simulated here before you sign | API | on |
 | USDT0 | USDT0 between chains (LayerZero OFT) | OFT `quoteSend`, over your RPC; LayerZero Scan for status | ON-CHAIN | on |
 | Circle CCTP V2 | USDC between chains (burn, then mint on the destination) | contracts; Circle's attestation API to mint | ON-CHAIN | on |
 | THORChain | native cross-chain swaps (BTC, ETH, …) | THORNode API; two node operators cross-check the vault | NODE | on |
@@ -284,7 +285,7 @@ key in it.** An RPC key is only acceptable if its provider restricts it to your 
 | key | default | what it does |
 |---|---|---|
 | `demo` | `false` | Fixtures only: no wallets, no network. |
-| `providers.<name>` | `true` | Build that venue at all (`false` switches it off). Names: `uniswap curve balancer wrap cow usdt0 cctp thorchain chainflip near_intents lifi relay symbiosis jupiter omniston fynd zeroex across` (`fynd`, `zeroex` and `across` are built only in Standard mode). |
+| `providers.<name>` | `true` | Build that venue at all (`false` switches it off). Names: `uniswap curve balancer wrap cow kyberswap usdt0 cctp thorchain chainflip near_intents lifi relay symbiosis jupiter omniston fynd zeroex across` (`fynd`, `zeroex` and `across` are built only in Standard mode). |
 | `evmRpc.<chainId>` | public RPCs per chain | JSON-RPC URLs tried in order. Used for balances, simulation, provider reads and the wallet's chain definitions. |
 | `solanaRpc` | publicnode, solanavibestation | Solana RPCs tried in order. `api.mainnet-beta.solana.com` is left out because it refuses browser origins. |
 | `nearRpc` | FastNear | NEAR RPCs tried in order, asked directly in every mode, only once a NEAR wallet is connected. `[]` = no NEAR reads: balances stay unknown and a NEAR wallet's deposits are refused before signing. |
