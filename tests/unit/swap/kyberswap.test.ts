@@ -7,6 +7,9 @@ import type {CrossChainProvider, QuoteParams} from "@anywalletkit/protocol-swap2
 import {KYBER_EXECUTOR, KYBER_NATIVE, KYBER_ROUTER_ABI, KYBER_ROUTER_V2} from "@anywalletkit/protocol-swap2-kyberswap/router";
 import {DEFAULT_RUNTIME_CONFIG} from "../../../src/config";
 import {buildProviders, PROXY_KEY_PLACEHOLDER} from "../../../src/swap/providers";
+import {orderSpender} from "../../../src/swap/providerMeta";
+import {toRouteView} from "../../../src/swap/routes";
+import {APPROVE_GAS, routeGasUnits} from "../../../src/swap/gas";
 import {createProviderStores} from "../../../src/swap/stores";
 
 const SLOT = "https://api.test/api/v2/swap-web/venue/kyberswap";
@@ -175,5 +178,18 @@ describe("KyberSwap through cp0x's slot (D52)", () => {
     expect(p.supportsChain?.("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")).toBe(false);
     expect(p.supportsRoute({chain: "eip155:8453", token: "ETH"}, {chain: "eip155:8453", token: "WETH"})).toBe(false);
     expect(p.supportsRoute({chain: "eip155:8453", token: "ETH"}, {chain: "eip155:8453", token: USDC})).toBe(true);
+  });
+
+  it("a token sale's dry quote is reviewed with the router as its spender, so the live plan's exact approval is the reviewed one", () => {
+    // The dry quote carries no transaction: the review must still name the approval (it read "Not needed", and the
+    // gate then refused the live plan's approval as one the user didn't review — Base USDC → ETH, 2026-11-26).
+    const dry = {provider: "kyberswap", sourceAmount: "5000000", destAmount: "2944000000000000", minDestAmount: "2940000000000000", feeUsd: 0, providerData: {approvalAddress: KYBER_ROUTER_V2}} as never;
+    expect(toRouteView(dry, {chain: "eip155:8453", isToken: true}).approvalSpender).toBe(KYBER_ROUTER_V2);
+    expect(toRouteView(dry, {chain: "eip155:8453", isToken: false}).approvalSpender).toBeNull();
+    expect(orderSpender("kyberswap", "eip155:143")).toBe(KYBER_ROUTER_V2);
+    expect(orderSpender("kyberswap", "eip155:250")).toBeNull();
+    expect(orderSpender("kyberswap", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")).toBeNull();
+    // The route row's gas counts that approval too.
+    expect(routeGasUnits(dry, true) - routeGasUnits({...(dry as object), providerData: {}}, true)).toBe(APPROVE_GAS);
   });
 });
