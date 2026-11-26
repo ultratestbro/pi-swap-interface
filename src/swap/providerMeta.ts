@@ -11,7 +11,7 @@ import {ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol
 import {WEB_ZEROEX_CHAINS} from "./zeroexChains";
 import {stargateRegistry} from "@anywalletkit/protocol-swap2-stargate/deployments";
 import {COW_DEPLOYMENTS, COW_VAULT_RELAYER, deploymentOf} from "@anywalletkit/protocol-swap2-cow";
-import {kyberChain} from "@anywalletkit/protocol-swap2-kyberswap/router";
+import {KYBER_ROUTER_V2, kyberChain} from "@anywalletkit/protocol-swap2-kyberswap/router";
 import {chainByCaip2Web} from "../catalog";
 
 /** Mobile lib/swap/providers.ts PROVIDER_NAMES, plus Curve, 0x, Across and CoW. */
@@ -94,8 +94,12 @@ export const cowServes = (chain: string): boolean => chain.startsWith("eip155:")
  * quote. Chainflip: a dry quote carries no txRequest, so the vault it will call
  * (CF_VAULTS) is named here. 0x: a price (dry) answer carries no transaction;
  * its token sales approve canonical Permit2 only, never a 0x contract (the
- * Settler pulls the input through a one-time Permit2 signature, D38). Every
- * other EVM venue names txRequest.approvalAddress in its dry quote.
+ * Settler pulls the input through a one-time Permit2 signature, D38).
+ * KyberSwap: its dry quote is the route alone (no txRequest; the router only in
+ * providerData), and every token sale approves exactly the input to the pinned
+ * MetaAggregationRouterV2 (D52) — named here from the package, never from the
+ * API's answer. Every other EVM venue names txRequest.approvalAddress in its
+ * dry quote.
  */
 export function orderSpender(provider: string, chain: string): string | null {
   if (provider === "omniston") return OMNISTON_ORDER_PROTOCOL[chain] ?? null;
@@ -103,6 +107,7 @@ export function orderSpender(provider: string, chain: string): string | null {
   if (provider === "zeroex" && zeroExServes(chain)) return ZEROEX_PERMIT2;
   // CoW (D48): a token sale's allowance goes to the GPv2 vault relayer (or an EIP-2612 permit for it, decided at Confirm).
   if (provider === "cow" && cowServes(chain)) return COW_VAULT_RELAYER;
+  if (provider === "kyberswap" && kyberServes(chain)) return KYBER_ROUTER_V2;
   return null;
 }
 

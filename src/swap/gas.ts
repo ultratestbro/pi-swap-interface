@@ -33,7 +33,8 @@ export function routeGasUnits(q: QuoteGasLike, sourceIsToken: boolean): bigint {
   if (q.gasless && !t) return sourceIsToken && q.providerData?.permit !== "offered" ? APPROVE_GAS : 0n;
   const limit = t?.gasLimit && /^\d+$/.test(t.gasLimit) ? BigInt(t.gasLimit) : null;
   const main = limit ?? (t?.to ? CALL_GAS : sourceIsToken ? TOKEN_TRANSFER_GAS : NATIVE_TRANSFER_GAS);
-  return main + (sourceIsToken && t?.approvalAddress ? APPROVE_GAS : 0n);
+  // A dry quote without its transaction may name its spender in providerData (KyberSwap's route, D52): still an approval.
+  return main + (sourceIsToken && (t?.approvalAddress ?? q.providerData?.approvalAddress) ? APPROVE_GAS : 0n);
 }
 
 /** Gas units × gas price (wei) in USD at the native coin's price. */
