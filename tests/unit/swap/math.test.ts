@@ -80,6 +80,9 @@ describe("slippage", () => {
     expect(autoSlippageBps("ETH", "usdc", true)).toBe(5);
     expect(autoSlippageBps("WETH", "wstETH", true)).toBe(5);
     expect(autoSlippageBps("USDC", "DAI", true)).toBe(5);
+    // Curve's and Frax's dollars and Gnosis' native dollar (and its wrapper) are stables too (owner, 2026-11-28).
+    for (const s of ["crvUSD", "frxUSD", "xDAI", "WXDAI"]) expect(autoSlippageBps(s, "USDC", true), s).toBe(5);
+    expect(autoSlippageBps("crvUSD", "USDC", false)).toBe(30);
     expect(autoSlippageBps("WBTC", "cbBTC", true)).toBe(5);
     // Across networks, or a long-tail token: 0.3 %.
     expect(autoSlippageBps("USDC", "USDT")).toBe(30);
