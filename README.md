@@ -92,7 +92,7 @@ The venues are independent services with their own rules, and cp0x cannot change
 
 | venue | what it does | quotes come from | badge | default |
 |---|---|---|---|---|
-| Uniswap v3 | same-chain swaps on EVM chains | QuoterV2 contract, over your RPC | ON-CHAIN | on |
+| Uniswap v3 / v4 | same-chain swaps on EVM chains, one row per version | QuoterV2 / V4Quoter contracts, over your RPC | ON-CHAIN | on |
 | Curve | same-chain swaps over a pinned list of checked pools (Ethereum, Arbitrum, Base, OP Mainnet, Gnosis, Monad, Plasma, X Layer) | Router NG `get_dy`, over your RPC | ON-CHAIN | on |
 | Balancer v2 | same-chain swaps | Vault `queryBatchSwap`, over your RPC; paths from the Balancer API | ON-CHAIN | on |
 | Wrap | native coin ⇄ wrapped native (ETH ⇄ WETH, …) | WETH9-style contract | ON-CHAIN | on |

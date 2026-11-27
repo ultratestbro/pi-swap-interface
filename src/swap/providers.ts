@@ -40,8 +40,7 @@ import {stargateProvider} from "@anywalletkit/protocol-swap2-stargate/provider";
 import {wrapProvider} from "@anywalletkit/protocol-swap2-wrap/provider";
 import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider";
 import type {SettlerResolver} from "@anywalletkit/protocol-swap2-0x/settler";
-import {zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
-import {WEB_ZEROEX_CHAINS, ZEROEX_EXTRA_CHAINS} from "./zeroexChains";
+import {ZEROEX_CHAINS, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
 import {acrossProvider} from "@anywalletkit/protocol-swap2-across/provider";
 import {cowProvider} from "@anywalletkit/protocol-swap2-cow/provider";
 import {kyberswapProvider} from "@anywalletkit/protocol-swap2-kyberswap/provider";
@@ -113,7 +112,7 @@ const settlerResolvers = new WeakMap<CrossChainProvider, SettlerResolver>();
  */
 export function zeroExSettlers(providers: readonly CrossChainProvider[], chain: string): readonly string[] {
   const id = zeroExChainId(chain);
-  if (!zeroExChain(WEB_ZEROEX_CHAINS, id)) return [];
+  if (!zeroExChain(ZEROEX_CHAINS, id)) return [];
   for (const p of providers) {
     const r = p.name === "zeroex" ? settlerResolvers.get(p) : undefined;
     if (r) return r.known(id);
@@ -179,7 +178,9 @@ export function buildProviders(
   const out: CrossChainProvider[] = [];
 
   // ── default on, in DEFAULT_ON_PROVIDERS order ──
-  if (on.uniswap) out.push(uniswapProvider({rpcUrls: evm}));
+  // v3 and v4 as two rows (D53): one ranking pass offers each venue's best route (routeId "v3" / "v4"); v4 on pinned
+  // hookless pools only — native input straight to Universal Router 2.1.2, token input through Uniswap's SwapProxy.
+  if (on.uniswap) out.push(uniswapProvider({rpcUrls: evm, v4: "all", venueRoutes: "both"}));
   // Router NG get_dy / exchange over the same RPC table (batches of ≤ 10), pinned pools only; keyless.
   if (on.curve) out.push(curveProvider({rpcUrls: evm}));
   // The SOR (its API) only suggests paths; the Vault prices them on-chain over the RPC table (queryBatchSwap).
@@ -311,8 +312,8 @@ export function buildProviders(
     // (the wallet's prompt, then a block or two) asked for the permit twice: permit, approve, permit. 0x's permits
     // run 300 s and the module keeps a quote 20 s inside that; the Settler still holds the swap to the minimum.
     const slot = extras.zeroex;
-    // chains: the module's seven plus Monad, pinned from the chain (zeroexChains.ts, D51).
-    const zeroex = zeroExProvider({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: slot.base, rpcUrls: evm, quoteTtlMs: ZEROEX_QUOTE_TTL_MS, chains: ZEROEX_EXTRA_CHAINS});
+    // chains: the module's own eight, Monad among them since protocol-swap2-0x 0.2.0 (D51).
+    const zeroex = zeroExProvider({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: slot.base, rpcUrls: evm, quoteTtlMs: ZEROEX_QUOTE_TTL_MS});
     const live = whileLive(zeroex, slot.live);
     settlerResolvers.set(live, zeroex.settlerResolver);
     out.push(live);
