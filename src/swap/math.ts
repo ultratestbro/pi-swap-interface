@@ -72,7 +72,7 @@ export function parsePastedAmount(text: string, decimals: number): PastedAmount 
 
 export const DEFAULT_SLIPPAGE_BPS = 50;
 
-const STABLES = new Set(["USDT", "USDC", "DAI", "USDE", "USDT0", "USDC.E", "USDBC", "PYUSD", "USDG", "USDS", "FDUSD", "TUSD", "USD1", "AUSD", "FRAX", "GHO", "LUSD"]);
+const STABLES = new Set(["USDT", "USDC", "DAI", "USDE", "USDT0", "USDC.E", "USDBC", "PYUSD", "USDG", "USDS", "FDUSD", "TUSD", "USD1", "AUSD", "FRAX", "GHO", "LUSD", "CRVUSD", "FRXUSD", "XDAI", "WXDAI"]);
 const MAJORS = new Set(["ETH", "WETH", "STETH", "WSTETH", "CBETH", "RETH", "WEETH", "BTC", "WBTC", "CBBTC", "BTCB", "TBTC", "SOL", "JITOSOL", "MSOL", "BNB", "WBNB", "TON", "TRX", "POL", "AVAX", "ARB", "OP"]);
 
 /**
