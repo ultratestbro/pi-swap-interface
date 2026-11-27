@@ -19,7 +19,6 @@ import {stargateProvider} from "@anywalletkit/protocol-swap2-stargate/provider";
 import {kyberswapProvider} from "@anywalletkit/protocol-swap2-kyberswap/provider";
 import {wrapProvider} from "@anywalletkit/protocol-swap2-wrap/provider";
 import {zeroExProvider} from "@anywalletkit/protocol-swap2-0x/provider";
-import {ZEROEX_EXTRA_CHAINS} from "../../../src/swap/zeroexChains";
 import {acrossProvider} from "@anywalletkit/protocol-swap2-across/provider";
 import {ACROSS_CHAINS} from "@anywalletkit/protocol-swap2-across/config";
 import {encodeFunctionData, zeroAddress} from "viem";
@@ -416,6 +415,8 @@ describe("buildProviders: options", () => {
     // Stargate: keyless, quoted from its pools over the same table (both networks), on in every mode.
     expect(lastConfig(stargateProvider)).toEqual({enabled: true, rpcUrls: evmRpcByCaip2(DEFAULT_RUNTIME_CONFIG.evmRpc), scanUrl: DEFAULT_RUNTIME_CONFIG.api.layerZeroScan});
     expect(lastConfig(uniswapProvider).rpcUrls).toBe(DEFAULT_RUNTIME_CONFIG.evmRpc);
+    // v3 and v4 as two rows (D53): v4 on for native and token input, each venue's best route offered.
+    expect(lastConfig(uniswapProvider)).toMatchObject({v4: "all", venueRoutes: "both"});
     expect(lastConfig(wrapProvider).rpcUrls).toBe(DEFAULT_RUNTIME_CONFIG.evmRpc);
     expect(lastConfig(balancerProvider).rpcUrls).toBe(DEFAULT_RUNTIME_CONFIG.evmRpc);
   });
@@ -699,9 +700,8 @@ describe("0x and Across: Standard only, through cp0x's proxy, while health keys 
     const names = buildProviders(config, stores(true), {fynd: slot(FYND_BASE, () => true), zeroex: slot(ZEROEX_BASE, () => true), across: slot(ACROSS_BASE, () => true)}).map((p) => p.name);
     expect(names.slice(-3)).toEqual(["fynd", "zeroex", "across"]);
     const zx = lastConfig(zeroExProvider);
-    expect(Object.keys(zx).sort()).toEqual(["apiKey", "baseUrl", "chains", "quoteTtlMs", "rpcUrls"]);
-    // The module's seven chains plus Monad, pinned from the chain (D51): nothing else is added or replaced.
-    expect(zx.chains).toBe(ZEROEX_EXTRA_CHAINS);
+    // No `chains`: the module's own table (Monad in it since 0.2.0, D51) — an entry here would replace the module's whole.
+    expect(Object.keys(zx).sort()).toEqual(["apiKey", "baseUrl", "quoteTtlMs", "rpcUrls"]);
     expect(zx).toMatchObject({apiKey: PROXY_KEY_PLACEHOLDER, baseUrl: ZEROEX_BASE});
     // A firm quote outlives an Ethereum approval, so the engine doesn't re-quote and ask for a second permit; 0x's
     // permits run 300 s and the module keeps a quote 20 s inside that.

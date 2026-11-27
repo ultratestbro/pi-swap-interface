@@ -7,8 +7,7 @@
 import {ACROSS_NATIVE, acrossRouteOf} from "@anywalletkit/protocol-swap2-across/config";
 import {acrossRouteUnpriced} from "@anywalletkit/protocol-swap2-across/pricing";
 import {CF_VAULTS} from "@anywalletkit/protocol-swap2-chainflip/config";
-import {ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
-import {WEB_ZEROEX_CHAINS} from "./zeroexChains";
+import {ZEROEX_CHAINS, ZEROEX_PERMIT2, zeroExChain, zeroExChainId} from "@anywalletkit/protocol-swap2-0x/chains";
 import {stargateRegistry} from "@anywalletkit/protocol-swap2-stargate/deployments";
 import {COW_DEPLOYMENTS, COW_VAULT_RELAYER, deploymentOf} from "@anywalletkit/protocol-swap2-cow";
 import {KYBER_ROUTER_V2, kyberChain} from "@anywalletkit/protocol-swap2-kyberswap/router";
@@ -48,8 +47,13 @@ export const providerName = (p: string): string => PROVIDER_NAMES[p] ?? p;
  */
 const ROUTE_NAMES: Readonly<Record<string, Readonly<Record<string, string>>>> = {cctp: {fast: "Fast", standard: "Standard"}};
 
-/** A route's display name: "Circle CCTP · Standard"; a route not named above reads as its venue ("Stargate"). */
+/** Routes whose name is the venue's own version, read as one name (D53): "Uniswap v3", "Uniswap v4". */
+const ROUTE_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {uniswap: {v3: "Uniswap v3", v4: "Uniswap v4"}};
+
+/** A route's display name: "Circle CCTP · Standard", "Uniswap v4"; a route not named above reads as its venue ("Stargate"). */
 export function routeName(provider: string, routeId?: string): string {
+  const labels = Object.hasOwn(ROUTE_LABELS, provider) ? ROUTE_LABELS[provider]! : undefined;
+  if (routeId !== undefined && labels && Object.hasOwn(labels, routeId)) return labels[routeId]!;
   const names = Object.hasOwn(ROUTE_NAMES, provider) ? ROUTE_NAMES[provider]! : undefined;
   const route = routeId !== undefined && names && Object.hasOwn(names, routeId) ? names[routeId] : undefined;
   return route ? `${providerName(provider)} · ${route}` : providerName(provider);
@@ -80,7 +84,7 @@ export const OMNISTON_ORDER_PROTOCOL: Readonly<Record<string, string>> = {
 };
 
 /** 0x serves this EVM network (the page's table: Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, BNB Chain, Monad). */
-export const zeroExServes = (chain: string): boolean => !!zeroExChain(WEB_ZEROEX_CHAINS, zeroExChainId(chain));
+export const zeroExServes = (chain: string): boolean => !!zeroExChain(ZEROEX_CHAINS, zeroExChainId(chain));
 
 /** KyberSwap serves this EVM network (its package's KYBER_CHAINS: 18 networks, D52). */
 export const kyberServes = (chain: string): boolean => chain.startsWith("eip155:") && !!kyberChain(Number(chain.slice("eip155:".length)));

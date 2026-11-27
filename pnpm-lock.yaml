@@ -15,8 +15,8 @@ importers:
         specifier: 0.6.1
         version: 0.6.1(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-0x':
-        specifier: 0.1.6
-        version: 0.1.6(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.2.0
+        version: 0.2.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-across':
         specifier: 0.1.4
         version: 0.1.4(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
@@ -72,8 +72,8 @@ importers:
         specifier: 0.4.7
         version: 0.4.7(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-uniswap':
-        specifier: 0.4.11
-        version: 0.4.11(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
+        specifier: 0.5.0
+        version: 0.5.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
       '@anywalletkit/protocol-swap2-usdt0':
         specifier: 0.5.7
         version: 0.5.7(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
@@ -223,8 +223,8 @@ packages:
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-0x@0.1.6':
-    resolution: {integrity: sha512-XFpMXzWmicb6cbkAmxumszJaYj2LW8FlE8VAzNHRCR/pDjSPvCLRFlifr/zNzSzWnmNYwGVvZhPZmi+6hrbarA==}
+  '@anywalletkit/protocol-swap2-0x@0.2.0':
+    resolution: {integrity: sha512-HXSbo2pLCdBWtYc9gApRNNDOZkx4oiBXJyYMpKq2r5RgqIxTC/ZbV8JC2sEPwn5MZqeIkO4nNcFHs59kzQ3VaQ==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
@@ -337,8 +337,8 @@ packages:
     peerDependencies:
       '@anywalletkit/core': 0.9.0
 
-  '@anywalletkit/protocol-swap2-uniswap@0.4.11':
-    resolution: {integrity: sha512-z+DlLuEDuZWXh3Pi/nqwDA0+kpTZ54vfR4MKnvsxglV00QmNf70/+7byBTyDn5qdj+x2UnE3Gi9tZWu9qWMKeQ==}
+  '@anywalletkit/protocol-swap2-uniswap@0.5.0':
+    resolution: {integrity: sha512-MK7iRXWUhuOV0PBDcG9la3MZ2ytx4oYRD1b8DenQrAVYRd63aT1y1tK3xC4/Hnc5xXUuOQDy1ISDilkS7s+fCw==}
     engines: {node: '>=22'}
     peerDependencies:
       '@anywalletkit/core': 0.9.0
@@ -3355,7 +3355,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-0x@0.1.6(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-0x@0.2.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
       '@anywalletkit/protocol-swap2-core': 0.17.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)
@@ -3591,7 +3591,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@anywalletkit/protocol-swap2-uniswap@0.4.11(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
+  '@anywalletkit/protocol-swap2-uniswap@0.5.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)':
     dependencies:
       '@anywalletkit/core': 0.9.0
       '@anywalletkit/protocol-swap2-core': 0.17.0(@anywalletkit/core@0.9.0)(typescript@5.9.3)(zod@3.25.76)

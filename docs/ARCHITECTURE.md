@@ -1917,6 +1917,11 @@ they hold code, the transaction is decoded and held to the request, Permit2 is t
 quoting. A newer Settler on Monad is refused until this pin is raised; once protocol-swap2-0x pins Monad itself, a unit
 test fails so the page's entry is dropped rather than overriding newer pins. Activity labels (`describeZeroExActivity`)
 read the module's default table, so a Monad 0x swap isn't labelled there — cosmetic.
+*Superseded 2026-11-27:* protocol-swap2-0x 0.2.0 pins Monad itself — the same pair (12/11) and WMON, plus a gas cap of
+its own (`maxGasLimit` 15,000,000; 0x splits a large MON sale across many pools, and under the default 6,000,000 sales
+from about $10,000 were refused). A `chains` entry replaces the module's entry whole, so the page's would have put the
+6M cap back: `swap/zeroexChains.ts` is gone and the provider, `orderSpender`/`venueScope` and the execute pins read the
+module's `ZEROEX_CHAINS`. Activity labels now cover Monad too.
 
 **D52 — KyberSwap (owner, 2026-11-26).** protocol-swap2-kyberswap 0.1.0: KyberSwap Aggregator, same-network exact-input
 swaps on 18 EVM chains, settled only through MetaAggregationRouterV2 (`0x6131…37b5`, pinned per chain). KyberSwap gave
@@ -1940,6 +1945,22 @@ and the minimum like any aggregator's. Execution is `calldata` (SIGNED_ONLY: a d
 Approvals section names an allowance on the router "verified" only on `lite` chains: on the 8 `generic` ones the
 router's owner whitelist could spend a leftover allowance, so one there is one to revoke. Refresh stays as it is
 (previews never poll; a live list every 30 s while visible), which fits KyberSwap's ask not to spam quotes.
+
+**D53 — Uniswap v3 and v4 as two rows (owner, 2026-11-27).** protocol-swap2-uniswap 0.5.0 adds Uniswap v4, opt-in. The
+page runs it with `v4: "all"` and `venueRoutes: "both"`: one ranking pass (v3 and v4 read together) returns each
+venue's best route as its own quote, `routeId` "v3" or "v4", shown as "Uniswap v3" and "Uniswap v4" (`routeName`'s
+`ROUTE_LABELS`); the review's re-quote and Confirm ask the picked venue alone (D47's routeId path), and one venue
+refusing never drops the other. v4 runs on the package's pinned hookless pools only. A native input calls the chain's
+pinned Universal Router 2.1.2 (`execute(0x10, [V4_SWAP], deadline)`, value = input, no approval); a token input calls
+Uniswap's SwapProxy (34 lines, no owner, no storage, one codehash; it pulls exactly the input from its caller into the
+router), approved for exactly the input and spent to 0 by the swap. The provider checks its own build
+(`uniswapV4VerifyQuote`), simulates a token input's approve + swap before returning it, and every call goes out with
+the account's own gas estimate (`ownGasEstimate`, Monad charges the limit). The gate's pins are the package's
+`uniswapPins` (0.5.0): SwapRouter02, the Universal Router and the SwapProxy as call targets, SwapRouter02 and the
+SwapProxy as spenders — so the Approvals section names a SwapProxy allowance "verified by cp0x" (only its owner can
+make it spend). Checked live 2026-11-27 (dry quotes, read-only): both rows on Ethereum, Base and Monad, the dry quote's
+`approvalAddress` the SwapProxy for a token input; on Monad v4 quoted 100 MON → AUSD at 0 bps impact where v3's pool
+lost 19%. Cost: about 1.03–1.14× a v3-only quote's JSON-RPC calls, over the same RPC table.
 
 ## 5. Conventions
 
